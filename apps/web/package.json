@@ -19,7 +19,8 @@
     "auth:verify": "node --import tsx scripts/auth-verify.ts",
     "test:projects": "node --conditions=react-server --import tsx --test tests/projects.test.ts",
     "projects:verify": "node --import tsx scripts/projects-verify.ts",
-    "projects:openapi": "node --import tsx scripts/projects-openapi.ts"
+    "projects:openapi": "node --import tsx scripts/projects-openapi.ts",
+    "test:library": "node --import tsx --test tests/library.test.ts"
   },
   "dependencies": {
     "@fontsource/inter": "5.3.0",

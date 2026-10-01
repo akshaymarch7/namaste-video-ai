@@ -242,7 +242,7 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     const privateHtml = await privatePage.text();
     assert.match(privateHtml, /tester@example.test/);
     // Cached HTML must not display the identity before client session validation.
-    assert.match(privateHtml, /<div hidden=""><header class="auth-header"/);
+    assert.match(privateHtml, /<div hidden=""><div class="library-shell"/);
     assert.match(privateHtml, /Checking your session/);
     const safeRedirect = await fetch(`${origin}/sign-in?returnTo=https://evil.example`, { headers: { Cookie: cookies(login) }, redirect: 'manual' });
     assert.equal(safeRedirect.headers.get('location'), '/projects');

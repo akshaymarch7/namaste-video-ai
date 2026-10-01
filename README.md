@@ -2,7 +2,7 @@
 
 A local TypeScript prototype for short educational motion-graphics videos. The first user-reviewed output is `runs/water-cycle-viraj-live/output.mp4`: 81.7 seconds, 1080 × 1920, Daniel narration, captions and animated water diagrams. The storyboard for that first video was authored. Gemini planning and conversational revision are now working through Gemini 3.5 Flash's Interactions API.
 
-The repository also includes an isolated Next.js application in `apps/web`, with database and internal authentication foundations, Cinema sign-in/recovery screens and a protected workspace entry. Personal project APIs are implemented; the video library UI is the next feature. [Project Status](PROJECT_STATUS.md) is the development source of truth; [prototype status](PROTOTYPE_STATUS.md) retains historical pipeline evidence.
+The repository also includes an isolated Next.js application in `apps/web`, with database and internal authentication foundations, Cinema sign-in/recovery screens and a protected workspace entry. Personal project APIs and the My videos library UI are implemented. Idea editing and hosted generation remain future features. [Project Status](PROJECT_STATUS.md) is the development source of truth; [prototype status](PROTOTYPE_STATUS.md) retains historical pipeline evidence.
 
 ## Run the application scaffold
 
@@ -43,9 +43,17 @@ Run `npm run test:db` for real MongoDB integration tests. They launch and stop a
 
 Connection pooling and transaction options follow the [MongoDB driver documentation](https://www.mongodb.com/docs/drivers/node/current/connect/connection-options/connection-pools/) and [transaction guidance](https://www.mongodb.com/docs/drivers/node/current/crud/transactions/). Transaction callbacks may be retried: prepare IDs before entering, use sequential DB operations, and keep provider calls outside them.
 
+## Test the My videos library (F06 checkpoint)
+
+F05 is user-approved. Run `npm run auth:local` with Node 24.21.0, enter fresh test credentials, and open **http://127.0.0.1:3001/sign-in**. Sign in to see your empty library, create a named project, rename it, change filters, and test cancelling/confirming deletion of your disposable project. Refresh or sign in again to verify persistence while the local launcher is running. Create more than 12 projects to exercise Load more. Check mobile layout too.
+
+`npm run test:library` verifies the client request/error and pagination helpers. The UI uses real project APIs, with no sample records in production. Decorative card art is not a generated video thumbnail. Search/count totals, editor/open, playback/download, Instagram and settings controls are not exposed until implemented. Only blank-project deletion is currently supported.
+
+The dialogs preserve edits on errors, require an explicit revision reload on conflict, and retry ambiguous create/delete responses with the same key while the dialog remains open. During an unresolved mutation, closing/editing is disabled to avoid accidental duplicate requests. A full browser reload does not preserve dialog input/retry keys. Stop the launcher with Ctrl+C after testing and share feedback before F07.
+
 ## Test project APIs (F05 checkpoint)
 
-F04 and the session-restoration fix are user-approved. F05 adds create/list/read/rename/delete APIs; the workspace screen is still the entry screen, not the F06 library.
+F04 and the session-restoration fix are user-approved. F05 adds create/list/read/rename/delete APIs. The F06 library above now consumes those APIs.
 
 1. With Node 24.21.0, run `npm run auth:local` in one terminal. It creates a disposable MongoDB replica set, applies both migrations and provisions your test account. Use a fresh test password.
 2. In another terminal, run `npm run projects:verify` and enter the same credentials. Expect five PASS messages covering authentication, creation/replay, read/list, rename/conflict and deletion/replay. Cookies stay in memory; the helper creates and removes only its test project.

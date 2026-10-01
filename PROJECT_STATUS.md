@@ -6,9 +6,9 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F05 — Personal project APIs: Done locally; delegated API checkpoint and extended checks passed; user feedback pending. F04 and its P2 fix are user-approved.** The user approved F03 testing and code review on October 1, 2026. F04 is implemented and verified below. Wait for user feedback before F06. Hosted Atlas configuration remains outstanding.
+**F06 — My videos library UI: Done locally; user browser review pending.** F05 QA and code review are user-approved. The library uses real project APIs. Wait for feedback before F07.
 
-Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the library UI, hosted rendering and Instagram integration are not implemented yet; no hosted database has been provisioned. The local video pipeline remains separately usable.
+Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
 ## How this document is maintained
 
@@ -36,8 +36,8 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F02 | MongoDB adapter, schema validation and initial indexes | Done (local) | 11 real replica-set tests; both typechecks; 23 prototype tests; production build; detailed evidence below. Atlas not configured. |
 | F03 | Internal account admission and session backend | Done; user approved | User confirmed testing and code review October 1, 2026; backend and manual evidence below |
 | F04 | Sign-in/recovery UI and private route protection | Done; user approved, including P2 fix | 51 automated tests and prior types/build passed; delegated desktop/mobile browser and interactive operator recovery walkthrough passed; evidence below |
-| F05 | Personal project create/list/rename/delete APIs | Done locally; delegated testing passed, user feedback pending | Five-group interactive checkpoint and extended two-user/pagination/revision/deletion checks passed; prior 65 automated tests/types/build recorded below |
-| F06 | My videos library UI | Planned | Real project data, filters, load more, empty/loading/error states and rename/delete dialogs |
+| F05 | Personal project create/list/rename/delete APIs | Done; user approved | Five-group interactive checkpoint and extended two-user/pagination/revision/deletion checks passed; prior 65 automated tests/types/build recorded below |
+| F06 | My videos library UI | Done locally; user review pending | Real API browser create/rename/delete/filter/pagination/conflict checks, mobile review, six client tests, auth/prototype regressions and production build passed |
 | F07 | Idea draft API, autosave and conflict handling | Planned | Persist topic/notes/voice; revisions; failed saves preserve input; cross-user checks |
 | F08 | Idea and brainstorming UI/integration | Planned | Save real idea; Gemini topic suggestions; use suggestion; available voice preview |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
@@ -334,6 +334,53 @@ Scope limits: the previously recorded 65 automated tests, both typechecks and pr
 - Lists use mutable updatedAt ordering, not snapshots. Clients must deduplicate IDs and refresh from page one after changes. Cursor signing shares the server auth secret with a distinct purpose prefix; secret rotation invalidates existing cursors.
 - Minimal project/command tombstones are retained without automated purging. No user billing or retention product was added.
 
+## F06 — My videos library UI and browser checkpoint
+
+Implemented October 1, 2026 after user approval of F05 QA/code review. F07 has not started.
+
+### Scope and files
+
+- `apps/web/app/projects/page.tsx`: protected My videos page using the existing per-page server guard and P2-fixed PrivateSession wrapper. Private content remains hidden before client session verification; the auth integration assertion was updated for the library shell markup.
+- `apps/web/components/library/project-library.tsx`: Cinema sidebar/header, current-user identity, responsive project grid with real titles/flags/dates, all six filters, 12-item pages, deduplicated Load more, Refresh, loading skeletons, empty/no-match states, error feedback and announcements. Only implemented navigation is shown. Card artwork is decorative, not a fabricated media thumbnail; no fake videos, durations, counts or provider status.
+- Create/rename/delete dialogs call the real F05 APIs. Strict shared Unicode title validation, busy/duplicate-submit protection, explicit delete confirmation, preserved input on errors, revision-conflict reload and same-body/key retries for ambiguous create/delete responses. Modal background is inert; keyboard Tab is trapped, Escape cancels when safe, and focus returns to the originating control or stable New project button after a grid refresh. Dialogs stay within the private wrapper rather than a top-layer portal that could bypass hiding.
+- `components/library/client.ts`: same-origin no-store requests, timeout/error classification, session-error redirects through the component, safe fixed feedback and ID-based page merging. List requests abort on filter change/unmount and discard stale completions.
+- `app/globals.css`: Cinema library/card/modal layouts and desktop/mobile breakpoints; approved video rendering style is unchanged. Existing saved approved library/review specifications guided implementation. Create is labeled New project because idea/video generation is not yet implemented; open/download/social/settings actions and search/totals remain absent.
+- `tests/library.test.ts`, extended auth markup assertion, package scripts, README, AGENTS and this status document record verification and the F07 review gate. No API/DB schema or prototype code was changed.
+
+### Verification
+
+Node 24.21.0 commands ran via `npm exec --yes --package=node@24.21.0 -- …`:
+
+| Check | Result |
+| --- | --- |
+| `npm run test:library` | 6/6 passed: live-page merge/deduplication, 204 handling, ambiguous failures, safe error codes, aborted-request propagation and no-store credentials policy |
+| `npm run test:auth` | 17/17 passed, including private page initial hiding and actual mounted project/session routes |
+| `npm run check` | Both TypeScript checks and 23/23 existing prototype tests passed |
+| `npm run build` | Final production build and TypeScript validation passed |
+| Empty/create/rename | Signed in with a disposable local user; observed empty library, rejected blank title, created a project and renamed it through the UI with persisted API results |
+| Pagination/filter | Seeded 12 additional disposable records through real APIs; verified 12 initial cards and 13 after Load more, Ready empty state and Clear filters |
+| Delete/focus | Escape cancelled and restored focus to the original Delete control; confirmed deletion of a disposable project removed it and restored focus to New project |
+| Concurrent edit | Advanced the same project revision via a second authenticated API session; UI showed conflict and disabled Save; explicit Reload current details updated the revision/title display while retaining proposed input; subsequent Save succeeded |
+| Layout/keyboard | Desktop three-column layout and narrow single-column layout inspected. Requested mobile viewport 390×844 reported effective CSS width 325 with content width 312 (no overflow). Mobile dialog fit, title input focused, Tab wrapped, Escape dismissed and restored focus. Temporary viewport override reset. |
+| Browser diagnostics | No captured warning/error logs during the walkthrough |
+
+Total this milestone: **46 automated tests passed**. The unchanged standalone DB/project suites retain F05 evidence and were not rerun. Preview used an actual Next.js development server and disposable local MongoDB; test process stopped with Ctrl+C (interrupted exit 1). No real credentials, paid AI calls, deployment or social publication occurred.
+
+Screenshots: [empty desktop](design/verification/f06-empty-desktop.png), [populated desktop](design/verification/f06-library-desktop.png), [mobile library](design/verification/f06-library-mobile.png), [mobile dialog](design/verification/f06-dialog-mobile.png), [revision conflict](design/verification/f06-conflict-desktop.png). All records shown are synthetic test projects stored through the actual APIs.
+
+### User browser checkpoint — before F07
+
+1. Run `npm run auth:local` under Node 24.21.0, enter fresh test credentials, then open `http://127.0.0.1:3001/sign-in`.
+2. Create a project, rename it, refresh to verify persistence, try filters, cancel deletion, then confirm deletion of your disposable test project. More than 12 projects enables Load more. Inspect mobile layout.
+3. Stop the launcher with Ctrl+C and share feedback before F07. Test data only persists while this disposable launcher is running; configured database operation is separate.
+
+### Remaining limitations
+
+- The library organizes projects, not generated web videos yet. Editor/open, playback, download, schedule details, Instagram and settings belong to later features. Current app-created projects only have the Drafts flag.
+- Network/503/aborted-request behavior is helper-tested and implemented in UI; prolonged outage/ambiguous-commit UI branches were not browser fault-injected. Loading skeletons exist but no artificial latency was added for visual capture. Production build passed; hosted/browser production acceptance is separate.
+- Unresolved mutation dialogs retain input and retry keys only in memory and disable dismissal/editing until resolved. A full reload loses that dialog state; no cross-reload request recovery store is claimed.
+- Live lists may move after edits; Refresh resets pagination and Load more deduplicates overlapping IDs. Atlas configuration/hosted privileges remain unverified. No generation or media cleanup was added.
+
 ## Earlier evidence
 
 The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three generated videos, Gemini/ElevenLabs integrations, timing checks, and renderer recovery tests. Those historical results are not evidence that a hosted pipeline or dashboard works. Existing design artifacts remain in design/SCREEN_REVIEW_INDEX.md; the founder approved proceeding with implementation on October 1, 2026, with background colors normalized to the Cinema tokens.
@@ -344,6 +391,8 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 | --- | --- | --- | --- |
 | 2026-10-01 | F05 delegated testing | Completed requested interactive API checkpoint and extended two-user/pagination/revision/retry/deletion checks; evidence only; user feedback pending before F06 | Five verifier PASS groups and six extended PASS groups, both exit 0; disposable servers stopped; `git diff --check` passed |
 | 2026-10-01 | F04 delegated testing | Completed requested desktop/mobile browser and interactive operator recovery walkthrough; saved two screenshots and results; user feedback pending before F05 | Sign-in/error/show-hide/help/private-route/sign-out checks passed; recovery mismatch rejected, successful recovery revoked old session/password, new password worked; local servers stopped; `git diff --check` passed |
+| 2026-10-01 | F06 | Built real project library with Cinema layout, filters/pagination and create/rename/delete dialogs; awaiting browser review before F07 | 46 tests, both typechecks, production build and desktop/mobile browser actions/conflict checks passed; five screenshots saved |
+| 2026-10-01 | F05 acceptance | User confirmed QA/code review green and authorized F06 | User approval in conversation |
 | 2026-10-01 | F05 | Added personal project API, transactional blank aggregates/deletion, revision checks, signed pagination, retries, OpenAPI and local verification command; awaiting review before F06 | 65 tests, both typechecks, build and interactive five-group checkpoint passed |
 | 2026-10-01 | F04 acceptance | User approved F04 and P2 fix and authorized F05 | User approval in this conversation |
 | 2026-10-01 | F04 review fix | Revalidate cached private pages before display on mount/reactivation/history navigation; discard superseded session checks | 17 auth tests, 23 prototype tests, both typechecks, build and two-tab Back/logout + valid-session Back/Forward checks passed |
