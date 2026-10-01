@@ -22,7 +22,9 @@
     "test:projects": "npm run test:projects --workspace=@namastevideo/web --",
     "projects:verify": "npm run projects:verify --workspace=@namastevideo/web --",
     "projects:openapi": "npm run projects:openapi --workspace=@namastevideo/web --",
-    "test:library": "npm run test:library --workspace=@namastevideo/web --"
+    "test:library": "npm run test:library --workspace=@namastevideo/web --",
+    "test:drafts": "npm run test:drafts --workspace=@namastevideo/web --",
+    "drafts:verify": "npm run drafts:verify --workspace=@namastevideo/web --"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.529",

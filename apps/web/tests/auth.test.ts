@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { setupDrafts } from '../src/drafts/setup';
+import { checkDrafts } from '../scripts/drafts-check';
 import { before, after, test } from 'node:test';
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -32,6 +34,7 @@ before(async () => {
   const db = client.db(dbName);
   await setupDatabase(db);
   await setupProjects(db);
+  await setupDrafts(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, account);
   const auth = createAuth(db, client, config);
@@ -235,6 +238,10 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     assert.equal((await fetch(`${origin}/api/projects?limit=1`, { headers: { Cookie: cookies(login) } })).status, 200);
     assert.equal((await fetch(`${origin}/api/projects/${project.id}`, { method: 'PATCH', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Updated HTTP project', expectedRevision: 1 }) })).status, 200);
     assert.equal((await fetch(`${origin}/api/projects/${project.id}`, { method: 'DELETE', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json', 'Idempotency-Key': 'actual-route-delete-0001' }, body: JSON.stringify({ expectedRevision: 2, confirm: true }) })).status, 204);
+    await checkDrafts((path, method = 'GET', body) => fetch(`${origin}${path}`, {
+      method, headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json', 'Idempotency-Key': randomBytes(16).toString('hex') },
+      ...(method === 'GET' ? {} : { body: JSON.stringify(body) }),
+    }));
     const privatePage = await fetch(`${origin}/projects`, { headers: { Cookie: cookies(login) } });
     assert.equal(privatePage.status, 200);
     // Next's development server emits no-cache; force-dynamic production pages use private/no-store.

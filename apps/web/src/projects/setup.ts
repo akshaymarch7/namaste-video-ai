@@ -1,4 +1,5 @@
 import 'server-only';
+import { draftDefinition } from '../drafts/schema';
 import { createHash } from 'node:crypto';
 import type { Db } from 'mongodb';
 import { DatabaseError } from '../db/config';
@@ -27,7 +28,7 @@ export const projectMigrationId = 'mig_projects0000000001';
 export const checksum = createHash('sha256').update(JSON.stringify(definitions)).digest('hex');
 export async function setupProjects(db: Db) {
   if (!await db.collection('schemaMigrations').findOne({ _id: foundationId as never, checksum: foundationChecksum, state: 'completed' })) throw new DatabaseError('DB_SETUP_REQUIRED', 'Run foundation setup first.');
-  return runMigration(db, '002-projects', projectMigrationId, checksum, definitions);
+  return runMigration(db, '002-projects', projectMigrationId, checksum, definitions, { successors: { drafts: draftDefinition.validator } });
 }
 export async function assertProjectsReady(db: Db) {
   if (!await db.collection('schemaMigrations').findOne({ _id: projectMigrationId as never, checksum, state: 'completed' })) throw new DatabaseError('PROJECT_SETUP_REQUIRED', 'Run db:setup before project operations.');

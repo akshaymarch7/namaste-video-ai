@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "NamasteVideo F05 project API",
-    "version": "0.1.0",
+    "title": "NamasteVideo project and idea draft API",
+    "version": "0.2.0",
     "description": "Implemented slice only. DELETE completes synchronously for empty projects (204); populated project cleanup and selectedVideoId mutation are not yet supported."
   },
   "servers": [
@@ -213,6 +213,426 @@
     }
   },
   "paths": {
+    "/api/projects/{id}/draft": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getIdeaDraft",
+        "responses": {
+          "200": {
+            "description": "Current idea draft. Validation is false until storyboard approval exists. No provider availability is implied.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "projectId",
+                        "conversationId",
+                        "revision",
+                        "topic",
+                        "audience",
+                        "notes",
+                        "voicePreset",
+                        "editablePlan",
+                        "sourceStoryboardId",
+                        "planStale",
+                        "contentHash",
+                        "validation",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "projectId": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "type": "string",
+                          "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+                        },
+                        "conversationId": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "topic": {
+                          "type": "string",
+                          "maxLength": 2000
+                        },
+                        "audience": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 20000
+                        },
+                        "voicePreset": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "editablePlan": {
+                          "type": "null"
+                        },
+                        "sourceStoryboardId": {
+                          "type": "null"
+                        },
+                        "planStale": {
+                          "const": false
+                        },
+                        "contentHash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "validation": {
+                          "type": "object",
+                          "required": [
+                            "valid",
+                            "issues"
+                          ],
+                          "properties": {
+                            "valid": {
+                              "const": false
+                            },
+                            "issues": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "path",
+                                  "code",
+                                  "message"
+                                ],
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "saveIdeaDraft",
+        "description": "Requires expectedRevision. Supports topic/audience/notes/voicePreset only. New voice choices allow daniel-test; existing saved preset may be retained. No idempotency key: after an unknown response read and compare before retrying; never silently overwrite a newer revision.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must exactly match configured application origin."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483646
+                  },
+                  "changes": {
+                    "type": "object",
+                    "properties": {
+                      "topic": {
+                        "type": "string",
+                        "maxLength": 2000,
+                        "description": "Unicode code points; whitespace preserved."
+                      },
+                      "audience": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "description": "Unicode code points; whitespace preserved."
+                      },
+                      "notes": {
+                        "type": "string",
+                        "maxLength": 20000,
+                        "description": "Unicode code points; whitespace preserved."
+                      },
+                      "voicePreset": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "additionalProperties": false,
+                    "minProperties": 1
+                  }
+                },
+                "required": [
+                  "expectedRevision",
+                  "changes"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current idea draft. Validation is false until storyboard approval exists. No provider availability is implied.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "projectId",
+                        "conversationId",
+                        "revision",
+                        "topic",
+                        "audience",
+                        "notes",
+                        "voicePreset",
+                        "editablePlan",
+                        "sourceStoryboardId",
+                        "planStale",
+                        "contentHash",
+                        "validation",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "projectId": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "type": "string",
+                          "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+                        },
+                        "conversationId": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "topic": {
+                          "type": "string",
+                          "maxLength": 2000
+                        },
+                        "audience": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 20000
+                        },
+                        "voicePreset": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "editablePlan": {
+                          "type": "null"
+                        },
+                        "sourceStoryboardId": {
+                          "type": "null"
+                        },
+                        "planStale": {
+                          "const": false
+                        },
+                        "contentHash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "validation": {
+                          "type": "object",
+                          "required": [
+                            "valid",
+                            "issues"
+                          ],
+                          "properties": {
+                            "valid": {
+                              "const": false
+                            },
+                            "issues": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "path",
+                                  "code",
+                                  "message"
+                                ],
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/projects": {
       "get": {
         "operationId": "listProjects",

@@ -1,3 +1,4 @@
+import { setupDrafts } from '../src/drafts/setup';
 import { setupProjects } from '../src/projects/setup';
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -35,6 +36,7 @@ try {
   const config = { origin: 'http://127.0.0.1:3001', secure: false, secret: randomBytes(48).toString('base64url') };
   await setupDatabase(db);
   await setupProjects(db);
+  await setupDrafts(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, input);
   // Explicit environment wins over any web env file. Do not inherit provider or migration credentials.

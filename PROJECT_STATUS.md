@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F06 — Done locally, including dialog focus restoration after session revalidation; user feedback pending.** F05 QA and code review are user-approved. The library uses real project APIs. Wait for feedback before F07.
+**F07 — Done locally; user testing/code review pending.** User approved moving beyond F06 and its focus fix. This slice adds idea draft persistence and a reusable autosave controller; the visible idea editor remains F08. Wait for user review before F08.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -37,8 +37,8 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F03 | Internal account admission and session backend | Done; user approved | User confirmed testing and code review October 1, 2026; backend and manual evidence below |
 | F04 | Sign-in/recovery UI and private route protection | Done; user approved, including P2 fix | 51 automated tests and prior types/build passed; delegated desktop/mobile browser and interactive operator recovery walkthrough passed; evidence below |
 | F05 | Personal project create/list/rename/delete APIs | Done; user approved | Five-group interactive checkpoint and extended two-user/pagination/revision/deletion checks passed; prior 65 automated tests/types/build recorded below |
-| F06 | My videos library UI | Done locally; delegated testing passed, user feedback pending | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
-| F07 | Idea draft API, autosave and conflict handling | Planned | Persist topic/notes/voice; revisions; failed saves preserve input; cross-user checks |
+| F06 | My videos library UI | Done; user approved | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
+| F07 | Idea draft API, autosave and conflict handling | Done locally; user review pending | 14 draft/autosave tests; 71 existing tests, both typechecks and build passed; actual Next.js draft checkpoint below |
 | F08 | Idea and brainstorming UI/integration | Planned | Save real idea; Gemini topic suggestions; use suggestion; available voice preview |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
@@ -413,6 +413,46 @@ Completed October 1, 2026. The reported P2 occurred because the private wrapper 
 
 Repeat: run `npm run auth:local`, sign in, open New project or Rename, enter text and position the caret, wait at least 65 seconds, then type and press Escape **without clicking or refocusing the input**. The title/caret should survive, typing should continue, and Escape should dismiss the dialog.
 
+## F07 — Idea draft API, autosave and conflict recovery
+
+Implemented October 1, 2026 after user authorization to proceed beyond F06. This is the persistence/client-state slice; no idea editor, brainstorming, AI calls or voice preview UI is claimed.
+
+### Scope and files
+
+- `src/drafts/contracts.ts`, `service.ts` and `app/api/projects/[id]/draft/route.ts` under `apps/web`: owner-scoped GET/PATCH through the existing session/admission/Origin/envelope boundary in `src/projects/http.ts`. Strict field bounds (Unicode code points), empty text and whitespace preserved, nonempty changes and expectedRevision required. Supports topic, audience, notes and application voice preset only. Unknown fields/structured plans/query parameters are rejected. New preset choice is `daniel-test`; a preexisting saved preset can be retained. No provider availability promise.
+- Transactional save recomputes the canonical content hash, increments draft revision and mirrors it to the live parent with contentRevision/updatedAt. Metadata revision remains separate. Concurrent saves yield one winner; stale clients receive 409 with currentRevision/reloadUrl. Child failure rolls back the parent. GET uses a consistent snapshot of parent/draft. Foreign/deleted parents are not readable or writable. The live parent write coordinates deletion; F05's edited-project deletion guard remains intact.
+- `src/drafts/schema.ts`, `setup.ts`, reviewed extension to `src/db/setup.ts` and successor recognition in `src/projects/setup.ts`: migration 003 upgrades only the exact known blank-draft validator. Original migration definitions/checksums remain unchanged. Replays preserve edited data and indexes; unknown drift/checksum changes stop setup. `scripts/db-setup.ts` and `auth-local.ts` install the new migration using operator/disposable-local setup. Runtime requests do no DDL.
+- `src/drafts/autosave.ts`: reusable controller with 800ms debounce, one save in flight, saved/dirty/saving/error/conflict states, preserved typing during saves/failures, read-before-retry recovery for ambiguous outcomes and explicit keep-local/use-remote resolution for competing changes. Disposal suppresses late notifications and clears timers. Transport uses same-origin/no-store requests and bounded timeouts. F08 must mount this controller and implement visible feedback, session redirects and navigation safeguards.
+- Added `tests/drafts.test.ts`, `tests/autosave.test.ts`; extended mounted Next.js route coverage in `tests/auth.test.ts`. `scripts/drafts-check.ts` contains shared API acceptance checks, used by auth integration tests and the interactive `drafts:verify` command. Updated shared-schema OpenAPI (`src/projects/openapi.ts`, `design/projects.openapi.json`), package scripts, README, API/DB documents and AGENTS review gate. Prototype code/style and root credentials are untouched.
+
+### Verification
+
+Executed with cached **Node 24.21.0** placed first in PATH (the initial npm-exec registry lookup failed because the sandbox had no DNS; no dependency upgrade was needed). Disposable MongoDB tests require local sockets and were rerun successfully with the approved sandbox escalation after an initial EPERM. Synthetic test accounts only.
+
+| Check | Result |
+| --- | --- |
+| Draft/API/controller tests | 14/14 passed, including migration/replay/drift, hash/Unicode preservation, cross-user/auth/Origin validation, concurrent CAS, lost-response conflict, deletion races, transaction rollback and autosave recovery/typing/disposal |
+| DB/project/library regression suites | 31/31 passed (11 DB + 14 project + 6 library), including checked-in OpenAPI equality |
+| `npm run test:auth` | 17/17 passed; actual mounted Next.js GET/PATCH draft routes and the shared four-group verification helper passed with real cookies and disposable MongoDB |
+| `npm run check` | Both TypeScript checks and 23/23 prototype tests passed |
+| Final targeted rerun | 25/25 DB/draft/autosave tests passed after tightening the explicit predecessor guard and copying the initial client snapshot |
+| `npm run build` | Passed, including TypeScript and the dynamic `/api/projects/[id]/draft` route |
+
+**85 distinct automated tests** passed across the suites above; the final 25-test targeted rerun and production build also passed. `git diff --check` passed. Interactive password entry in the new verifier was not separately exercised; its exact API checkpoint function ran against Next.js in auth integration. No new browser UI exists in F07, so no browser screenshot is presented as feature evidence. Test servers/databases stop after completion. No Atlas migration, paid provider call, rendering run, deployment or Instagram publication occurred.
+
+### User testing checkpoint — before F08
+
+1. Under Node 24.21.0, run `npm run auth:local`, enter fresh synthetic name/email/password and leave the disposable server running.
+2. In another terminal run `npm run drafts:verify` with the same email/password. Expect four PASS groups for blank draft, persisted idea fields, conflict/validation denial and explicit save recovery/guarded deletion.
+3. Stop `auth:local` with Ctrl+C. This removes the edited fixture because edited-project deletion remains unavailable. Review the API/controller code and share feedback before F08.
+
+### Remaining limitations
+
+- No visible idea editor, Gemini brainstorming, provider calls, voice catalogue preview or storyboard editing; those retain their planned feature gates. DraftView is explicitly not approval-valid until a storyboard exists.
+- Only in-memory unsaved input retention is implemented. Full reload loses unsaved edits; cross-reload recovery and actual browser integration/unsaved-navigation behavior are not claimed.
+- Edited projects still return PROJECT_DELETE_UNAVAILABLE. Durable populated-content cleanup must be implemented before lifting the guard. Migration 003 needs operator setup on any configured development database; no hosted database was altered.
+- Conflict resolution deliberately requires a user decision; it offers no automatic field merge. Voice acceptance reflects registered application presets, not current provider plan/credit availability.
+
 ## Earlier evidence
 
 The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three generated videos, Gemini/ElevenLabs integrations, timing checks, and renderer recovery tests. Those historical results are not evidence that a hosted pipeline or dashboard works. Existing design artifacts remain in design/SCREEN_REVIEW_INDEX.md; the founder approved proceeding with implementation on October 1, 2026, with background colors normalized to the Cinema tokens.
@@ -421,6 +461,8 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | F07 | Implemented idea draft persistence, reviewed validator upgrade and reusable autosave/conflict recovery; added local API verification command | 85 distinct tests, both typechecks, final 25-test rerun and production build passed; F08 waits for review |
+| 2026-10-01 | F06 acceptance | User authorized the next feature after the session-focus fix | Conversation approval |
 | 2026-10-01 | F06 delegated testing | Completed requested desktop/mobile library walkthrough and two-tab conflict test; added three screenshots; user feedback pending before F07 | Create/rename/delete/persistence, all filters, 12-to-13 Load more, conflict recovery and keyboard checks passed; test servers stopped; `git diff --check` passed |
 | 2026-10-01 | F05 delegated testing | Completed requested interactive API checkpoint and extended two-user/pagination/revision/retry/deletion checks; evidence only; user feedback pending before F06 | Five verifier PASS groups and six extended PASS groups, both exit 0; disposable servers stopped; `git diff --check` passed |
 | 2026-10-01 | F04 delegated testing | Completed requested desktop/mobile browser and interactive operator recovery walkthrough; saved two screenshots and results; user feedback pending before F05 | Sign-in/error/show-hide/help/private-route/sign-out checks passed; recovery mismatch rejected, successful recovery revoked old session/password, new password worked; local servers stopped; `git diff --check` passed |

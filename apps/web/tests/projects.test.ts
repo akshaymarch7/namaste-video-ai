@@ -34,7 +34,7 @@ before(async () => {
 after(async () => { await client?.close(); await replica?.stop(); });
 const make = async (title = 'Example', user = owner, key = randomUUID()) => (await service.create(user, key, { title })).data!;
 const rejects = (promise: Promise<unknown>, code: string) => assert.rejects(promise, (error: unknown) => (error as { code: string }).code === code);
-const req = (action: ProjectAction, body?: unknown, target?: string, options: { cookie?: string; origin?: string; query?: string; key?: string } = {}) => {
+const req = (action: Exclude<ProjectAction, 'draft-read' | 'draft-save'>, body?: unknown, target?: string, options: { cookie?: string; origin?: string; query?: string; key?: string } = {}) => {
   const method = ({ list: 'GET', read: 'GET', create: 'POST', rename: 'PATCH', delete: 'DELETE' } as const)[action];
   return handleProjects(new Request(`${config.origin}/api/projects${target ? `/${target}` : ''}${options.query ?? ''}`, {
     method, headers: { Cookie: options.cookie ?? cookie, Origin: options.origin ?? config.origin, 'Content-Type': 'application/json', 'Idempotency-Key': options.key ?? randomUUID() },

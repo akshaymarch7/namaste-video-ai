@@ -23,7 +23,7 @@ No additional creator steps, billing features, public signup or shared workspace
 
 ### F05 implemented boundary — October 1, 2026
 
-The session facade and P01–P04 are implemented locally; P04 currently accepts **title only**, with `expectedRevision`. P02 atomically creates a project, blank draft and conversation and snapshots the saved default voice (fallback `daniel-test`); draft editing and preferences endpoints are later features. [Generated OpenAPI for the implemented project routes](design/projects.openapi.json) is checked against shared request schemas by tests.
+The session facade and P01–P04 are implemented locally; P04 currently accepts **title only**, with `expectedRevision`. P02 atomically creates a project, blank draft and conversation and snapshots the saved default voice (fallback `daniel-test`); preferences endpoints remain future work. F07 implements P06 and the idea-field subset of P07, as detailed below. [Generated OpenAPI for the implemented project routes](design/projects.openapi.json) is checked against shared request schemas by tests.
 
 **Temporary P05 response:** empty projects are synchronously tombstoned and their blank draft/conversation removed in a transaction, returning **204**. The original deletion key replays 204. Create-response snapshots are scrubbed; minimal key tombstones prevent replay from recreating deleted content. Projects with draft edits, pipeline references, messages or later-stage flags are rejected with **409 PROJECT_DELETE_UNAVAILABLE** until durable cleanup is implemented. No job is queued and no 202/cleanup ID is advertised. The full P05 contract below remains the target for the jobs/media feature; coordinate that API change with its client.
 
@@ -470,3 +470,15 @@ Before implementation completion, contract tests must cover every endpoint's suc
 | FR-14 autosave/deletion | 2.4, 5 |
 
 Stitch designs should include empty project library, saving/unsaved/conflict states, planning, storyboard candidate comparison, unavailable voice, real generation stages, previous output during revision, ready preview, connection cancellation, schedule confirmation with timezone, paused authorization, and unknown publication outcome. UI may reorganize presentation but must not hide approvals, pretend uncertain publication failed safely, or invent unavailable actions. API changes discovered during design are reviewed in both this document and the database contract before coding.
+
+## Implemented F07 idea draft slice
+
+`GET/PATCH /api/projects/:id/draft` use the existing admitted session, owner filter, private/no-store envelope and exact mutation Origin policy. PATCH requires `expectedRevision` and a nonempty `changes` object containing only `topic` (≤2,000 Unicode code points), `audience` (≤200), `notes` (≤20,000) and/or `voicePreset` (1–64). Whitespace and empty text are preserved. Unknown fields, structured plans and query parameters are rejected. Request bodies remain capped at 256 KiB. See `design/projects.openapi.json` for the implemented request/response schema.
+
+New voice selections currently allow only the approved `daniel-test` application preset. An existing saved preset can be retained; this is not a live ElevenLabs availability check. Other new choices return `422 VOICE_UNAVAILABLE`. No provider IDs or credentials appear in the DTO.
+
+Every accepted PATCH advances the draft revision, recomputes its canonical SHA-256 content hash and transactionally updates parent draftRevision/contentRevision/updatedAt. Project metadata revision stays unchanged. Stale requests return `409 REVISION_CONFLICT` with currentRevision and reloadUrl; no automatic last-write-wins. GET uses a snapshot transaction to read the live parent and draft consistently. Foreign/deleted parents return 404.
+
+F07 responses have editablePlan/sourceStoryboardId null, planStale false and validation.valid false with STORYBOARD_REQUIRED. Saving an idea is not storyboard approval. Plan editing/staleness transitions arrive with F09/F10. Edited projects retain the documented P05 409 deletion guard until durable cleanup is implemented.
+
+The reusable autosave controller debounces at 800ms, serializes saves and preserves newer in-memory typing while requests run. Failures pause saving. Explicit recovery reads the current draft: matching attempted content acknowledges a lost response; an unchanged revision permits retry; other changes require an explicit keep-local/use-remote decision. It never blindly retries against a newer revision. A full page reload loses unsaved in-memory edits. F08 will mount the controller, show save/conflict feedback and connect session handling/navigation safeguards; F07 introduces no editor UI.

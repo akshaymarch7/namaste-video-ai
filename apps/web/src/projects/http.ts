@@ -1,4 +1,7 @@
 import 'server-only';
+import { assertDraftsReady } from '../drafts/setup';
+import { draftService } from '../drafts/service';
+import { patchDraft } from '../drafts/contracts';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { dependencies } from '../auth/runtime';
@@ -7,7 +10,7 @@ import { HttpError, readBody } from '../auth/http';
 import { assertProjectsReady } from './setup';
 import { createProject, renameProject, deleteProject, listProjects, projectId, idempotencyKey, ProjectError } from './contracts';
 import { projectService } from './service';
-export type ProjectAction = 'list' | 'create' | 'read' | 'rename' | 'delete';
+export type ProjectAction = 'list' | 'create' | 'read' | 'rename' | 'delete' | 'draft-read' | 'draft-save';
 export async function handleProjects(request: Request, action: ProjectAction, rawId?: string, getDependencies = dependencies) {
   const requestId = `req_${randomUUID().replaceAll('-', '')}`;
   const headers = new Headers({ 'Cache-Control': 'private, no-store', 'X-Request-Id': requestId });
@@ -19,11 +22,17 @@ export async function handleProjects(request: Request, action: ProjectAction, ra
     if (!session) throw new ProjectError(401, 'UNAUTHENTICATED', 'Sign in to continue.');
     const ownerId = session.user.id;
     if (!await isAdmitted(db, ownerId)) throw new ProjectError(403, 'ACCESS_DISABLED', 'Account access is disabled.');
-    if (!['list', 'read'].includes(action) && request.headers.get('origin') !== config.origin) throw new ProjectError(403, 'INVALID_ORIGIN', 'Request origin is not allowed.');
+    if (!['list', 'read', 'draft-read'].includes(action) && request.headers.get('origin') !== config.origin) throw new ProjectError(403, 'INVALID_ORIGIN', 'Request origin is not allowed.');
     const parsedId = rawId === undefined ? undefined : projectId.safeParse(rawId);
     if (parsedId && !parsedId.success) throw new ProjectError(404, 'NOT_FOUND', 'Project not found.');
     const target = parsedId?.data!;
     await assertProjectsReady(db);
+    if (action === 'draft-read' || action === 'draft-save') {
+      await assertDraftsReady(db);
+      if (new URL(request.url).search) throw new ProjectError(422, 'VALIDATION_FAILED', 'Query parameters are not supported.');
+      const drafts = draftService(db, client);
+      return reply(action === 'draft-read' ? await drafts.get(ownerId, target) : await drafts.save(ownerId, target, patchDraft.parse(await readBody(request))));
+    }
     const service = projectService(db, client, config.secret);
     if (action === 'list') {
       const query = new URL(request.url).searchParams;

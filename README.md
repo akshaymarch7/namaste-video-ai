@@ -192,3 +192,19 @@ npm run pipeline -- edit-plan --from my-video --run edited-video --plan-file rev
 This validates an edited plan and carries compatible audio into a new run without altering the source export.
 
 The integration checks in `scripts/verify-recovery.ts` and `scripts/verify-failure-exit.ts` use the existing RAM output and fixed, single-use destination run IDs. They refuse to overwrite existing runs. They guard against provider requests, inject a missing-browser failure, and check cache reuse, lock release, process exit, and recovery. Reports are saved under `runs/ram-storage-recovery/` and `runs/renderer-exit-check/`.
+
+### F07 idea draft API and autosave checkpoint
+
+The draft API and reusable autosave controller are implemented; the visible idea editor is F08. Existing library UI remains unchanged. Use Node 24.21.0.
+
+```bash
+npm run test:drafts
+# Interactive API checkpoint with disposable MongoDB:
+npm run auth:local
+# In another terminal, use the same test credentials:
+npm run drafts:verify
+```
+
+Expect four PASS groups for persistence, conflicts/validation and guarded deletion. Stop `auth:local` with Ctrl+C to remove the edited fixture; populated-project deletion is not implemented yet. This script signs out its own session and prints no credentials. Its API checks also run against actual Next.js routes in `test:auth`.
+
+For an explicitly configured development database, run `npm run db:setup` with the web operator configuration to install migration 003 before draft requests. Root prototype `.env.local` remains separate. The API supports topic/audience/notes and the existing `daniel-test` preset; it makes no AI calls. Autosave recovery is unit-tested and ready for F08 integration; there is no browser editor or unsaved-edit persistence across reloads yet.

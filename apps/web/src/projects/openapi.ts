@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { patchDraft } from '../drafts/contracts';
 import { createProject, renameProject, deleteProject, projectId, idempotencyKey, filters } from './contracts';
 const schema = (value: z.ZodType) => z.toJSONSchema(value, { io: 'input' });
 const nullableId = { anyOf: [{ type: 'string' }, { type: 'null' }] };
@@ -27,9 +28,27 @@ export function projectsOpenApi() {
     const value = request.content['application/json'].schema as { properties: Record<string, object> };
     Object.assign(value.properties.title, { minLength: 1, maxLength: 100, description: 'Trimmed plain text, 1–100 Unicode code points.' });
   }
-  return { openapi: '3.1.0', info: { title: 'NamasteVideo F05 project API', version: '0.1.0', description: 'Implemented slice only. DELETE completes synchronously for empty projects (204); populated project cleanup and selectedVideoId mutation are not yet supported.' },
+  const draftRequest = body(patchDraft);
+  const changes = (draftRequest.content['application/json'].schema as { properties: { changes: { minProperties?: number; properties: Record<string, object> } } }).properties.changes;
+  changes.minProperties = 1;
+  for (const [key, maxLength] of Object.entries({ topic: 2000, audience: 200, notes: 20000 })) Object.assign(changes.properties[key], { maxLength, description: 'Unicode code points; whitespace preserved.' });
+  const draftResponse = { description: 'Current idea draft. Validation is false until storyboard approval exists. No provider availability is implied.', headers: responseHeaders, content: content({ type: 'object', required: ['data', 'meta'], properties: { meta, data: {
+    type: 'object', additionalProperties: false,
+    required: ['projectId','conversationId','revision','topic','audience','notes','voicePreset','editablePlan','sourceStoryboardId','planStale','contentHash','validation','updatedAt'],
+    properties: { projectId: schema(projectId), conversationId: { type: 'string' }, revision: { type: 'integer', minimum: 1 },
+      topic: { type: 'string', maxLength: 2000 }, audience: { type: 'string', maxLength: 200 }, notes: { type: 'string', maxLength: 20000 }, voicePreset: { type: 'string', maxLength: 64 },
+      editablePlan: { type: 'null' }, sourceStoryboardId: { type: 'null' }, planStale: { const: false }, contentHash: { type: 'string', pattern: '^[a-f0-9]{64}$' }, updatedAt: { type: 'string', format: 'date-time' },
+      validation: { type: 'object', required: ['valid','issues'], properties: { valid: { const: false }, issues: { type: 'array', items: { type: 'object', required: ['path','code','message'], properties: { path: { type: 'string' }, code: { type: 'string' }, message: { type: 'string' } } } } } },
+    },
+  } } }) };
+  return { openapi: '3.1.0', info: { title: 'NamasteVideo project and idea draft API', version: '0.2.0', description: 'Implemented slice only. DELETE completes synchronously for empty projects (204); populated project cleanup and selectedVideoId mutation are not yet supported.' },
     servers: [{ url: '/' }], security: [{ session: [] }], components: { schemas: { Project: project }, responses: { Error: errorResponse }, securitySchemes: { session: { type: 'apiKey', in: 'cookie', name: 'better-auth.session_token', description: 'Better Auth HttpOnly session cookie; production uses its __Secure- prefix. Obtain it via the session facade.' } } },
     paths: {
+      '/api/projects/{id}/draft': {
+        parameters: [{ in: 'path', name: 'id', required: true, schema: schema(projectId) }],
+        get: { operationId: 'getIdeaDraft', responses: { ...errors, 200: draftResponse } },
+        patch: { operationId: 'saveIdeaDraft', description: 'Requires expectedRevision. Supports topic/audience/notes/voicePreset only. New voice choices allow daniel-test; existing saved preset may be retained. No idempotency key: after an unknown response read and compare before retrying; never silently overwrite a newer revision.', parameters: mutation, requestBody: draftRequest, responses: { ...errors, 200: draftResponse } },
+      },
       '/api/projects': {
         get: { operationId: 'listProjects', parameters: [{ in: 'query', name: 'limit', schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } }, { in: 'query', name: 'filter', schema: { type: 'string', enum: filters, default: 'all' } }, { in: 'query', name: 'cursor', schema: { type: 'string', minLength: 1, maxLength: 2048 }, description: 'Signed owner/filter-bound tuple cursor, valid for 24 hours. Live lists may move after edits; deduplicate by ID.' }], responses: { ...errors, 200: { description: 'Owner-scoped live project list', headers: responseHeaders, content: content({ type: 'object', required: ['data','page','meta'], properties: { data: { type: 'array', items: projectRef }, page: { type: 'object', required: ['hasMore','nextCursor'], properties: { hasMore: { type: 'boolean' }, nextCursor: nullableId } }, meta } }) } } },
         post: { operationId: 'createProject', parameters: keyed, requestBody: create, responses: { ...errors, 201: { ...success('Project, blank draft and conversation created atomically'), headers: { ...responseHeaders, Location: { schema: { type: 'string' } }, 'Idempotency-Replayed': { schema: { type: 'string', const: 'true' } } } } } },
