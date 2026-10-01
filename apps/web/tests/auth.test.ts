@@ -13,6 +13,10 @@ import { assertAuthReady, setupAuth } from '../src/auth/setup';
 import { provisionUser, disableUser } from '../src/auth/operator';
 import { handleSession, type SessionAction } from '../src/auth/http';
 import { LoginLimited, reserveLogin } from '../src/auth/throttle';
+import { recoverPassword } from '../src/auth/recovery';
+import { safeReturnTo } from '../src/auth/navigation';
+import { betterAuth } from 'better-auth';
+import { authOptions } from '../src/auth/engine';
 
 let replica: MongoMemoryReplSet;
 let client: MongoClient;
@@ -209,12 +213,63 @@ test('actual Next.js routes allow the full session round trip and expose no nati
   for (let i = 0; i < 120 && !ready && web.exitCode === null; i++) await new Promise(resolve => setTimeout(resolve, 250));
   assert.ok(ready, 'Next.js test server failed to start');
   try {
+    const deniedPage = await fetch(`${origin}/projects`, { redirect: 'manual' });
+    assert.equal(deniedPage.status, 307);
+    assert.match(deniedPage.headers.get('location') ?? '', /^\/sign-in\?/);
+    assert.equal((await deniedPage.text()).includes(account.email), false);
+    assert.equal((await fetch(`${origin}/sign-in`)).status, 200);
+    assert.match(await (await fetch(`${origin}/access-help`)).text(), /Contact your administrator to restore access/);
     assert.equal((await fetch(`${origin}/api/session`)).status, 401);
     assert.equal((await fetch(`${origin}/api/auth/get-session`)).status, 404);
     const login = await fetch(`${origin}/api/session/sign-in`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: account.email, password: account.password }) });
     assert.equal(login.status, 200, await login.clone().text());
     assert.equal((await fetch(`${origin}/api/session`, { headers: { Cookie: cookies(login) } })).status, 200);
+    const privatePage = await fetch(`${origin}/projects`, { headers: { Cookie: cookies(login) } });
+    assert.equal(privatePage.status, 200);
+    // Next's development server emits no-cache; force-dynamic production pages use private/no-store.
+    assert.match(privatePage.headers.get('cache-control') ?? '', /no-(store|cache)/);
+    assert.match(await privatePage.text(), /tester@example.test/);
+    const safeRedirect = await fetch(`${origin}/sign-in?returnTo=https://evil.example`, { headers: { Cookie: cookies(login) }, redirect: 'manual' });
+    assert.equal(safeRedirect.headers.get('location'), '/projects');
+    await client.db(dbName).collection('internalAccess').updateOne({ normalizedEmail: account.email }, { $set: { enabled: false } });
+    const disabledPage = await fetch(`${origin}/projects`, { headers: { Cookie: cookies(login) }, redirect: 'manual' });
+    assert.equal(disabledPage.headers.get('location'), '/access-help?state=disabled');
+    assert.equal((await disabledPage.text()).includes(account.email), false);
+    await client.db(dbName).collection('internalAccess').updateOne({ normalizedEmail: account.email }, { $set: { enabled: true } });
     assert.equal((await fetch(`${origin}/api/session/sign-out`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', Cookie: cookies(login) }, body: '{}' })).status, 204);
     assert.equal((await fetch(`${origin}/api/session`, { headers: { Cookie: cookies(login) } })).status, 401);
+    const expiredPage = await fetch(`${origin}/projects`, { headers: { Cookie: cookies(login) }, redirect: 'manual' });
+    assert.match(expiredPage.headers.get('location') ?? '', /reason=expired/);
   } finally { await stopWeb(); }
+});
+
+test('return destinations are limited to implemented private routes', () => {
+  for (const value of ['https://evil.example', '//evil.example', '/\\evil.example', '/api/session', '/projects/../api', '%2F%2Fevil.example', ['/projects']]) assert.equal(safeReturnTo(value), '/projects');
+});
+
+test('operator recovery changes credentials and revokes existing sessions without enabling disabled users', async () => {
+  const { db } = await dependencies();
+  const input = { ...account, email: 'recover@example.test' };
+  await provisionUser(db, client, config, input);
+  const login = await call('sign-in', { email: input.email, password: input.password });
+  assert.equal(login.status, 200);
+  await recoverPassword(db, client, config, { email: input.email, password: 'Replacement-fixture-password-937!' });
+  assert.equal((await call('read', {}, cookies(login))).status, 401);
+  assert.equal((await call('sign-in', { email: input.email, password: input.password })).status, 401);
+  assert.equal((await call('sign-in', { email: input.email, password: 'Replacement-fixture-password-937!' })).status, 200);
+  await disableUser(db, input.email);
+  await assert.rejects(recoverPassword(db, client, config, { email: input.email, password: input.password }));
+});
+
+test('Better Auth recovery token is consumed once and cannot be replayed', async () => {
+  const { db } = await dependencies();
+  let token = '';
+  const options = authOptions(db, client, config);
+  const auth = betterAuth({ ...options, emailAndPassword: { ...options.emailAndPassword, enabled: true,
+    revokeSessionsOnPasswordReset: true, sendResetPassword: async value => { token = value.token; },
+  } });
+  await auth.api.requestPasswordReset({ body: { email: account.email } });
+  assert.ok(token);
+  await auth.api.resetPassword({ body: { token, newPassword: account.password } });
+  await assert.rejects(auth.api.resetPassword({ body: { token, newPassword: account.password } }));
 });

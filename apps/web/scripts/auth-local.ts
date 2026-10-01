@@ -41,7 +41,7 @@ try {
     BETTER_AUTH_SECRET: config.secret, BETTER_AUTH_URL: config.origin,
     NEXT_TELEMETRY_DISABLED: '1', AUTH_CLIENT_IP_HEADER: '',
   };
-  console.log('Test account ready. Starting http://127.0.0.1:3001\nIn a second terminal, run: npm run auth:verify\nPress Ctrl+C here when finished.');
+  console.log('Test account ready. Open http://127.0.0.1:3001/sign-in when Next.js is ready.\nOptional API check in a second terminal: npm run auth:verify\nPress Ctrl+C here when finished.');
   web = spawn(process.execPath, [createRequire(import.meta.url).resolve('next/dist/bin/next'), 'dev', '--hostname', '127.0.0.1', '--port', '3001'], { env, stdio: 'inherit' });
   await new Promise<void>((resolve, reject) => { web!.once('exit', code => code && !stopping ? reject(new Error('Web server failed')) : resolve()); web!.once('error', reject); });
 } catch {

@@ -6,9 +6,9 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F03 — Internal authentication backend: Implemented; delegated manual API checkpoint passed; awaiting user feedback.** The requested `auth:local` / `auth:verify` walkthrough and additional API checks passed on October 1, 2026. Do not begin F04 until the user provides feedback. Hosted Atlas configuration remains outstanding.
+**F04 — Sign-in/recovery UI and private route protection: Done locally; user browser review pending.** The user approved F03 testing and code review on October 1, 2026. F04 is implemented and verified below. Wait for user feedback before F05. Hosted Atlas configuration remains outstanding.
 
-Internal authentication APIs and initial database collections are implemented and tested locally. No sign-in UI, project CRUD API, hosted rendering or Instagram integration exists yet; no hosted database has been provisioned. The local video pipeline remains separately usable.
+Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. No project CRUD API, hosted rendering or Instagram integration exists yet; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
 ## How this document is maintained
 
@@ -34,8 +34,8 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F00 | Local idea-to-video proof of concept | Done (local prototype) | Existing three narrated exports and recovery reports; see PROTOTYPE_STATUS.md |
 | F01 | Next.js workspace, Cinema tokens, primitives and app boundary | Done | Production build; both TypeScript checks; 23 existing tests; desktop/mobile route smoke checks; root media inaccessible — evidence below |
 | F02 | MongoDB adapter, schema validation and initial indexes | Done (local) | 11 real replica-set tests; both typechecks; 23 prototype tests; production build; detailed evidence below. Atlas not configured. |
-| F03 | Internal account admission and session backend | Implemented; manual checkpoint passed, user feedback pending | 14 real auth/Next.js tests plus regression checks passed; delegated manual API results below; stop before F04 |
-| F04 | Sign-in/recovery UI and private route protection | Planned | Approved sign-in flow; generic errors; expired session; private pages inaccessible anonymously |
+| F03 | Internal account admission and session backend | Done; user approved | User confirmed testing and code review October 1, 2026; backend and manual evidence below |
+| F04 | Sign-in/recovery UI and private route protection | Done locally; user review pending | 17 auth tests, 11 DB tests, 23 prototype tests, types/build and desktop/mobile browser checks passed; evidence below |
 | F05 | Personal project create/list/rename/delete APIs | Planned | Ownership isolation, validation, pagination and deletion behavior tested |
 | F06 | My videos library UI | Planned | Real project data, filters, load more, empty/loading/error states and rename/delete dialogs |
 | F07 | Idea draft API, autosave and conflict handling | Planned | Persist topic/notes/voice; revisions; failed saves preserve input; cross-user checks |
@@ -132,7 +132,7 @@ Database tests cover configuration/CLI failure, shared connections/reconnect, se
 
 ## F03 — implementation record and user testing checkpoint
 
-Implemented October 1, 2026. Backend only; F04 is not started.
+Implemented October 1, 2026. This record describes the backend milestone; F03 was subsequently user-approved and F04 is recorded separately below.
 
 - `apps/web/src/auth/config.ts`, `engine.ts`, `runtime.ts`: Better Auth 1.7.7 with MongoDB, explicit string user IDs, server-only lazy initialization, seven-day absolute sessions, no cookie token cache, secure production configuration, and admission checks. Public signup is disabled by configuration and creation hook; no native Better Auth HTTP handler is mounted.
 - `apps/web/src/auth/http.ts` and three `app/api/session` route files: strict input validation, exact Origin checks on mutations, bounded JSON bodies, safe response envelopes, private/no-store caching, cookie forwarding, generic credential failures and no session token in JSON. Session read returns a personal workspace ID matching the user ID; capabilities remain false until features exist.
@@ -154,7 +154,7 @@ Commands ran under Node 24.21.0 using `npm exec --yes --package=node@24.21.0 -- 
 | Final `npm run typecheck:web` and `npm run build` | Passed; three dynamic session API routes compiled; build requires no database credentials |
 | `git diff --check` | Passed before commit |
 
-Auth coverage includes provisioning/idempotency/real user uniqueness, signup denial, safe session DTOs, cookie attributes, missing/cross-site Origin, unknown fields/body bounds, generic invalid credentials, email/IP throttling, disabled access and revocation, expiry/tampering, runtime absence of schema operations, fail-closed incomplete setup and no native auth endpoint exposure. Test servers/databases stop after completion. The delegated manual checkpoint below passed; user feedback is still pending.
+Auth coverage includes provisioning/idempotency/real user uniqueness, signup denial, safe session DTOs, cookie attributes, missing/cross-site Origin, unknown fields/body bounds, generic invalid credentials, email/IP throttling, disabled access and revocation, expiry/tampering, runtime absence of schema operations, fail-closed incomplete setup and no native auth endpoint exposure. Test servers/databases stop after completion. The delegated manual checkpoint below passed; the user subsequently approved testing and code review on October 1, 2026.
 
 ### Delegated manual API testing — October 1, 2026
 
@@ -173,25 +173,69 @@ At the user's request, Codex exercised the interactive checkpoint against implem
 
 Additional checks used a temporary ad hoc TypeScript harness outside the repository, with password entry hidden and cookies held in memory. No credentials, tokens or generated media were added to the repository. Initial environment restrictions (npm registry DNS lookup and sandbox socket binding) were resolved by using the already-cached Node runtime and approved local networking; no product failure was observed. The Ctrl+C-interrupted launcher reported exit 1; both server listeners stopped.
 
-Scope limits: this was a local API walkthrough, not browser UI acceptance, Atlas verification, a new full regression run or production validation. The previously recorded 48 automated tests/typechecks/build were not rerun for this documentation-only milestone. The interactive operator CLI, session time passage and production HTTPS cookie behavior were not re-exercised manually. F04 remains unstarted pending user feedback.
+Scope limits: this was a local API walkthrough, not browser UI acceptance, Atlas verification, a new full regression run or production validation. The previously recorded 48 automated tests/typechecks/build were not rerun for this documentation-only milestone. The interactive operator CLI, session time passage and production HTTPS cookie behavior were not re-exercised manually. At that checkpoint F04 was unstarted; subsequent user approval authorized the F04 implementation below.
 
-### Runnable checkpoint — feedback required before F04
+### Historical F03 API checkpoint — now user-approved
 
 From the repository root using Node 24.21.0:
 
 1. Terminal one: `npm run auth:local`. Enter a name/email and a fresh test-only password (12–128 characters). Wait for Next.js Ready at `http://127.0.0.1:3001`.
 2. Terminal two: `npm run auth:verify`. Enter that same email/password. Expect PASS messages for anonymous denial, wrong-password denial, login/workspace identity, session recognition and logout.
 3. Stop terminal one with Ctrl+C. Disposable test data is removed.
-4. Report the result; development waits for feedback before the designed sign-in/recovery UI (F04).
+4. This checkpoint has been accepted; use the F04 browser checkpoint below for the current review.
 
 This is an API test, not a browser sign-in screen. No Atlas credentials are required. Do not use a real/reused password. Port 3001 must be free; avoid another Next.js development server in this same workspace during the test.
 
 ### Remaining limitations
 
 - Atlas configuration and actual hosted DB privileges remain unverified. Local checks do not establish production readiness.
-- No browser login/recovery UI or private page guards yet (F04). Operator-assisted one-use password recovery remains F04 scope; provisioning never silently resets passwords or re-enables disabled users.
+- At the F03 milestone, browser UI, page guards and password recovery were deferred to F04 (now implemented below). Provisioning never silently resets passwords or re-enables disabled users.
 - No jobs/publishing exist to cancel or pause on disable; later features must integrate these transitions. Hosted reverse-proxy IP trust must be verified before deployment.
 - Local HTTP cookies intentionally lack Secure; HTTPS production configuration requires it. No deployment, AI calls or social publication occurred.
+
+## F04 — implementation record and browser review checkpoint
+
+Implemented and locally verified October 1, 2026. User acceptance is pending; F05 has not started.
+
+### Scope and files
+
+- `app/sign-in/page.tsx`, `components/sign-in-form.tsx`, `components/auth-shell.tsx` under `apps/web`: Cinema sign-in, accessible email/password fields, show/hide, pending state, generic credential errors, service/network feedback and Retry-After cooldown. No public signup.
+- `app/access-help/page.tsx`: operator-assisted recovery guidance without exposing account membership or claiming an email was sent. Disabled/service-unavailable states have generic guidance.
+- `src/auth/page-guard.ts`, `navigation.ts`, `runtime.ts`: server session/admission checks for private pages, safe redirects and an allowlisted return destination. `/projects` is an authenticated workspace entry showing the current identity, not project CRUD or a video library.
+- `components/private-session.tsx`, `app/projects/page.tsx`: sign-out, session expiry, focus/periodic/history-restoration rechecks, identity-change reload and retry feedback when connectivity prevents verification. Future private pages and APIs must independently enforce authorization.
+- `src/auth/recovery.ts`, `scripts/auth-operator.ts`: hidden, confirmed password input for operator recovery after out-of-band identity verification. Supported Better Auth reset APIs consume a five-minute one-use token and revoke existing sessions. Disabled accounts remain disabled; no public reset endpoint or email delivery was added.
+- `app/globals.css`, `app/page.tsx`: approved Cinema tokens, responsive auth/workspace layouts and a working home sign-in link. Live Stitch retrieval was unavailable; implementation used the saved approved design specifications, not a newly verified pixel comparison.
+- `tests/auth.test.ts`, `scripts/auth-local.ts`, README, AGENTS and this status document: integration coverage, browser test instructions and the next-feature review gate. Prototype credentials, rendering code and video styling are unchanged.
+
+### Verification
+
+Commands ran under Node 24.21.0 using `npm exec --yes --package=node@24.21.0 -- …`:
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Both TypeScript checks and 23/23 prototype tests passed |
+| `npm run test:db` | 11/11 real local MongoDB replica-set tests passed |
+| `npm run test:auth` | 17/17 passed, including actual Next.js page/API requests, anonymous/expired/disabled route guards, safe return redirects, recovery/session revocation and one-use reset-token replay rejection |
+| `npm run build` | Production build passed, including sign-in, access-help and private projects routes; no hosted credentials required |
+| Desktop browser | Wrong-password generic error, cleared password, show/hide, successful login with correct identity, sign-out and anonymous private-route redirect passed |
+| Mobile browser, 390 × 844 | Sign-in and recovery inspected; no horizontal overflow; help navigation passed |
+| Screenshots | [Desktop sign-in](design/verification/f04-sign-in-desktop.png), [workspace](design/verification/f04-workspace-desktop.png), [mobile sign-in](design/verification/f04-sign-in-mobile.png), [mobile recovery](design/verification/f04-recovery-mobile.png) |
+
+Total: 51 automated tests passed. Browser checks used a temporary Next.js server and disposable local MongoDB with synthetic credentials; that preview is stopped. No real credentials, paid API calls, deployment or social publication occurred.
+
+### User browser checkpoint — review before F05
+
+1. From the repository root with Node 24.21.0, run `npm run auth:local`. Enter a test name/email and a fresh test-only password of 12–128 characters. No Atlas configuration is needed.
+2. Once Ready, open `http://127.0.0.1:3001/sign-in`. Check a wrong password, password visibility and “Need help signing in?”. Then sign in and verify your name/email.
+3. Sign out, then visit `/projects`; it should return to sign-in. Inspect desktop and mobile layouts.
+4. Stop with Ctrl+C and share feedback. Keep port 3001 free and avoid a second Next.js dev server in this workspace. The local fixture is disposable.
+
+### Remaining limitations
+
+- Atlas credentials/privileges, production HTTPS and deployment remain unverified. This is local acceptance evidence.
+- Throttling is backend-tested; the UI cooldown and offline branches were not browser fault-injected. Expired-session redirects are integration-tested, not verified by waiting seven days in a browser. Operator recovery is function-tested; interactive recovery prompts have not had a separate manual walkthrough.
+- Project CRUD/library, AI generation and Instagram integration remain future features. The private workspace explicitly says video creation is coming soon.
+- Recovery requires a trusted operator and out-of-band identity verification. Automated recovery email, public signup and an admin web console are outside this slice.
 
 ## Earlier evidence
 
@@ -201,6 +245,8 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | F04 | Implemented Cinema sign-in/recovery, private workspace guards and operator recovery; browser review pending before F05 | 51 tests, both typechecks, production build and desktop/mobile browser walkthrough passed; four screenshots saved |
+| 2026-10-01 | F03 acceptance | User confirmed feature testing and code review; authorized F04 | User approval in this conversation |
 | 2026-10-01 | F03 manual testing | Completed user-delegated interactive API checkpoint and additional negative/security checks; recorded evidence only; awaiting user feedback before F04 | `auth:verify` exit 0 with five PASS messages; extra origin/input/cookie/disabled-account/rate-limit checks passed; local servers stopped; documentation checked with `git diff --check` |
 | 2026-10-01 | F03 | Implemented internal authentication backend, operator account tools and disposable user-testing commands; waiting for user test before F04 | 14 auth/HTTP tests, 11 database tests, 23 prototype tests, typechecks and production build passed; user acceptance pending |
 | 2026-10-01 | F02 | Completed local MongoDB foundation, initial schemas/indexes, operator setup and configuration documentation | 11 database tests, 23 prototype tests, both typechecks and production build passed on Node 24; hosted Atlas setup outstanding |

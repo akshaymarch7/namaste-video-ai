@@ -2,7 +2,7 @@
 
 A local TypeScript prototype for short educational motion-graphics videos. The first user-reviewed output is `runs/water-cycle-viraj-live/output.mp4`: 81.7 seconds, 1080 × 1920, Daniel narration, captions and animated water diagrams. The storyboard for that first video was authored. Gemini planning and conversational revision are now working through Gemini 3.5 Flash's Interactions API.
 
-The repository also includes an isolated Next.js application in `apps/web`, with database and internal authentication foundations. The sign-in screen and project dashboard are not implemented yet. [Project Status](PROJECT_STATUS.md) is the development source of truth; [prototype status](PROTOTYPE_STATUS.md) retains historical pipeline evidence.
+The repository also includes an isolated Next.js application in `apps/web`, with database and internal authentication foundations, Cinema sign-in/recovery screens and a protected workspace entry. Project CRUD and the video library are not implemented yet. [Project Status](PROJECT_STATUS.md) is the development source of truth; [prototype status](PROTOTYPE_STATUS.md) retains historical pipeline evidence.
 
 ## Run the application scaffold
 
@@ -45,13 +45,15 @@ Connection pooling and transaction options follow the [MongoDB driver documentat
 
 ## Test the authentication backend (F03 checkpoint)
 
+F03 was user-tested and code-reviewed on October 1, 2026. For the new **F04 browser checkpoint**, run `npm run auth:local` as below, then open **http://127.0.0.1:3001/sign-in**. Try a wrong password, show/hide the password, open “Need help signing in?”, then sign in with your test account. Check your name/email in the protected workspace and sign out. Opening `/projects` while signed out must return you to sign-in. Inspect desktop and mobile widths. Stop the local process with Ctrl+C and share feedback before F05.
+
 Use Node 24.21.0 in two terminals, both at the repository root. No Atlas configuration is needed for this disposable test:
 
 1. Run `npm run auth:local`. Enter a test name, email and a new test-only password of 12–128 characters. Password input is hidden. Wait for Next.js to report Ready on **http://127.0.0.1:3001**.
 2. In the second terminal, run `npm run auth:verify` and enter the same email/password. It exercises the actual Next.js endpoints: anonymous denial, wrong-password denial, successful login, session recognition and logout/revocation. Cookies remain in memory and are not printed.
-3. Return to the first terminal and press Ctrl+C. The disposable MongoDB replica set and test data are removed. Share test feedback before F04 begins.
+3. Return to the first terminal and press Ctrl+C. The disposable MongoDB replica set and test data are removed. Share browser test feedback before F05 begins.
 
-This checkpoint tests the API, not a sign-in screen; the Cinema sign-in UI is F04. The launcher uses isolated data and a temporary signing secret; it does not read prototype credentials or point to Atlas. The first run may download the pinned official MongoDB binary. Use a free port 3001 and avoid running another Next.js development process in this workspace simultaneously.
+`auth:verify` tests the API; the browser flow above tests the F04 UI. The launcher uses isolated data and a temporary signing secret; it does not read prototype credentials or point to Atlas. The first run may download the pinned official MongoDB binary. Use a free port 3001 and avoid running another Next.js development process in this workspace simultaneously.
 
 ### Configured development database
 
@@ -68,7 +70,11 @@ Provisioning is an interactive operator action, after out-of-band verification o
 - `GET /api/session` — cookie session and current enabled-access check.
 - `POST /api/session/sign-out` — strict `{}`, exact Origin, clears/revokes the cookie session.
 
-`npm run auth:operator -- disable` denies access before deleting that user's session records. No jobs/publication state exists yet to cancel/pause; those integrations belong to their later features. Password recovery is not implemented in this backend slice; it will be addressed with the F04 recovery flow.
+`npm run auth:operator -- disable` denies access before deleting that user's session records. No jobs/publication state exists yet to cancel/pause; those integrations belong to their later features.
+
+`npm run auth:operator -- recover` performs operator-assisted recovery for an enabled, provisioned account after out-of-band identity verification. Enter and confirm the new password in hidden terminal prompts. Better Auth generates a five-minute one-use token held only in memory by the command; its supported reset API consumes the token and revokes existing sessions. No reset link/token/password is printed or sent by email, no public reset handler exists, and disabled accounts are not automatically re-enabled.
+
+The public `/access-help` screen explains how to contact the administrator without claiming an email was sent or revealing account membership. The `/projects` page checks the actual session and enabled admission on every server render. It is a workspace entry, not the future project library. Session expiry redirects to sign-in; disabled/service-unavailable requests render generic recovery guidance. The client rechecks on window focus, periodically and after history restoration; it hides workspace content during checks, handles connectivity errors and reloads when the account identity changes. Future private pages must call the same server guard independently; a persistent layout alone is insufficient. Return destinations currently allow only `/projects`.
 
 Sessions have a seven-day absolute lifetime, HttpOnly/SameSite=Lax cookies, no browser-readable token cache and no token fields in JSON. Production requires HTTPS/Secure cookies; HTTP is allowed only on development loopback. API responses use private/no-store caching. Generation/publishing capabilities are false until those features exist.
 
