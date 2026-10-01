@@ -627,3 +627,17 @@ Started from clean `a0b73fd` using Node 24.21.0 and `npm run auth:local -- --pro
 Evidence: [saved fixture and sample controls](design/verification/f08b-manual-editor.png), [unknown-request recovery](design/verification/f08b-manual-recovery.png). Screenshots contain only synthetic test content. No credentials, signed sample URLs, cookies or downloaded audio were saved in the repository. `git diff --check` passed.
 
 Result: application/recovery checks above passed, but this is not a complete live Gemini happy-path pass. Successful live generation should be rechecked before treating the manual checkpoint as fully green. No implementation defect was established from the bounded provider failures. Typechecks, production build, full regression suite, hosted operation, two-tab suggestion races and injected network outages were not rerun for this evidence-only milestone. F09 remains unstarted pending user review.
+
+
+### F08b controlled Gemini diagnostic retest — October 2, 2026
+
+Following the manual QA report, two sequential synthetic binary-search requests used the actual `suggest` adapter, configured web model `gemini-3.5-flash`, existing 30-second timeout and a diagnostic fetch wrapper. No browser reload, database, fixture substitution or automatic retry participated.
+
+| Attempt | Sanitized evidence | Result |
+| --- | --- | --- |
+| 1 | HTTP 503; Google category UNAVAILABLE; headers 22,346 ms; total 22,354 ms | PROVIDER_UNAVAILABLE; no suggestion cards possible |
+| 2 | No HTTP response headers; TimeoutError at 30,008 ms | PROVIDER_OUTCOME_UNKNOWN; provider completion/usage cannot be inferred |
+
+This independently reproduces both reported failure classes. Attempt 1 demonstrates upstream availability failure rather than an authentication error for that request; attempt 2 demonstrates the configured client/provider deadline, without proving why upstream was slow. Neither required browser reload. The original three QA requests still cannot be retrospectively classified beyond their stored safe codes. Google documents 503 UNAVAILABLE as temporary overload/unavailability: https://ai.google.dev/gemini-api/docs/troubleshooting .
+
+No implementation, model, timeouts, retry semantics or credentials changed. No prompts, keys, raw provider messages or generated output were logged. Existing automated/UI passes remain separate from live reliability; F08b live Gemini acceptance remains incomplete. Recommended next slice: bounded server-side diagnostics (HTTP status, allowlisted category, duration and request correlation) with redaction tests, then a controlled model/latency comparison. Do not blindly increase only the provider timeout: browser, receipt and route limits are respectively 40/45/60 seconds. Do not automatically retry ambiguous outcomes. This is diagnosis, not a provider reliability fix.
