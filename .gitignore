@@ -1,0 +1,11 @@
+node_modules/
+.env*
+!.env.example
+runs/
+public/runs/
+.remotion/
+dist/
+.DS_Store
+
+.next/
+*.tsbuildinfo
