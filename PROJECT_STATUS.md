@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F08b — Implemented; ready for review.** Gemini brainstorming, request recovery and explicit suggestion application are available. The ElevenLabs `voices_read` permission issue is resolved: the live app adapter downloads Daniel's sample successfully after support for the provider's signed preview endpoint. Browser audio playback remains to be verified. F08a was user-approved; wait for F08b review before F09.
+**F08b — Implemented; QA has a live Gemini limitation.** Daniel sample browser playback, pause and completion now pass. Recovery and fixture-backed suggestion application/autosave/reload pass. This manual run produced two unknown Gemini outcomes and one `PROVIDER_UNAVAILABLE` failure, so successful live suggestion generation was not reproduced. Earlier successful generation evidence remains historical. F08a was user-approved; wait for F08b review before F09.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -40,7 +40,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F06 | My videos library UI | Done; user approved | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
 | F07 | Idea draft API, autosave and conflict handling | Done; user approved progression | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
 | F08a | Cinema idea editor and autosave integration | Done locally; delegated testing passed, user review pending | Browser autosave/reload, both conflict choices, validation recovery, mobile editing and 87-second session-focus check passed; prior 56-test/typecheck/build evidence below |
-| F08b | AI brainstorming and voice previews | Implemented — awaiting review | Gemini topic suggestions; use suggestion; available voice preview |
+| F08b | AI brainstorming and voice previews | Implemented — awaiting review; live Gemini retest limited | Browser Daniel playback passed; fixture-backed Use idea/save/reload and recovery passed; latest live Gemini requests returned unknown/unavailable |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
@@ -606,3 +606,24 @@ Review checkpoint: run `npm run auth:local -- --providers` with Node 24, choose 
 The user enabled `voices_read` on the correct existing API key. Retesting returned HTTP 200 for voice metadata and the sample. Metadata now supplies a signed `api.us.elevenlabs.io/v1/voices/{Daniel ID}/previews/audio` URL rather than the static `.mp3` paths previously supported. Updated `apps/web/src/ideas/providers.ts` to accept only that exact host/voice/path, including its server-only query. HTTPS, URL length, no credentials/fragment, redirect rejection, MIME and byte bounds remain enforced. The sample fetch does not forward the API key. No keys or signed URLs are logged or committed.
 
 Verification: 6/6 provider tests passed, including the new signed-endpoint acceptance, wrong-host/voice/path rejection and no-key-forwarding regression test in `apps/web/tests/idea-providers.test.ts`; `npm run typecheck:web` passed. The actual app adapter downloaded 45,975 bytes successfully from ElevenLabs. No speech was synthesized. Browser playback and production build were not rerun for this narrow adapter change. Earlier 401 limitations are superseded by this evidence. README and AGENTS checkpoint updated; unrelated generated `next-env.d.ts` changes are excluded from this commit.
+
+### F08b manual QA — October 2, 2026
+
+Started from clean `a0b73fd` using Node 24.21.0 and `npm run auth:local -- --providers`, with a fresh disposable account. Concurrent work committed the signed-preview fix as `146105c` during this run; it was preserved and the subsequent successful preview checks exercised that updated adapter. This milestone changes documentation and synthetic screenshots only.
+
+| Check | Observed result |
+| --- | --- |
+| Real Gemini requests | Three explicit requests: two persisted `unknown / PROVIDER_OUTCOME_UNKNOWN`, then one `failed / PROVIDER_UNAVAILABLE`. The second request stayed open and returned after 30.4 seconds; the third failed after 11.9 seconds. No successful live suggestion is claimed for this run. |
+| Reload and recovery | Reloaded the first request while Exploring; saved Topic survived, prompt reset as documented, and Check request restored the running state. Later checking showed the unknown-outcome warning, including possible repeat credit usage. New requests required explicit action. |
+| Fixture boundary | After the live failures, used the real idea service with a local `manual-qa-fixture` provider to persist three clearly labelled QA cards in the disposable database. No production code or provider response was altered. The following application checks use these fixtures, not live Gemini results. |
+| Use idea and stale protection | Read idea expanded; Use idea copied the first fixture topic and focused Topic. All three cards disabled immediately while unsaved and stayed disabled with earlier-draft guidance after All changes saved. |
+| Reload persistence | Mobile reload retained the applied Topic and three stale cards; no second application or replacement occurred. |
+| Prompt validation | Empty and 2,001-character prompts disabled Suggest ideas. No provider request was made for those inputs. |
+| Daniel preview | Initial unavailable state preserved narrator choice. After the concurrent signed-URL fix, preview returned HTTP 200 and exposed audio controls. Play changed to Pause with `readyState=4`, advancing currentTime and no media error; playback ended at 5.746875 seconds. A second play paused at 5.627835 seconds without error. No speech synthesis was invoked. This verifies browser media behavior, not subjective listening quality. |
+| Narrow-layout smoke check | Requested 390×844 viewport; browser reported 325 CSS-pixel viewport and 312px document/scroll width, with no measured horizontal overflow. Saved draft and stale cards survived reload; prompt validation worked. Full-page capture was visibly clipped, so it was discarded and complete mobile visual acceptance is not claimed. This is desktop browser emulation, not a mobile OS test. |
+| Targeted automated checks | Initial idea/provider suite passed 12/12. Rerun after signed-preview changes passed 13/13, including receipt replay, deadline/late-completion fencing, owner/origin/revision denial and signed URL restrictions. |
+| Cleanup | Signed out successfully, reset viewport, closed test tab, removed temporary credentials and stopped launcher with Ctrl+C. Neither port 3001 nor the disposable MongoDB port 64414 retained a listener. |
+
+Evidence: [saved fixture and sample controls](design/verification/f08b-manual-editor.png), [unknown-request recovery](design/verification/f08b-manual-recovery.png). Screenshots contain only synthetic test content. No credentials, signed sample URLs, cookies or downloaded audio were saved in the repository. `git diff --check` passed.
+
+Result: application/recovery checks above passed, but this is not a complete live Gemini happy-path pass. Successful live generation should be rechecked before treating the manual checkpoint as fully green. No implementation defect was established from the bounded provider failures. Typechecks, production build, full regression suite, hosted operation, two-tab suggestion races and injected network outages were not rerun for this evidence-only milestone. F09 remains unstarted pending user review.
