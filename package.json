@@ -26,7 +26,9 @@
     "test:drafts": "npm run test:drafts --workspace=@namastevideo/web --",
     "drafts:verify": "npm run drafts:verify --workspace=@namastevideo/web --",
     "test:ideas": "npm run test:ideas --workspace=@namastevideo/web --",
-    "ideas:probe": "npm run ideas:probe --workspace=@namastevideo/web --"
+    "ideas:probe": "npm run ideas:probe --workspace=@namastevideo/web --",
+    "test:storyboards": "npm run test:storyboards --workspace=@namastevideo/web --",
+    "storyboards:probe": "npm run storyboards:probe --workspace=@namastevideo/web --"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.529",

@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F08b — Topic-switch browser QA passed; ready for user approval.** Independent testing of `e144b8c` returned water-cycle suggestions despite saved binary-search topic/notes, preserved the draft until Use idea, recovered after reload during generation, and used saved binary-search context for an implicit refinement. Four real browser requests completed in 1.86–2.52 seconds; the prior topic-switching P2 finding is closed by this retest. Use idea/autosave/reload and 20 targeted tests passed. Reliability was previously accepted. Do not start F09 before user approval.
+**F08b — User approved. F09a — Implemented locally; ready for planner QA.** The strict core PlanV2 contract, bounded Gemini planner and private local inspection command are implemented. Live RAM/storage and water-cycle candidates passed validation (six scenes, 66 and 70.4 seconds estimated). F09b still owns immutable database versions and owner-protected APIs; F10 owns review UI. No new storyboard dashboard controls or rendering integration are claimed.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -39,9 +39,10 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F05 | Personal project create/list/rename/delete APIs | Done; user approved | Five-group interactive checkpoint and extended two-user/pagination/revision/deletion checks passed; prior 65 automated tests/types/build recorded below |
 | F06 | My videos library UI | Done; user approved | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
 | F07 | Idea draft API, autosave and conflict handling | Done; user approved progression | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
-| F08a | Cinema idea editor and autosave integration | Done locally; delegated testing passed, user review pending | Browser autosave/reload, both conflict choices, validation recovery, mobile editing and 87-second session-focus check passed; prior 56-test/typecheck/build evidence below |
-| F08b | AI brainstorming and voice previews | Implemented — local QA passed; user approval pending | Live topic switching, implicit refinement, draft preservation, recovery, Use idea/save/reload and prior Daniel playback passed; topic-switching finding closed |
-| F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
+| F08a | Cinema idea editor and autosave integration | Done; user approved | Browser autosave/reload, both conflict choices, validation recovery, mobile editing and 87-second session-focus check passed; prior 56-test/typecheck/build evidence below |
+| F08b | AI brainstorming and voice previews | Done; user approved | Live topic switching, implicit refinement, draft preservation, recovery, Use idea/save/reload and prior Daniel playback passed; topic-switching finding closed |
+| F09a | Storyboard contract and planner | Implemented locally; review pending | Validated PlanV2 subset, bounded repair, live local probe; no persistence/UI |
+| F09b | Storyboard candidate storage and APIs | Planned | Saved immutable versions, owner isolation, idempotency and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
 | F12 | Private R2 asset adapter and media access | Planned | Private upload/read, owner-authorized access, expiry and missing-asset behavior |
@@ -727,3 +728,31 @@ Read-only database evidence before Use idea: four completed receipts, null error
 Evidence: [water-cycle cards beside unchanged binary-search draft](design/verification/f08b-qa-topic-switch.png), [implicit saved-context refinement](design/verification/f08b-qa-implicit-context.png), [water-cycle idea saved and reloaded](design/verification/f08b-qa-water-cycle-saved.png). Synthetic data only. Signed out, closed the QA tab, removed temporary credentials and stopped the launcher. Ports 3001 and 56978 had no remaining listeners; restored only the known Next-generated route-type path changes.
 
 Result: **PASS for the requested browser checkpoint; prior topic-switching P2 finding closed.** F08b is ready for user approval under the documented local scope. No implementation changes or new feature work; F09 remains unstarted.
+
+
+## F09a — Validated storyboard contract and local planner (October 2, 2026)
+
+F08b QA was explicitly accepted by the user. F09 was split into this contract/planner slice and F09b persistence/API integration so a validated candidate format can be reviewed before enabling dashboard generation.
+
+Implemented files:
+- `apps/web/src/storyboards/contracts.ts`: strict PlanV2 core schema, supported visual union (title/takeaway/flow/comparison v1), bounded narration/labels/events/sources/pronunciation, unique IDs, target/action checks, flow endpoint checks, exact case-sensitive cue occurrence checks, source references and exact provided-note excerpts. Overlapping/missing pronunciation substitutions fail. Duration estimate is whitespace-token count after pronunciation substitution at 150 words/minute, bounded to 60–90 seconds; diagnostic range issues include actual/minimum/maximum word counts. No measured audio timing is claimed.
+- `apps/web/src/storyboards/planner.ts`: server-only saved-idea planning with configured web Gemini model, minimal thinking for supported IDs, 128 KiB response cap and 30 seconds per attempt. At most one repair of completed invalid output; no retry after HTTP failure, transport uncertainty, truncation or blocked output. Exhaustion returns STORYBOARD_INVALID with safe bounded field/code/numeric diagnostics. Diagnostic callback emits attempt/status/category/duration only and cannot alter result success.
+- Provider wire format uses a JSON string for each component data object and a simplified generated schema without provider-side size/range/pattern constraints. The complete contract remains in instructions and all wire/decoded output passes full local validation. Wire strings are parsed as JSON, never evaluated or executed. No arbitrary SVG, code or remote asset component is accepted.
+- `apps/web/scripts/storyboards-probe.ts` and package commands: creates an exclusive mode-0600 local JSON artifact in ignored `apps/web/runs/storyboards`; prints path, scene count, estimate and attempt count. This is an inspection artifact, not a stored project version, approval or generated video. It neither reads nor writes prototype runs and exposes no HTTP route.
+- `apps/web/tests/storyboards.test.ts`: contract, component, source, cue, pronunciation, duration, safe diagnostics, transport, repair and wire-format tests. API/DB design and README document the staged boundary.
+
+Verification:
+| Check | Result |
+| --- | --- |
+| `npm run test:storyboards` | 13/13 passed |
+| `npm run check` | Prototype/web typechecks and 23/23 existing rendering/algorithm tests passed; final web typecheck also passed after planner refinements |
+| `npm run build` | Production build passed; no storyboard routes added |
+| RAM/storage live probe | HTTP 200, first candidate rejected, one repair succeeded: 4,287 + 3,558 ms. Six scenes, 165 spoken words, 66-second estimate. Artifact: `apps/web/runs/storyboards/426c8f92-fd86-4c9f-85be-5fd39d8672e3.json` |
+| Water-cycle live probe | Final request HTTP 200 in 6,052 ms, first attempt valid. Six scenes, 176 words, 70.4-second estimate. Artifact: `apps/web/runs/storyboards/93323574-c08b-4a2c-abe0-48782b0e2e96.json` |
+| Content inspection | Both saved JSON artifacts were read; narration and component selection matched their requested subject. No independent factual certification or human publication approval is implied. |
+
+Development probes exposed real upstream schema rejections and invalid candidates (missing cues, out-of-range narration length, extra keys); these were rejected, not stripped into acceptable plans. A fuller Flash comparison returned 503 and did not automatically retry. The final grammar/instructions corrected compatibility, and numeric word-count feedback improved the repair path. These historical failures are not counted as successful live validation. Model availability and generation quality remain variable; two validated artifacts do not establish production reliability.
+
+Remaining work: F09b must add owner isolation, immutable candidate documents/hashes, idempotent request admission, active-project fencing, source-revision/stale-result behavior, pagination/read APIs and crash recovery. Its time budget must allow up to two planner attempts; the existing F08b 45-second receipt cannot simply be reused unchanged. F10 will add schematic storyboard/script review. PlanV2 is not yet accepted by the prototype PlanV1 renderer, and the wider registry (binary search, water-specific drawings, charts, diagrams, timelines) is not enabled. Semantic/factual review and measured narration/event bounds remain later checks. No DB changes, dashboard changes, audio spending, deployment or social publishing occurred in this slice.
+
+QA command: `npm run storyboards:probe -- "Explain RAM versus storage to beginners"` under Node 24. This is a live provider request and may consume credits; one validation repair may make a second call. Open its printed JSON path and inspect narration, visuals, cues and estimated duration. Share results before moving to F09b.

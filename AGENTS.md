@@ -11,3 +11,5 @@
 - F07 and its autosave recovery fix were accepted for progression on October 1, 2026. F08 is split into F08a (idea editor/autosave UI) and F08b (AI brainstorming/voice previews). At the end of F08a, provide the editor browser checkpoint and wait for user feedback before F08b.
 
 - F08a QA/code review was accepted on October 2, 2026. F08b brainstorming is implemented; Daniel browser playback passed. The Gemini minimal-thinking/Flash-Lite reliability fix passed live dashboard checks; see the latest Project Status checkpoint for evidence and remaining provider limits. Provide its checkpoint and wait for user feedback before F09. See PROJECT_STATUS.md for exact verification and limitations.
+
+- F08b QA was user-approved on October 2, 2026. F09 is split into F09a (validated core PlanV2 contract/planner/local probe) and F09b (candidate persistence and APIs). Do not describe F09a artifacts as saved dashboard versions or rendering approvals. F10 owns storyboard UI; prototype PlanV1 remains unchanged.

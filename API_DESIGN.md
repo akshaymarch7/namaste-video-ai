@@ -500,3 +500,12 @@ No request/response shape changes. Terminal failed receipts can now distinguish 
 ### F08b brainstorming context precedence (October 2, 2026)
 
 The current `prompt` is authoritative when it names a subject or audience. Saved topic/notes are optional context for implicit refinement and must not override an explicit topic switch. Suggestions do not mutate the saved draft; sourceDraftRevision remains the revision of the context snapshot regardless of the suggested subject. No public DTO or persistence schema change.
+
+
+### F09a staged storyboard contract (October 2, 2026)
+
+F09 is split before exposing S03/S04/S05: F09a implements a pure strict PlanV2 validation module and server-only planner, callable through a local operator probe. F09b will introduce owner-scoped request receipts, immutable candidate persistence and HTTP contracts. No new dashboard endpoint or OpenAPI operation is exposed in F09a.
+
+The initial PlanV2 registry subset is title, takeaway, flow and comparison, all version 1. Events require known component targets/actions and exact case-sensitive narration cues. Source IDs and flow endpoints are validated. Provided-note source excerpts must occur in supplied notes. Pronunciation substitutions must resolve and cannot overlap. Planning duration is estimated from whitespace-separated spoken words (after pronunciation substitutions) at 150 words/minute and must fall within 60–90 seconds; it is not measured narration timing. Actual audio-bound event validation belongs to the compiler stage. The prototype PlanV1 renderer remains separate and is not claimed to consume PlanV2.
+
+A planner call can make at most two provider requests: one initial request and one explicit validation repair of a completed candidate. HTTP failures, transport ambiguity and truncated/blocked output are never retried automatically. Each attempt is bounded at 30 seconds and 128 KiB; F09b must account for both attempts when defining receipt/route budgets. The provider wire schema encodes each visual data object into a bounded dataJson string and omits size/range/pattern constraints from the provider grammar after its full schema was rejected upstream. The complete contract is supplied in instructions; wire parsing, JSON decoding and full local schema/semantic validation remain authoritative. No wire-format data is exposed as a PlanV2 candidate. Exhausted repair returns STORYBOARD_INVALID with bounded path/code diagnostics only.

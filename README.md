@@ -232,3 +232,12 @@ The verified web brainstorming configuration is `GEMINI_MODEL=gemini-3.5-flash-l
 Run `npm run ideas:probe` under Node 24 for **one live request** using synthetic binary-search input. It can consume provider credits. It prints status/category/duration and suggestion count without model text or secrets. Application attempts emit `idea_provider_result` in server logs, correlated by the receipt ID returned by the suggestions API. Categories come from HTTP status/local validation, not raw provider messages. Logs are not stored in the database or returned to the browser. Retain server logs if you need historical investigation.
 
 No automatic retry or fallback is enabled. Unknown outcomes remain unresolved; Check request recovers the existing receipt, while a new request can consume usage again. The October 2 fix passed six selected-model live checks (including dashboard application and recovery after reload); see Project Status for exact timings and limitations.
+
+
+### F09a storyboard planner checkpoint (backend only)
+
+Run `npm run storyboards:probe -- "Explain the water cycle to school students"` with Node 24 and the existing web Gemini configuration. It makes one live planning request and, only for a completed invalid candidate, at most one repair request. Provider calls may consume credits. A successful command prints an absolute path to a private ignored JSON inspection artifact under `apps/web/runs/storyboards`. It does not create a dashboard project/version, synthesize speech or render video. Each attempt has a 30-second timeout; unknown/provider failures do not automatically retry.
+
+Review the saved `content.scenes`: narration, on-screen labels, flow/comparison data and exact narration cue events. `estimatedDurationSeconds` uses 150 spoken words/minute; it is not measured audio duration. The current version-1 registry includes title, takeaway, flow and comparison. The prototype renderer still consumes its original PlanV1 format. PlanV2 persistence/APIs are F09b and review UI is F10.
+
+Run `npm run test:storyboards` for offline contract, planner and bounded-repair tests. The provider receives a reduced wire grammar; decoded output must pass the complete local validation contract before it can be saved as an inspection artifact. Narration relevance and factual accuracy still require human review.
