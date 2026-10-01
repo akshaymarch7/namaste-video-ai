@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F07 — Done locally; user testing/code review pending.** User approved moving beyond F06 and its focus fix. This slice adds idea draft persistence and a reusable autosave controller; the visible idea editor remains F08. Wait for user review before F08.
+**F07 — Done locally; delegated API/autosave testing passed; user feedback/code review pending.** User approved moving beyond F06 and its focus fix. This slice adds idea draft persistence and a reusable autosave controller; the visible idea editor remains F08. Wait for user review before F08.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -38,7 +38,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F04 | Sign-in/recovery UI and private route protection | Done; user approved, including P2 fix | 51 automated tests and prior types/build passed; delegated desktop/mobile browser and interactive operator recovery walkthrough passed; evidence below |
 | F05 | Personal project create/list/rename/delete APIs | Done; user approved | Five-group interactive checkpoint and extended two-user/pagination/revision/deletion checks passed; prior 65 automated tests/types/build recorded below |
 | F06 | My videos library UI | Done; user approved | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
-| F07 | Idea draft API, autosave and conflict handling | Done locally; user review pending | 14 draft/autosave tests; 71 existing tests, both typechecks and build passed; actual Next.js draft checkpoint below |
+| F07 | Idea draft API, autosave and conflict handling | Done locally; delegated testing passed, user review pending | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
 | F08 | Idea and brainstorming UI/integration | Planned | Save real idea; Gemini topic suggestions; use suggestion; available voice preview |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
@@ -438,7 +438,28 @@ Executed with cached **Node 24.21.0** placed first in PATH (the initial npm-exec
 | Final targeted rerun | 25/25 DB/draft/autosave tests passed after tightening the explicit predecessor guard and copying the initial client snapshot |
 | `npm run build` | Passed, including TypeScript and the dynamic `/api/projects/[id]/draft` route |
 
-**85 distinct automated tests** passed across the suites above; the final 25-test targeted rerun and production build also passed. `git diff --check` passed. Interactive password entry in the new verifier was not separately exercised; its exact API checkpoint function ran against Next.js in auth integration. No new browser UI exists in F07, so no browser screenshot is presented as feature evidence. Test servers/databases stop after completion. No Atlas migration, paid provider call, rendering run, deployment or Instagram publication occurred.
+**85 distinct automated tests** passed across the suites above; the final 25-test targeted rerun and production build also passed. `git diff --check` passed. At implementation handoff, interactive password entry in the new verifier had not been separately exercised; the delegated walkthrough below now verifies it. No new browser UI exists in F07, so no browser screenshot is presented as feature evidence. Test servers/databases stop after completion. No Atlas migration, paid provider call, rendering run, deployment or Instagram publication occurred.
+
+### Delegated API and autosave testing — October 1, 2026
+
+At the user's request, Codex tested implementation commit `d04b915` under cached Node 24.21.0, starting `npm run auth:local` with fresh synthetic credentials. No application code/configuration changed; this evidence milestone changes `PROJECT_STATUS.md` only.
+
+| Check | Observed result |
+| --- | --- |
+| Interactive `npm run drafts:verify` | Hidden password entry worked; exit 0 and all four PASS groups: blank draft, persisted fields, conflict/validation denial and explicit revision retry/edited-project deletion guard |
+| Targeted controller suite | `node --import tsx --test apps/web/tests/autosave.test.ts`: 7/7 passed, including debounce, disposal, recovery, competing edits and transport/session behavior |
+| Live controller persistence | Actual controller saved all four fields through mounted Next.js routes; readback preserved Unicode, emoji, leading/trailing whitespace and newlines; content hash changed |
+| Simulated pre-send failure | Test transport threw SERVICE_UNAVAILABLE before sending; local input survived, server revision stayed unchanged, read-before-retry recovered and subsequent save persisted it |
+| Simulated lost response after commit | Real API accepted the save, then test transport withheld its successful response and threw CONNECTION; recovery read the committed revision without another write and preserved newer typing for the next save |
+| Typing during an in-flight save | Held an actual successful API response while editing locally; a second flush sent no concurrent write; acknowledgement left newer input dirty, and the next save persisted it |
+| Competing writer and keep-local | Independent API save advanced the revision; controller hit a real conflict, kept local input and blocked automatic writes; recovery exposed remote content and explicit keep-local saved successfully |
+| Explicit use-remote | Another real competing edit produced a conflict; choosing use-remote adopted remote content without another write; parent draftRevision matched saved draft revision while metadata revision stayed 1 |
+| Session failure | Signed out the test API session, then attempted another save; actual UNAUTHENTICATED response retained unsaved local notes |
+| Cleanup | Disposed the controller, removed temporary harness and stopped auth:local with Ctrl+C; no remaining listeners on port 3001 or its disposable MongoDB port; restored generated next-env.d.ts change |
+
+The seven live controller checks used a temporary TypeScript harness outside the repository, importing the actual `createAutosave` controller with a custom test transport targeting the real local APIs. Failure/response delay was injected only in that transport; no browser outage or visible editor is claimed. Harness exit 0; no passwords/session cookies printed or committed. Edited fixtures were left for disposable database shutdown because populated-project deletion remains guarded. No functional defect was observed; `git diff --check` passed.
+
+Scope limits: the full 85-test suite, both typechecks and production build were not rerun. Migration upgrade/drift and cross-user cases retain prior automated evidence; this walkthrough exercised fresh disposable setup. Browser editor integration, full-reload retention, Atlas and production behavior remain unverified. F08 remains unstarted pending user feedback/code review.
 
 ### User testing checkpoint — before F08
 
@@ -461,6 +482,7 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | F07 delegated testing | Completed interactive draft API checkpoint and live autosave failure/conflict recovery walkthrough; documentation only; user feedback/code review pending before F08 | Four verifier PASS groups, seven live controller PASS groups and 7/7 targeted autosave tests passed; local servers stopped; `git diff --check` passed |
 | 2026-10-01 | F07 | Implemented idea draft persistence, reviewed validator upgrade and reusable autosave/conflict recovery; added local API verification command | 85 distinct tests, both typechecks, final 25-test rerun and production build passed; F08 waits for review |
 | 2026-10-01 | F06 acceptance | User authorized the next feature after the session-focus fix | Conversation approval |
 | 2026-10-01 | F06 delegated testing | Completed requested desktop/mobile library walkthrough and two-tab conflict test; added three screenshots; user feedback pending before F07 | Create/rename/delete/persistence, all filters, 12-to-13 Load more, conflict recovery and keyboard checks passed; test servers stopped; `git diff --check` passed |
