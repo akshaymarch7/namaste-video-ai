@@ -2,7 +2,7 @@
 
 A local TypeScript prototype for short educational motion-graphics videos. The first user-reviewed output is `runs/water-cycle-viraj-live/output.mp4`: 81.7 seconds, 1080 × 1920, Daniel narration, captions and animated water diagrams. The storyboard for that first video was authored. Gemini planning and conversational revision are now working through Gemini 3.5 Flash's Interactions API.
 
-The repository also includes an isolated Next.js application in `apps/web`, with database and internal authentication foundations, Cinema sign-in/recovery screens and a protected workspace entry. Project CRUD and the video library are not implemented yet. [Project Status](PROJECT_STATUS.md) is the development source of truth; [prototype status](PROTOTYPE_STATUS.md) retains historical pipeline evidence.
+The repository also includes an isolated Next.js application in `apps/web`, with database and internal authentication foundations, Cinema sign-in/recovery screens and a protected workspace entry. Personal project APIs are implemented; the video library UI is the next feature. [Project Status](PROJECT_STATUS.md) is the development source of truth; [prototype status](PROTOTYPE_STATUS.md) retains historical pipeline evidence.
 
 ## Run the application scaffold
 
@@ -28,7 +28,7 @@ The application contracts are design documents, not deployed endpoints or migrat
 
 ## Database foundation
 
-The server-only MongoDB adapter and initial schema setup live in `apps/web/src/db`. The web pages still work without a database. No account or project API is connected yet.
+The server-only MongoDB adapter and initial schema setup live in `apps/web/src/db`. Public preview pages work without a database. Account and project APIs require the database/auth setup below.
 
 For an isolated development replica set or Atlas database, create `apps/web/.env.local` from its `.env.example` and configure `MONGODB_DATABASE` plus two separate credentials:
 
@@ -42,6 +42,18 @@ This is infrastructure only: owner/reference checks, timezone validation and pro
 Run `npm run test:db` for real MongoDB integration tests. They launch and stop a disposable **MongoDB 8.0.17** single-node replica set on localhost and ignore database environment credentials. The first run downloads the official MongoDB binary through `mongodb-memory-server`; allow local process/network access. `npm run check` continues to run typechecks and the prototype suite; run `test:db` separately for database changes. Driver **7.7.0** is pinned. Atlas access and its actual credential permissions have not yet been verified.
 
 Connection pooling and transaction options follow the [MongoDB driver documentation](https://www.mongodb.com/docs/drivers/node/current/connect/connection-options/connection-pools/) and [transaction guidance](https://www.mongodb.com/docs/drivers/node/current/crud/transactions/). Transaction callbacks may be retried: prepare IDs before entering, use sequential DB operations, and keep provider calls outside them.
+
+## Test project APIs (F05 checkpoint)
+
+F04 and the session-restoration fix are user-approved. F05 adds create/list/read/rename/delete APIs; the workspace screen is still the entry screen, not the F06 library.
+
+1. With Node 24.21.0, run `npm run auth:local` in one terminal. It creates a disposable MongoDB replica set, applies both migrations and provisions your test account. Use a fresh test password.
+2. In another terminal, run `npm run projects:verify` and enter the same credentials. Expect five PASS messages covering authentication, creation/replay, read/list, rename/conflict and deletion/replay. Cookies stay in memory; the helper creates and removes only its test project.
+3. Stop the local launcher with Ctrl+C and share feedback before F06. If a test is interrupted, restarting the launcher discards the fixture.
+
+For code review, run `npm run test:projects`. [Implemented OpenAPI contract](design/projects.openapi.json) is regenerated with `npm run projects:openapi`. It covers `/api/projects` and `/api/projects/:id`. Creation and deletion require `Idempotency-Key`; mutations require exact Origin; rename/delete require the current revision. Empty-project deletion returns 204; projects needing future media/job cleanup return 409. See the F05 boundaries in API_DESIGN.md and DB_DESIGN.md.
+
+On a configured development database, rerun `npm run db:setup` with operator credentials to apply `002-projects` before using these routes. This does not configure Atlas or deploy the app.
 
 ## Test the authentication backend (F03 checkpoint)
 

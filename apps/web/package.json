@@ -16,7 +16,10 @@
     "test:auth": "node --conditions=react-server --import tsx --test tests/auth.test.ts",
     "auth:operator": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/auth-operator.ts",
     "auth:local": "node --conditions=react-server --import tsx scripts/auth-local.ts",
-    "auth:verify": "node --import tsx scripts/auth-verify.ts"
+    "auth:verify": "node --import tsx scripts/auth-verify.ts",
+    "test:projects": "node --conditions=react-server --import tsx --test tests/projects.test.ts",
+    "projects:verify": "node --import tsx scripts/projects-verify.ts",
+    "projects:openapi": "node --import tsx scripts/projects-openapi.ts"
   },
   "dependencies": {
     "@fontsource/inter": "5.3.0",

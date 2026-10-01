@@ -26,6 +26,10 @@ async function ensureCollection(db: Db, definition: CollectionDefinition) {
 }
 
 export async function setupDatabase(db: Db) {
+  return runMigration(db, migrationName, migrationId, migrationChecksum, foundationDefinitions);
+}
+
+export async function runMigration(db: Db, migrationName: string, migrationId: string, migrationChecksum: string, definitions: CollectionDefinition[]) {
   const topology = await db.admin().command({ hello: 1 });
   if (!topology.setName && topology.msg !== 'isdbgrid') {
     throw new DatabaseError('DB_REPLICA_SET_REQUIRED', 'Database setup requires a replica set or transaction-capable sharded deployment.');
@@ -43,7 +47,7 @@ export async function setupDatabase(db: Db) {
   }
   const previous = await migrations.findOne({ _id: migrationId });
   if (previous?.checksum !== migrationChecksum) {
-    throw new DatabaseError('DB_MIGRATION_CHANGED', 'Foundation migration checksum differs. Do not edit an applied migration.');
+    throw new DatabaseError('DB_MIGRATION_CHANGED', 'Migration checksum differs. Do not edit an applied migration.');
   }
   const holder = `run_${randomUUID().replaceAll('-', '')}`;
   const claimed = await migrations.findOneAndUpdate({
@@ -57,7 +61,7 @@ export async function setupDatabase(db: Db) {
   const owned = { _id: migrationId, 'lease.holder': holder, 'lease.fence': claimed.lease.fence };
   try {
     // Replay all additive DDL on resume; checkpoint is progress evidence, not permission to skip validation.
-    for (const definition of foundationDefinitions) {
+    for (const definition of definitions) {
       const renewed = await migrations.updateOne({ ...owned, 'lease.until': { $gt: new Date() } }, {
         $set: { 'lease.until': new Date(Date.now() + 300_000), updatedAt: new Date() },
       });
@@ -70,7 +74,7 @@ export async function setupDatabase(db: Db) {
       $set: { state: 'completed', updatedAt: new Date(), 'lease.until': new Date(0) },
     });
     if (!result.matchedCount) throw new DatabaseError('DB_SETUP_LEASE_LOST', 'Database setup lease expired; rerun setup.');
-    return { migration: migrationName, collections: foundationDefinitions.map(item => item.name) };
+    return { migration: migrationName, collections: definitions.map(item => item.name) };
   } catch (error) {
     await migrations.updateOne(owned, {
       $set: { state: 'failed', updatedAt: new Date(), 'lease.until': new Date(0), errorCode: error instanceof DatabaseError ? error.code : 'DB_SETUP_FAILED' },

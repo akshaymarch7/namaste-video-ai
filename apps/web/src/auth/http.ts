@@ -9,11 +9,11 @@ import { LoginLimited, reserveLogin } from './throttle';
 
 type Dependencies = { auth: AuthEngine; db: Db; config: AuthConfig };
 export type SessionAction = 'sign-in' | 'read' | 'sign-out';
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
 }
 const signInBody = z.object({ email: emailSchema, password: z.string().min(1).max(128) }).strict();
-async function readBody(request: Request) {
+export async function readBody(request: Request) {
   if (request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') {
     throw new HttpError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Use application/json.');
   }

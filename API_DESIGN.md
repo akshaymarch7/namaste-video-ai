@@ -1,7 +1,7 @@
 # NamasteVideo.ai — API Design
 
 Version 1.0 · September 26, 2026  
-Status: Proposed implementation contract; routes are not implemented.  
+Status: Target contract; implemented subsets and verification are recorded in PROJECT_STATUS.md.
 Inputs: [PRD](PRD.md), [system design](SYSTEM_DESIGN.md), [database design](DB_DESIGN.md).  
 Scope: Internal individual accounts, English 60–90-second explainers, private media, individual Instagram. UI design in Google Stitch precedes frontend implementation.
 
@@ -21,6 +21,14 @@ Refinements to the system-design outline:
 
 No additional creator steps, billing features, public signup or shared workspaces are introduced.
 
+### F05 implemented boundary — October 1, 2026
+
+The session facade and P01–P04 are implemented locally; P04 currently accepts **title only**, with `expectedRevision`. P02 atomically creates a project, blank draft and conversation and snapshots the saved default voice (fallback `daniel-test`); draft editing and preferences endpoints are later features. [Generated OpenAPI for the implemented project routes](design/projects.openapi.json) is checked against shared request schemas by tests.
+
+**Temporary P05 response:** empty projects are synchronously tombstoned and their blank draft/conversation removed in a transaction, returning **204**. The original deletion key replays 204. Create-response snapshots are scrubbed; minimal key tombstones prevent replay from recreating deleted content. Projects with draft edits, pipeline references, messages or later-stage flags are rejected with **409 PROJECT_DELETE_UNAVAILABLE** until durable cleanup is implemented. No job is queued and no 202/cleanup ID is advertised. The full P05 contract below remains the target for the jobs/media feature; coordinate that API change with its client.
+
+Project JSON errors include `error.requestId` and `meta.requestId`; all responses carry `X-Request-Id` and private/no-store caching. Unsupported fields (including ownerId and selectedVideoId), duplicate/unknown query parameters, missing preconditions and missing/invalid idempotency keys are rejected. Title limits count Unicode code points after trimming. Retry receipts and cursors never bypass current authentication/admission checks. List sorting is live and can move after edits as described below.
+
 ## 2. Transport and common conventions
 
 ### 2.1 Headers and representations
@@ -30,7 +38,7 @@ No additional creator steps, billing features, public signup or shared workspace
 | Requests | HTTPS, `Content-Type: application/json` for JSON bodies, `Accept: application/json` |
 | Cookies | Same-origin secure HttpOnly session cookie set by Better Auth integration; browser uses credentials `same-origin` |
 | CSRF | Exact configured Origin required for cookie-authenticated mutations, including sign-in; reject missing/untrusted Origin on browser routes |
-| Command identity | `Idempotency-Key` required for endpoints marked **K**; random UUID, 16–128 printable ASCII characters, no user content |
+| Command identity | `Idempotency-Key` required for endpoints marked **K**; random UUID, 16–128 non-whitespace printable ASCII characters, no user content |
 | Correlation | Server-generated `X-Request-Id` on every response; response meta/error repeats it |
 | Caching | Private API: `Cache-Control: private, no-store`; no shared Next.js fetch cache for user data |
 | Input size | Maximum JSON body 256 KiB; reject oversize before parsing; route-specific text limits also apply |

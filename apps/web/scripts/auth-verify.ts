@@ -27,7 +27,7 @@ try {
     method: 'POST', headers: { Cookie: cookie, Origin: origin, 'Content-Type': 'application/json' }, body: '{}',
   })).status, 204);
   assert.equal((await fetch(`${origin}/api/session`, { headers: { Cookie: cookie } })).status, 401);
-  console.log('PASS: sign-out revokes the session\nManual API checkpoint passed. Share your feedback before we begin the sign-in UI.');
+  console.log('PASS: sign-out revokes the session\nManual API checkpoint passed. For the current project API checkpoint, run npm run projects:verify.');
 } catch {
   console.error('TEST FAILED: Make sure auth:local is ready, credentials match, and port 3001 is available. No credentials were printed.');
   process.exitCode = 1;

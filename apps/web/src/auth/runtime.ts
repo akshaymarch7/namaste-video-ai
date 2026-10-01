@@ -5,13 +5,13 @@ import { createAuth, isAdmitted } from './engine';
 import { handleSession, type SessionAction } from './http';
 import { assertAuthReady } from './setup';
 
-let pending: Promise<{ auth: ReturnType<typeof createAuth>; db: Awaited<ReturnType<typeof getDatabase>>['db']; config: ReturnType<typeof readAuthConfig> }> | undefined;
-async function dependencies() {
+let pending: Promise<{ client: Awaited<ReturnType<typeof getDatabase>>['client']; auth: ReturnType<typeof createAuth>; db: Awaited<ReturnType<typeof getDatabase>>['db']; config: ReturnType<typeof readAuthConfig> }> | undefined;
+export async function dependencies() {
   if (!pending) pending = (async () => {
     const config = readAuthConfig();
     const { db, client } = await getDatabase();
     await assertAuthReady(db);
-    return { config, db, auth: createAuth(db, client, config) };
+    return { config, db, client, auth: createAuth(db, client, config) };
   })().catch(error => { pending = undefined; throw error; });
   return pending;
 }

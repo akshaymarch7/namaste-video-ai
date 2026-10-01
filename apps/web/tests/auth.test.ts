@@ -6,6 +6,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { setupProjects } from '../src/projects/setup';
 import { setupDatabase } from '../src/db/setup';
 import { readAuthConfig } from '../src/auth/config';
 import { createAuth } from '../src/auth/engine';
@@ -30,6 +31,7 @@ before(async () => {
   client = await new MongoClient(replica.getUri(), { promoteLongs: false, monitorCommands: true }).connect();
   const db = client.db(dbName);
   await setupDatabase(db);
+  await setupProjects(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, account);
   const auth = createAuth(db, client, config);
@@ -180,6 +182,7 @@ test('runtime sign-in does not request schema/index administration', async () =>
 test('IP throttling spans emails and untrusted forwarded headers cannot evade it', async () => {
   const db = client.db('namastevideo_auth_limits');
   await setupDatabase(db);
+  await setupProjects(db);
   await setupAuth(db, client, config);
   for (let i = 0; i < 30; i++) await reserveLogin(db, config, `person${i}@example.test`, new Headers({ 'x-forwarded-for': `192.0.2.${i}` }));
   await assert.rejects(reserveLogin(db, config, 'another@example.test', new Headers({ 'x-forwarded-for': '198.51.100.1' })), LoginLimited);
@@ -192,6 +195,7 @@ test('missing operator setup fails closed without creating an unvalidated allowl
   await assert.rejects(provisionUser(db, client, config, account));
   assert.equal(await db.listCollections().hasNext(), false);
   await setupDatabase(db);
+  await setupProjects(db);
   await assert.rejects(assertAuthReady(db));
   await setupAuth(db, client, config);
   await assertAuthReady(db);
@@ -224,6 +228,13 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     const login = await fetch(`${origin}/api/session/sign-in`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: account.email, password: account.password }) });
     assert.equal(login.status, 200, await login.clone().text());
     assert.equal((await fetch(`${origin}/api/session`, { headers: { Cookie: cookies(login) } })).status, 200);
+    const projectResponse = await fetch(`${origin}/api/projects`, { method: 'POST', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json', 'Idempotency-Key': 'actual-route-test-0001' }, body: JSON.stringify({ title: 'HTTP project' }) });
+    assert.equal(projectResponse.status, 201);
+    const project = (await projectResponse.json()).data;
+    assert.equal((await fetch(`${origin}/api/projects/${project.id}`, { headers: { Cookie: cookies(login) } })).status, 200);
+    assert.equal((await fetch(`${origin}/api/projects?limit=1`, { headers: { Cookie: cookies(login) } })).status, 200);
+    assert.equal((await fetch(`${origin}/api/projects/${project.id}`, { method: 'PATCH', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Updated HTTP project', expectedRevision: 1 }) })).status, 200);
+    assert.equal((await fetch(`${origin}/api/projects/${project.id}`, { method: 'DELETE', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json', 'Idempotency-Key': 'actual-route-delete-0001' }, body: JSON.stringify({ expectedRevision: 2, confirm: true }) })).status, 204);
     const privatePage = await fetch(`${origin}/projects`, { headers: { Cookie: cookies(login) } });
     assert.equal(privatePage.status, 200);
     // Next's development server emits no-cache; force-dynamic production pages use private/no-store.

@@ -18,7 +18,10 @@
     "test:auth": "npm run test:auth --workspace=@namastevideo/web --",
     "auth:operator": "npm run auth:operator --workspace=@namastevideo/web --",
     "auth:local": "npm run auth:local --workspace=@namastevideo/web --",
-    "auth:verify": "npm run auth:verify --workspace=@namastevideo/web --"
+    "auth:verify": "npm run auth:verify --workspace=@namastevideo/web --",
+    "test:projects": "npm run test:projects --workspace=@namastevideo/web --",
+    "projects:verify": "npm run projects:verify --workspace=@namastevideo/web --",
+    "projects:openapi": "npm run projects:openapi --workspace=@namastevideo/web --"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.529",

@@ -6,9 +6,9 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F04 — Done locally, including the P2 history-restoration session fix; user feedback pending.** The user approved F03 testing and code review on October 1, 2026. F04 is implemented and verified below. Wait for user feedback before F05. Hosted Atlas configuration remains outstanding.
+**F05 — Personal project APIs: Done locally; user API review pending. F04 and its P2 fix are user-approved.** The user approved F03 testing and code review on October 1, 2026. F04 is implemented and verified below. The user approved moving to F05; provide an API testing checkpoint before F06. Hosted Atlas configuration remains outstanding.
 
-Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. No project CRUD API, hosted rendering or Instagram integration exists yet; no hosted database has been provisioned. The local video pipeline remains separately usable.
+Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the library UI, hosted rendering and Instagram integration are not implemented yet; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
 ## How this document is maintained
 
@@ -35,8 +35,8 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F01 | Next.js workspace, Cinema tokens, primitives and app boundary | Done | Production build; both TypeScript checks; 23 existing tests; desktop/mobile route smoke checks; root media inaccessible — evidence below |
 | F02 | MongoDB adapter, schema validation and initial indexes | Done (local) | 11 real replica-set tests; both typechecks; 23 prototype tests; production build; detailed evidence below. Atlas not configured. |
 | F03 | Internal account admission and session backend | Done; user approved | User confirmed testing and code review October 1, 2026; backend and manual evidence below |
-| F04 | Sign-in/recovery UI and private route protection | Done locally; delegated testing passed, user feedback pending | 51 automated tests and prior types/build passed; delegated desktop/mobile browser and interactive operator recovery walkthrough passed; evidence below |
-| F05 | Personal project create/list/rename/delete APIs | Planned | Ownership isolation, validation, pagination and deletion behavior tested |
+| F04 | Sign-in/recovery UI and private route protection | Done; user approved, including P2 fix | 51 automated tests and prior types/build passed; delegated desktop/mobile browser and interactive operator recovery walkthrough passed; evidence below |
+| F05 | Personal project create/list/rename/delete APIs | Done locally; user review pending | 14 project tests, real Next.js HTTP coverage, local interactive checkpoint and full regressions passed; evidence below |
 | F06 | My videos library UI | Planned | Real project data, filters, load more, empty/loading/error states and rename/delete dialogs |
 | F07 | Idea draft API, autosave and conflict handling | Planned | Persist topic/notes/voice; revisions; failed saves preserve input; cross-user checks |
 | F08 | Idea and brainstorming UI/integration | Planned | Save real idea; Gemini topic suggestions; use suggestion; available voice preview |
@@ -272,6 +272,48 @@ Completed October 1, 2026. Scope is the reported P2 session-display issue; F05 r
 
 Repeat the browser regression with `npm run auth:local` and two tabs sharing its test account; use only a fresh test password. Do not treat a regular full-page reload as a substitute for the home-link → browser Back sequence.
 
+## F05 — Personal project APIs and review checkpoint
+
+Implemented October 1, 2026 after user approval of F04 and its P2 fix. This milestone is backend/API work; F06 library UI has not started.
+
+### Scope and files
+
+- `apps/web/app/api/projects/route.ts` and `[id]/route.ts`: authenticated list/create/read/rename/delete routes. Exact Origin on mutations, bounded JSON, strict input and query validation, generic safe errors, private/no-store caching, request IDs, 404 for foreign projects and admission checks on each request.
+- `apps/web/src/projects/contracts.ts`, `http.ts`, `service.ts`: trimmed Unicode title bounds, metadata revision CAS, atomic aggregate creation, preference voice snapshot, current-state read, signed owner/filter-bound 24-hour tuple cursors, live filtered lists, idempotent creation/deletion and safe concurrent same-key replay. No owner or arbitrary media selection accepted from commands. Generation/publishing capabilities remain false.
+- `apps/web/src/projects/setup.ts`: additive `002-projects` migration with strict blank-draft validation, unique draft ownership index, project receipt scope/parent indexes and no receipt TTL. Runtime checks setup/indexes without administering them. `src/db/setup.ts` extracts a reusable leased migration runner while preserving the original foundation definitions/checksum. Both setup scripts apply the new migration.
+- Deletion is deliberately limited to empty F05 projects: one transaction tombstones/scrubs the parent title and flags, removes blank draft/conversation, scrubs create-response snapshots and stores a replayable 204 receipt. It rejects later content with `PROJECT_DELETE_UNAVAILABLE`. Minimal tombstones prevent deleted create keys recreating content. No background cleanup job or media/provider side effect is claimed. API_DESIGN.md and DB_DESIGN.md document this temporary boundary; the eventual 202 cleanup contract remains future work.
+- `src/projects/openapi.ts`, `scripts/projects-openapi.ts`, `design/projects.openapi.json`: generated OpenAPI 3.1 for the implemented project routes, sourced from shared request schemas with explicit Unicode title constraints; checked for drift in tests. Not a full specification of unimplemented V1 routes.
+- `tests/projects.test.ts`, extended `tests/auth.test.ts`, `scripts/projects-verify.ts`: database/HTTP/security/race tests, real mounted Next.js route checks and interactive local API checkpoint. Package scripts, README and AGENTS reflect the checkpoint before F06. Auth runtime exposes its existing server dependencies and bounded JSON reader; no authentication policy was changed.
+
+### Verification
+
+All commands used Node 24.21.0 via `npm exec --yes --package=node@24.21.0 -- …`.
+
+| Check | Result |
+| --- | --- |
+| `npm run test:projects` | 14/14 passed against actual disposable MongoDB 8.0.17 replica set |
+| `npm run test:auth` | 17/17 passed, including create/read/list/rename/delete through mounted Next.js routes and existing session/page regressions |
+| `npm run test:db` | 11/11 passed, including original migration replay, checksum/lease protection, drift refusal and transaction rollback |
+| `npm run check` | Both TypeScript checks and 23/23 prototype tests passed |
+| `npm run build` | Production build passed; `/api/projects` and `/api/projects/[id]` compiled with existing routes |
+| `npm run projects:openapi` | Generated the checked-in schema; equality test passed |
+| Interactive local checkpoint | Started `auth:local`, provisioned a fresh disposable test account and ran `projects:verify` using hidden password input. Exit 0 and five PASS groups: authentication, create/replay, read/filter, rename/conflict, delete/replay/deleted-content denial. Signed out afterward; local launcher stopped with Ctrl+C (interrupted exit 1). |
+
+Total: **65 automated tests passed**. Project cases cover owner isolation, Unicode title limits, unknown fields, preconditions, payload bounds, disabled admission, origin denial, key reuse, concurrent duplicate creation/deletion, child-write rollback, concurrent rename CAS, rename/delete races, tie-safe pagination, cursor tampering/expiry/owner/filter binding, preferences snapshot, migration readiness/checksum refusal, content scrubbing and deleted-parent replay denial. No provider calls, hosted DB mutation, deployment or social publication occurred. UI did not change, so no new visual acceptance is claimed.
+
+### User testing checkpoint — before F06
+
+1. Run `npm run auth:local` with Node 24.21.0 and enter a fresh test name/email/password. It creates a disposable database; Atlas is not needed. Keep port 3001 free.
+2. In another terminal, run `npm run projects:verify` with the same email/password. Expect five PASS groups and a final success message. Password and cookies are not printed. The helper creates and deletes its own test project.
+3. Stop the launcher with Ctrl+C and share test/code-review feedback. The workspace UI remains the F04 entry screen; the F06 video library will consume these APIs after acceptance.
+
+### Remaining limitations
+
+- Hosted Atlas setup/privileges and production browser/deployment behavior remain unverified. Existing video generation remains CLI-only.
+- Draft editing, available voice selection, preference editing, video selection, jobs and populated-project cleanup are later features. F07 must extend the blank-draft validator through a new migration; future child writers must fence the live parent and extend deletion before enabling their content.
+- Lists use mutable updatedAt ordering, not snapshots. Clients must deduplicate IDs and refresh from page one after changes. Cursor signing shares the server auth secret with a distinct purpose prefix; secret rotation invalidates existing cursors.
+- Minimal project/command tombstones are retained without automated purging. No user billing or retention product was added.
+
 ## Earlier evidence
 
 The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three generated videos, Gemini/ElevenLabs integrations, timing checks, and renderer recovery tests. Those historical results are not evidence that a hosted pipeline or dashboard works. Existing design artifacts remain in design/SCREEN_REVIEW_INDEX.md; the founder approved proceeding with implementation on October 1, 2026, with background colors normalized to the Cinema tokens.
@@ -281,6 +323,8 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
 | 2026-10-01 | F04 delegated testing | Completed requested desktop/mobile browser and interactive operator recovery walkthrough; saved two screenshots and results; user feedback pending before F05 | Sign-in/error/show-hide/help/private-route/sign-out checks passed; recovery mismatch rejected, successful recovery revoked old session/password, new password worked; local servers stopped; `git diff --check` passed |
+| 2026-10-01 | F05 | Added personal project API, transactional blank aggregates/deletion, revision checks, signed pagination, retries, OpenAPI and local verification command; awaiting review before F06 | 65 tests, both typechecks, build and interactive five-group checkpoint passed |
+| 2026-10-01 | F04 acceptance | User approved F04 and P2 fix and authorized F05 | User approval in this conversation |
 | 2026-10-01 | F04 review fix | Revalidate cached private pages before display on mount/reactivation/history navigation; discard superseded session checks | 17 auth tests, 23 prototype tests, both typechecks, build and two-tab Back/logout + valid-session Back/Forward checks passed |
 | 2026-10-01 | F04 | Implemented Cinema sign-in/recovery, private workspace guards and operator recovery; browser review pending before F05 | 51 tests, both typechecks, production build and desktop/mobile browser walkthrough passed; four screenshots saved |
 | 2026-10-01 | F03 acceptance | User confirmed feature testing and code review; authorized F04 | User approval in this conversation |

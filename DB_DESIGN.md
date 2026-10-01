@@ -583,3 +583,14 @@ Mongo integration tests must use real indexes, validators and transactions, not 
 | FR-14 | draft revisions, tombstones, cleanup jobs |
 
 The next design activity is Google Stitch UI review using the API's explicit states. Neither this document nor the API document creates database resources, runs migrations, changes provider keys, publishes videos or begins frontend implementation. Build schema/route code only after the design phase moves to implementation.
+
+## F05 implemented migration boundary — October 1, 2026
+
+`001-foundation` retains its original schema definitions and checksum. The shared setup runner now also supports the additive, leased `002-projects` migration, run by `db:setup` and the disposable `auth:local` launcher. Runtime operations require the completed matching migration and required indexes and perform no schema administration.
+
+- `drafts`: the documented base/owner/project fields, revision 1, blank topic/audience/notes, voice preference snapshot, null editablePlan, false planStale, canonicalizationVersion 1, SHA-256 contentHash of recursively key-sorted JSON for these restricted values, and empty validationIssues. The strict validator deliberately accepts only blank drafts until F07 installs a new migration for editable content; empty validationIssues is not approval eligibility. Unique `draft_owner_project` index on ownerId/projectId.
+- `projectCommands`: project-scoped receipt for POST/DELETE with method, normalized path, SHA-256 keyHash/requestHash, accepted status and response snapshot. Unique `project_command_key` index on ownerId/method/path/keyHash; `project_command_parent` on ownerId/projectId. No short TTL. This slice-specific collection is not the future general jobs/outbox command implementation.
+- Creation transaction: project + blank draft + conversation + receipt, with saved defaultVoicePreset snapshot or `daniel-test` fallback. No preference write or provider availability claim. Renaming increments project metadata/content revisions while leaving draftRevision unchanged.
+- Empty-project deletion transaction: validate owner/live parent/revision and absence of later content, tombstone and scrub the title, increment revisions, clear flags, remove blank draft/conversation and scrub create response snapshots, then save the 204 deletion receipt. The minimal project/receipt tombstones retain no submitted title. Same-key deletion replay works; create replay for a deleted parent returns 404. No R2/provider cleanup or background job is implied.
+
+Before editable drafts, messages or worker outputs are introduced, extend deletion with the durable cleanup transition described in this design and coordinate the API/client change. All future child writers must fence the live parent in the same transaction. Do not relax the F05 guard to silently delete populated projects.

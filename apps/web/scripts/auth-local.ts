@@ -1,3 +1,4 @@
+import { setupProjects } from '../src/projects/setup';
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -33,6 +34,7 @@ try {
   const db = client.db('namastevideo_auth_local');
   const config = { origin: 'http://127.0.0.1:3001', secure: false, secret: randomBytes(48).toString('base64url') };
   await setupDatabase(db);
+  await setupProjects(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, input);
   // Explicit environment wins over any web env file. Do not inherit provider or migration credentials.
@@ -41,7 +43,7 @@ try {
     BETTER_AUTH_SECRET: config.secret, BETTER_AUTH_URL: config.origin,
     NEXT_TELEMETRY_DISABLED: '1', AUTH_CLIENT_IP_HEADER: '',
   };
-  console.log('Test account ready. Open http://127.0.0.1:3001/sign-in when Next.js is ready.\nOptional API check in a second terminal: npm run auth:verify\nPress Ctrl+C here when finished.');
+  console.log('Test account ready. Open http://127.0.0.1:3001/sign-in when Next.js is ready.\nProject API checkpoint in a second terminal: npm run projects:verify (auth-only checks: npm run auth:verify)\nPress Ctrl+C here when finished.');
   web = spawn(process.execPath, [createRequire(import.meta.url).resolve('next/dist/bin/next'), 'dev', '--hostname', '127.0.0.1', '--port', '3001'], { env, stdio: 'inherit' });
   await new Promise<void>((resolve, reject) => { web!.once('exit', code => code && !stopping ? reject(new Error('Web server failed')) : resolve()); web!.once('error', reject); });
 } catch {
