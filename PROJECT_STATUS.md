@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F06 — My videos library UI: Done locally; user browser review pending.** F05 QA and code review are user-approved. The library uses real project APIs. Wait for feedback before F07.
+**F06 — My videos library UI: Done locally; delegated browser review passed; user feedback pending.** F05 QA and code review are user-approved. The library uses real project APIs. Wait for feedback before F07.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -37,7 +37,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F03 | Internal account admission and session backend | Done; user approved | User confirmed testing and code review October 1, 2026; backend and manual evidence below |
 | F04 | Sign-in/recovery UI and private route protection | Done; user approved, including P2 fix | 51 automated tests and prior types/build passed; delegated desktop/mobile browser and interactive operator recovery walkthrough passed; evidence below |
 | F05 | Personal project create/list/rename/delete APIs | Done; user approved | Five-group interactive checkpoint and extended two-user/pagination/revision/deletion checks passed; prior 65 automated tests/types/build recorded below |
-| F06 | My videos library UI | Done locally; user review pending | Real API browser create/rename/delete/filter/pagination/conflict checks, mobile review, six client tests, auth/prototype regressions and production build passed |
+| F06 | My videos library UI | Done locally; delegated testing passed, user feedback pending | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
 | F07 | Idea draft API, autosave and conflict handling | Planned | Persist topic/notes/voice; revisions; failed saves preserve input; cross-user checks |
 | F08 | Idea and brainstorming UI/integration | Planned | Save real idea; Gemini topic suggestions; use suggestion; available voice preview |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
@@ -368,6 +368,27 @@ Total this milestone: **46 automated tests passed**. The unchanged standalone DB
 
 Screenshots: [empty desktop](design/verification/f06-empty-desktop.png), [populated desktop](design/verification/f06-library-desktop.png), [mobile library](design/verification/f06-library-mobile.png), [mobile dialog](design/verification/f06-dialog-mobile.png), [revision conflict](design/verification/f06-conflict-desktop.png). All records shown are synthetic test projects stored through the actual APIs.
 
+### Delegated browser testing — October 1, 2026
+
+At the user's request, Codex reviewed implementation commit `ff00f5e` under cached Node 24.21.0 using `npm run auth:local`, a fresh synthetic account and the actual library in the Codex in-app browser. No application code/configuration changed. This milestone updates `PROJECT_STATUS.md` and adds three screenshots under `design/verification/`.
+
+| Browser check | Observed result |
+| --- | --- |
+| Empty library and create | Empty state displayed; blank title rejected with guidance; Unicode/emoji title created successfully with surrounding whitespace trimmed; success announcement and focus on New project |
+| Rename and persistence | Completed rename appeared in the card and survived browser reload |
+| Cancel deletion | Escape closed the confirmation, preserved the project and returned focus to its Delete button |
+| Two-tab conflict | Opened rename in one tab, saved a competing rename in another, then submitted the stale edit; conflict guidance appeared and Save was disabled; Reload current details displayed the newer title while preserving the proposed input; subsequent Save succeeded and persisted after reload |
+| Load more | Seeded 12 additional synthetic projects through the real API; Refresh showed 12 cards, Load more produced 13 distinct project titles and then disappeared |
+| All six filters | All and Drafts displayed the projects; Ready, Scheduled, Published and Needs attention each displayed the no-match state; Clear filters restored All with pagination reset |
+| Confirmed deletion | Deleted one synthetic project through the dialog; success notice appeared, count became 12, Load more disappeared and focus returned to New project; deleted card remained absent after reload |
+| Desktop/mobile layout | Desktop three-column grid inspected; 390×844 mobile viewport showed a single-column library with document width 375px, no horizontal overflow and a dialog fully within the viewport |
+| Keyboard/dialog | Project title focused on open; Tab from the final button wrapped to the input; Shift+Tab wrapped back to the final button; Escape closed the dialog and restored New project focus |
+| Diagnostics and cleanup | No captured browser warnings/errors; signed out, restored viewport, closed test tabs and removed temporary credentials/seed script; Ctrl+C stopped the launcher, with no remaining listeners on web port 3001 or its disposable MongoDB port |
+
+Evidence: [desktop library](design/verification/f06-manual-library-desktop.png), [mobile library](design/verification/f06-manual-library-mobile.png), [two-tab revision conflict](design/verification/f06-manual-conflict.png). All screenshots contain synthetic test data only. The API seed helper ran outside the repository, created records through `/api/projects` and signed out its separate session. No passwords/session cookies were printed or committed. The dev server's generated `next-env.d.ts` change was restored.
+
+No functional defect was observed in the completed checks. `git diff --check` passed. The prior 46 automated tests, both typechecks and production build were not rerun for this evidence-only milestone. This is local development-browser evidence; hosted/production behavior, network outages, ambiguous mutation responses and genuine non-Draft content were not tested. F07 remains unstarted pending user feedback.
+
 ### User browser checkpoint — before F07
 
 1. Run `npm run auth:local` under Node 24.21.0, enter fresh test credentials, then open `http://127.0.0.1:3001/sign-in`.
@@ -389,6 +410,7 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | F06 delegated testing | Completed requested desktop/mobile library walkthrough and two-tab conflict test; added three screenshots; user feedback pending before F07 | Create/rename/delete/persistence, all filters, 12-to-13 Load more, conflict recovery and keyboard checks passed; test servers stopped; `git diff --check` passed |
 | 2026-10-01 | F05 delegated testing | Completed requested interactive API checkpoint and extended two-user/pagination/revision/retry/deletion checks; evidence only; user feedback pending before F06 | Five verifier PASS groups and six extended PASS groups, both exit 0; disposable servers stopped; `git diff --check` passed |
 | 2026-10-01 | F04 delegated testing | Completed requested desktop/mobile browser and interactive operator recovery walkthrough; saved two screenshots and results; user feedback pending before F05 | Sign-in/error/show-hide/help/private-route/sign-out checks passed; recovery mismatch rejected, successful recovery revoked old session/password, new password worked; local servers stopped; `git diff --check` passed |
 | 2026-10-01 | F06 | Built real project library with Cinema layout, filters/pagination and create/rename/delete dialogs; awaiting browser review before F07 | 46 tests, both typechecks, production build and desktop/mobile browser actions/conflict checks passed; five screenshots saved |
