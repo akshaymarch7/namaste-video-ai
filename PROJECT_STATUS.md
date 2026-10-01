@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F06 — My videos library UI: Done locally; delegated browser review passed; user feedback pending.** F05 QA and code review are user-approved. The library uses real project APIs. Wait for feedback before F07.
+**F06 — Done locally, including dialog focus restoration after session revalidation; user feedback pending.** F05 QA and code review are user-approved. The library uses real project APIs. Wait for feedback before F07.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -402,6 +402,17 @@ No functional defect was observed in the completed checks. `git diff --check` pa
 - Unresolved mutation dialogs retain input and retry keys only in memory and disable dismissal/editing until resolved. A full reload loses that dialog state; no cross-reload request recovery store is claimed.
 - Live lists may move after edits; Refresh resets pagination and Load more deduplicates overlapping IDs. Atlas configuration/hosted privileges remain unverified. No generation or media cleanup was added.
 
+## F06 review fix — dialog focus after session revalidation
+
+Completed October 1, 2026. The reported P2 occurred because the private wrapper hid the focused dialog while its own busy/error state stayed unchanged, so the dialog effect never restored focus.
+
+- `apps/web/components/private-session.tsx`: capture the focused dialog control and input/textarea selection before hiding private content. Preserve that snapshot across repeated invalidations. After an authorized reveal commits, a layout effect restores the still-usable control without scrolling; a removed/disabled control falls back inside the same live dialog. A reveal counter covers batched checking-to-ready updates. Closed/disconnected dialogs are ignored, and deliberate focus elsewhere is respected. Existing auth-failure/account-change redirects, hidden content and stale-request guards remain intact.
+- Actual-component browser regression: opened New project on a disposable local account, typed `Focus survives`, and moved the caret to position 13. Waited approximately 68 seconds without clicking the field. The real periodic `/api/session` request returned 200; the same input remained focused with unchanged text and selection 13/13. Typed `X` using the currently focused element (no locator refocus), yielding `Focus surviveXs` at caret 14. Escape dismissed the dialog and returned focus to New project. [Screenshot after typing](design/verification/f06-session-focus.png).
+- Verification: `npm run test:auth` 17/17 and `npm run test:library` 6/6 passed; web TypeScript check passed; production build passed under Node 24.21.0. No prototype/database changes were made, so those standalone suites were not rerun. This is a manual actual-timer browser regression, not a new automated DOM test. The removed/disabled-control fallback was code-reviewed, not independently browser fault-injected.
+- Disposable preview stopped after verification. No credential/configuration changes, deployment or provider calls. F07 remains unstarted.
+
+Repeat: run `npm run auth:local`, sign in, open New project or Rename, enter text and position the caret, wait at least 65 seconds, then type and press Escape **without clicking or refocusing the input**. The title/caret should survive, typing should continue, and Escape should dismiss the dialog.
+
 ## Earlier evidence
 
 The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three generated videos, Gemini/ElevenLabs integrations, timing checks, and renderer recovery tests. Those historical results are not evidence that a hosted pipeline or dashboard works. Existing design artifacts remain in design/SCREEN_REVIEW_INDEX.md; the founder approved proceeding with implementation on October 1, 2026, with background colors normalized to the Cinema tokens.
@@ -413,6 +424,7 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 | 2026-10-01 | F06 delegated testing | Completed requested desktop/mobile library walkthrough and two-tab conflict test; added three screenshots; user feedback pending before F07 | Create/rename/delete/persistence, all filters, 12-to-13 Load more, conflict recovery and keyboard checks passed; test servers stopped; `git diff --check` passed |
 | 2026-10-01 | F05 delegated testing | Completed requested interactive API checkpoint and extended two-user/pagination/revision/retry/deletion checks; evidence only; user feedback pending before F06 | Five verifier PASS groups and six extended PASS groups, both exit 0; disposable servers stopped; `git diff --check` passed |
 | 2026-10-01 | F04 delegated testing | Completed requested desktop/mobile browser and interactive operator recovery walkthrough; saved two screenshots and results; user feedback pending before F05 | Sign-in/error/show-hide/help/private-route/sign-out checks passed; recovery mismatch rejected, successful recovery revoked old session/password, new password worked; local servers stopped; `git diff --check` passed |
+| 2026-10-01 | F06 focus fix | Restore dialog control/caret after authorized session reveal | Actual 60-second poll + unrefocused typing/Escape passed; 23 auth/library tests, web typecheck and production build passed |
 | 2026-10-01 | F06 | Built real project library with Cinema layout, filters/pagination and create/rename/delete dialogs; awaiting browser review before F07 | 46 tests, both typechecks, production build and desktop/mobile browser actions/conflict checks passed; five screenshots saved |
 | 2026-10-01 | F05 acceptance | User confirmed QA/code review green and authorized F06 | User approval in conversation |
 | 2026-10-01 | F05 | Added personal project API, transactional blank aggregates/deletion, revision checks, signed pagination, retries, OpenAPI and local verification command; awaiting review before F06 | 65 tests, both typechecks, build and interactive five-group checkpoint passed |

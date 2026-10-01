@@ -6,14 +6,24 @@ import { signInLocation } from '@/src/auth/navigation';
 
 export function PrivateSession({ expiresAt, userId, children }: { expiresAt: string; userId: string; children: ReactNode }) {
   const [state, setState] = useState<'ready' | 'checking' | 'offline'>('checking');
+  const [revealVersion, setRevealVersion] = useState(0);
   const pathname = usePathname();
   const content = useRef<HTMLDivElement>(null);
+  const dialogFocus = useRef<{ dialog: HTMLElement; control: HTMLElement; selection: [number | null, number | null, 'forward' | 'backward' | 'none' | null] | null } | null>(null);
   const generation = useRef(0);
   const pending = useRef<AbortController | null>(null);
   const invalidate = useCallback(() => {
     generation.current += 1;
     pending.current?.abort();
     pending.current = null;
+    // Capture before hiding moves focus to BODY. Repeated checks must not overwrite it.
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && content.current?.contains(focused)) {
+      const dialog = focused.closest<HTMLElement>('[role="dialog"]');
+      if (dialog) dialogFocus.current = { dialog, control: focused,
+        selection: focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement
+          ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection] : null };
+    }
     // Hide synchronously: React can retain this DOM/state across route restoration.
     if (content.current) content.current.hidden = true;
   }, []);
@@ -34,6 +44,8 @@ export function PrivateSession({ expiresAt, userId, children }: { expiresAt: str
       if (result.ok && identity !== userId) { window.location.replace('/projects'); return; }
       if (content.current) content.current.hidden = !result.ok;
       setState(result.ok ? 'ready' : 'offline');
+      // Also trigger restoration when React batches checking → ready into one render.
+      if (result.ok) setRevealVersion(value => value + 1);
     } catch {
       if (current === generation.current) setState('offline');
     } finally {
@@ -41,6 +53,24 @@ export function PrivateSession({ expiresAt, userId, children }: { expiresAt: str
       if (current === generation.current) pending.current = null;
     }
   }, [invalidate, userId]);
+  useLayoutEffect(() => {
+    if (state !== 'ready') return;
+    const saved = dialogFocus.current;
+    if (!saved) return;
+    if (!saved.dialog.isConnected || !content.current?.contains(saved.dialog)) { dialogFocus.current = null; return; }
+    if (!saved.dialog.getClientRects().length) return;
+    dialogFocus.current = null;
+    // Do not steal focus if the user deliberately moved it elsewhere during validation.
+    if (document.activeElement !== document.body && document.activeElement !== document.documentElement) return;
+    const target = saved.control.isConnected && saved.dialog.contains(saved.control)
+      && !saved.control.matches(':disabled,[inert]') && saved.control.getClientRects().length
+      ? saved.control : saved.dialog.querySelector<HTMLElement>('input:not(:disabled),textarea:not(:disabled),button:not(:disabled),[tabindex="0"]') ?? saved.dialog;
+    target.focus({ preventScroll: true });
+    if (target === saved.control && saved.selection && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const [start, end, direction] = saved.selection;
+      if (start !== null && end !== null) target.setSelectionRange(start, end, direction ?? undefined);
+    }
+  }, [state, revealVersion]);
   useLayoutEffect(() => {
     // Runs before paint on mount and on React reactivation, even with preserved state.
     void check();
