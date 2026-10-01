@@ -26,6 +26,23 @@ The web app's public directory is separate from root `public/runs`. Do not copy 
 
 The application contracts are design documents, not deployed endpoints or migrations. Cinema screen designs are approved for implementation; features are being built incrementally according to Project Status.
 
+## Database foundation
+
+The server-only MongoDB adapter and initial schema setup live in `apps/web/src/db`. The web pages still work without a database. No account or project API is connected yet.
+
+For an isolated development replica set or Atlas database, create `apps/web/.env.local` from its `.env.example` and configure `MONGODB_DATABASE` plus two separate credentials:
+
+- `MONGODB_URI`: application runtime access, without schema/index administration or validation bypass privileges.
+- `MONGODB_MIGRATION_URI`: operator setup access to create collections/indexes and write migration records. Do not install this credential in the hosted web runtime.
+
+Run `npm run db:setup` explicitly from the repository root. It loads only the web environment file, never the prototype environment. It creates strict validators and named indexes for `internalAccess`, `preferences`, `projects`, `conversations` and `schemaMigrations`. It requires a transaction-capable topology, records a checksum/lease/checkpoint, reruns additive setup safely, and refuses validator drift or an edited migration. Existing mismatched schemas or conflicting indexes require a reviewed migration; setup never drops records or silently replaces validators. Keep the applied foundation definitions immutable when adding subsequent migrations.
+
+This is infrastructure only: owner/reference checks, timezone validation, project/draft atomic creation, admission state transitions and auth-managed schemas are implemented with their respective future features. MongoDB schemas do not provide foreign-key or user-authorization guarantees.
+
+Run `npm run test:db` for real MongoDB integration tests. They launch and stop a disposable **MongoDB 8.0.17** single-node replica set on localhost and ignore database environment credentials. The first run downloads the official MongoDB binary through `mongodb-memory-server`; allow local process/network access. `npm run check` continues to run typechecks and the prototype suite; run `test:db` separately for database changes. Driver **7.7.0** is pinned. Atlas access and its actual credential permissions have not yet been verified.
+
+Connection pooling and transaction options follow the [MongoDB driver documentation](https://www.mongodb.com/docs/drivers/node/current/connect/connection-options/connection-pools/) and [transaction guidance](https://www.mongodb.com/docs/drivers/node/current/crud/transactions/). Transaction callbacks may be retried: prepare IDs before entering, use sequential DB operations, and keep provider calls outside them.
+
 ## Latest outputs
 
 `runs/binary-search-reviewed/output.mp4` is a 77-second binary-search explainer with real Daniel narration, captions, and deterministic midpoint/elimination animation. Gemini 3.8 Flash produced the draft; operator review refined decision cues and the final explanation. Three narrated topics now exist: water cycle, RAM versus storage, and binary search. The latter two await user playback review.

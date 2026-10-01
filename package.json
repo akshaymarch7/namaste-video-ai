@@ -12,7 +12,9 @@
     "dev": "npm run dev --workspace=@namastevideo/web",
     "build": "npm run build --workspace=@namastevideo/web",
     "start": "npm run start --workspace=@namastevideo/web",
-    "typecheck:web": "npm run typecheck --workspace=@namastevideo/web"
+    "typecheck:web": "npm run typecheck --workspace=@namastevideo/web",
+    "db:setup": "npm run db:setup --workspace=@namastevideo/web",
+    "test:db": "npm run test:db --workspace=@namastevideo/web"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.529",

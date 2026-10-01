@@ -3,24 +3,32 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": "24.x" },
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "db:setup": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/db-setup.ts",
+    "test:db": "node --conditions=react-server --import tsx --test tests/db.test.ts"
   },
   "dependencies": {
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/plus-jakarta-sans": "5.3.0",
+    "mongodb": "7.7.0",
     "next": "16.3.8",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "@fontsource/inter": "5.3.0",
-    "@fontsource/plus-jakarta-sans": "5.3.0"
+    "server-only": "0.0.1"
   },
   "devDependencies": {
-    "typescript": "5.9.3",
     "@types/node": "22.19.0",
     "@types/react": "19.2.2",
-    "@types/react-dom": "19.2.2"
+    "@types/react-dom": "19.2.2",
+    "mongodb-memory-server": "11.3.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
   }
 }
