@@ -22,7 +22,8 @@
     "projects:openapi": "node --import tsx scripts/projects-openapi.ts",
     "test:library": "node --import tsx --test tests/library.test.ts",
     "test:drafts": "node --conditions=react-server --import tsx --test tests/drafts.test.ts tests/autosave.test.ts",
-    "drafts:verify": "node --import tsx scripts/drafts-verify.ts"
+    "drafts:verify": "node --import tsx scripts/drafts-verify.ts",
+    "test:ideas": "node --conditions=react-server --import tsx --test tests/ideas.test.ts tests/idea-providers.test.ts"
   },
   "dependencies": {
     "@fontsource/inter": "5.3.0",

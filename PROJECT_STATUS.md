@@ -1,12 +1,12 @@
 # Project Status — NamasteVideo.ai
 
-Last updated: October 1, 2026 (Asia/Kolkata).
+Last updated: October 2, 2026 (Asia/Kolkata).
 
 This is the source of truth for development progress. Specifications describe intent; a feature is complete here only when its implementation and verification are recorded. Design approval is not evidence of working functionality.
 
 ## Current checkpoint
 
-**F08a — Done locally; delegated browser testing passed; user feedback/code review pending.** User authorized progression after F07 review fixes. F08 is split into a reviewable editor/persistence slice and F08b AI suggestions/voice previews. Delegated persistence, conflict recovery, validation, desktop/mobile and session-focus results are recorded below. Wait for feedback before F08b.
+**F08b — Implemented; live voice preview blocked by provider authorization.** Gemini brainstorming, request recovery and explicit suggestion application are ready for review. Live Gemini and browser autosave/reload checks passed. ElevenLabs voice metadata returned HTTP 401 with the configured key, so actual sample playback is not verified. F08a was user-approved; wait for F08b review before F09.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -40,7 +40,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F06 | My videos library UI | Done; user approved | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
 | F07 | Idea draft API, autosave and conflict handling | Done; user approved progression | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
 | F08a | Cinema idea editor and autosave integration | Done locally; delegated testing passed, user review pending | Browser autosave/reload, both conflict choices, validation recovery, mobile editing and 87-second session-focus check passed; prior 56-test/typecheck/build evidence below |
-| F08b | AI brainstorming and voice previews | Planned | Gemini topic suggestions; use suggestion; available voice preview |
+| F08b | AI brainstorming and voice previews | Partial — voice provider authorization | Gemini topic suggestions; use suggestion; available voice preview |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
@@ -575,3 +575,27 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 | 2026-10-01 | Branch workflow | Created `dev` from the published initial scaffold and made it the active development branch; documented milestone pushes to `dev` and approval before promotion to `main` | Clean starting tree; remote had no `dev`; documentation-only change, checked with `git diff --check`; remote branch equality verified at handoff |
 | 2026-10-01 | Repository setup | Prepared initial public repository snapshot of the prototype, scaffold, specifications and design evidence; added standing milestone commit/push workflow | Remote confirmed empty; publishable text scanned for common credential patterns with no matches; environment and generated-media exclusions verified; F01 checks above remain applicable (no runtime code changed). Push result is verified against the remote and reported at handoff. |
 | 2026-10-01 | F01 | Completed isolated Next.js scaffold, Cinema primitives, runtime configuration and status workflow | Node 24 production build, both typechecks, 23 tests, HTTP boundary checks and desktop/mobile review passed; evidence above |
+
+
+## F08b — AI brainstorming and voice sample preview (October 2, 2026)
+
+Scope: owner-scoped Gemini suggestions in the Cinema idea editor, 3–5 bounded title/topic/angle cards, explicit Use idea through the existing autosave controller, source-revision guards, and authenticated Daniel sample proxy/player. No storyboard generation, TTS synthesis or video rendering was added. Provider settings were copied into ignored web configuration with user authorization; no values are stored here or committed.
+
+Implementation:
+- `apps/web/src/ideas/{contracts,providers,setup,service,http}.ts`: shared schemas, bounded provider adapters, migration 004 strict request receipts, transactions, auth and safe responses. Gemini uses configured model, structured JSON and a 30-second timeout. Receipts occupy the parent active slot before one provider call; replay does not repeat it. A 45-second deadline fences late completion and releases the slot lazily as unknown. No durable worker/resumption is claimed.
+- `apps/web/app/api/projects/[id]/idea-suggestions/route.ts`, `app/api/voices/route.ts`, `app/api/voices/daniel-test/preview/route.ts`: mounted authenticated routes. Preview fetches metadata then an allowlisted, size-bounded MP3 without forwarding credentials to storage or following redirects.
+- `components/idea/{brainstorm,voice-preview,idea-editor}.tsx` and `app/globals.css`: request/recovery UI, result cards, autosave application and audio sample controls. Stale or unsaved drafts cannot apply suggestions. Object URLs and pending preview fetches are cleaned up.
+- Operator/local launcher applies migration 004; `auth:local -- --providers` explicitly enables separate web provider settings. Offline launcher and auth integration tests mask provider values even when Next loads `.env.local`.
+- Project deletion now also refuses suggestion history until durable cleanup exists. API/DB design adjustments and generated `design/projects.openapi.json` document this bounded slice separately from future S02/Inngest conversation jobs.
+
+Verification:
+- `npm run test:ideas`: 12/12 passed, including provider bounds, SSRF rejection, strict schema, owner/origin/revision denial, receipt replay, single active slot, stale draft preservation, unknown deadline and late completion fencing.
+- `npm run test:projects`: 14/14; `npm run test:drafts`: 17/17; `npm run test:library`: 6/6; `npm run test:auth`: 17/17. Auth tests include the actual new Next routes, anonymous denial, catalog and safe missing-provider errors; no paid calls occur in automated suites.
+- `npm run check`: prototype/web typechecks and 23/23 prototype rendering/algorithm tests passed. `npm run build`: production build passed with all new routes.
+- Live Gemini (`gemini-3.5-flash`) returned three validated ideas. Browser testing exposed an off-topic English-lessons response; the system prompt now explicitly distinguishes language from subject. A subsequent live request returned three binary-search approaches. Quality remains probabilistic and requires review.
+- Real browser: create project, request ideas, Use idea, autosave, reload persistence and stale-card disablement passed. Daniel preview showed the safe unavailable state; direct metadata check returned HTTP 401. Successful audio playback remains unverified with the current key. No synthesis credits were used by the preview adapter.
+- Desktop and narrow responsive screenshots: `design/qa/f08b-desktop.png`, `design/qa/f08b-mobile.png`. Narrow view reported 325 CSS pixels with no horizontal overflow. This is a layout smoke check, not mobile-device playback certification. Disposable browser/server stopped after testing.
+
+Remaining limits: one test narrator, no voice entitlement guarantee, no full chat history, automatic polling, resumable background generation, rate-limit UI, or populated-project deletion. Prompt text is not restored after reload; persisted suggestion results are. Unknown requests require explicit recovery/new-request decisions and may already have consumed provider credits. Hosted deployment, end-to-end successful MP3 playback and provider outage browser injection are not verified.
+
+Review checkpoint: run `npm run auth:local -- --providers` with Node 24, choose fresh test credentials, open http://127.0.0.1:3001/sign-in, create a project and choose Edit idea. Ask for suggestions, select Use idea, confirm All changes saved and reload. ElevenLabs requires a working key/voice-read permission before its live sample can be verified. Stop the disposable launcher with Ctrl+C. Do not start F09 until this slice is reviewed.

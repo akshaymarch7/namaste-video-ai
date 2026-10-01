@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { parseEnv } from 'node:util';
+import { setupIdeas } from '../src/ideas/setup';
 import { setupDrafts } from '../src/drafts/setup';
 import { setupProjects } from '../src/projects/setup';
 import { randomBytes } from 'node:crypto';
@@ -37,6 +40,7 @@ try {
   await setupDatabase(db);
   await setupProjects(db);
   await setupDrafts(db);
+  await setupIdeas(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, input);
   // Explicit environment wins over any web env file. Do not inherit provider or migration credentials.
@@ -45,6 +49,14 @@ try {
     BETTER_AUTH_SECRET: config.secret, BETTER_AUTH_URL: config.origin,
     NEXT_TELEMETRY_DISABLED: '1', AUTH_CLIENT_IP_HEADER: '',
   };
+  if (process.argv.includes('--providers')) {
+    const providerEnv = parseEnv(readFileSync(new URL('../.env.local', import.meta.url), 'utf8'));
+    for (const key of ['GEMINI_API_KEY', 'GEMINI_MODEL', 'ELEVENLABS_API_KEY']) if (providerEnv[key]) env[key] = providerEnv[key];
+    console.log('Live providers enabled from the separate web configuration.');
+  } else {
+    // Next loads .env.local itself: explicitly mask provider values in the offline launcher.
+    for (const key of ['GEMINI_API_KEY', 'GEMINI_MODEL', 'ELEVENLABS_API_KEY']) env[key] = '';
+  }
   console.log('Test account ready. Open http://127.0.0.1:3001/sign-in when Next.js is ready.\nProject API checkpoint in a second terminal: npm run projects:verify (auth-only checks: npm run auth:verify)\nPress Ctrl+C here when finished.');
   web = spawn(process.execPath, [createRequire(import.meta.url).resolve('next/dist/bin/next'), 'dev', '--hostname', '127.0.0.1', '--port', '3001'], { env, stdio: 'inherit' });
   await new Promise<void>((resolve, reject) => { web!.once('exit', code => code && !stopping ? reject(new Error('Web server failed')) : resolve()); web!.once('error', reject); });

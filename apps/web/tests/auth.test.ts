@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { setupIdeas } from '../src/ideas/setup';
 import { setupDrafts } from '../src/drafts/setup';
 import { checkDrafts } from '../scripts/drafts-check';
 import { before, after, test } from 'node:test';
@@ -35,6 +36,7 @@ before(async () => {
   await setupDatabase(db);
   await setupProjects(db);
   await setupDrafts(db);
+  await setupIdeas(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, account);
   const auth = createAuth(db, client, config);
@@ -210,7 +212,7 @@ test('actual Next.js routes allow the full session round trip and expose no nati
   });
   const origin = `http://127.0.0.1:${port}`;
   web = spawn(process.execPath, [createRequire(import.meta.url).resolve('next/dist/bin/next'), 'dev', '--hostname', '127.0.0.1', '--port', String(port)], {
-    env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, NODE_ENV: 'development',
+    env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, NODE_ENV: 'development', GEMINI_API_KEY: '', GEMINI_MODEL: '', ELEVENLABS_API_KEY: '',
       MONGODB_URI: replica.getUri(), MONGODB_DATABASE: dbName, BETTER_AUTH_SECRET: config.secret, BETTER_AUTH_URL: origin,
       NEXT_TELEMETRY_DISABLED: '1', AUTH_CLIENT_IP_HEADER: '' }, stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -234,6 +236,17 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     const projectResponse = await fetch(`${origin}/api/projects`, { method: 'POST', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json', 'Idempotency-Key': 'actual-route-test-0001' }, body: JSON.stringify({ title: 'HTTP project' }) });
     assert.equal(projectResponse.status, 201);
     const project = (await projectResponse.json()).data;
+    const ideaUrl = `${origin}/api/projects/${project.id}/idea-suggestions`;
+    assert.equal((await fetch(ideaUrl)).status, 401);
+    assert.equal((await fetch(ideaUrl, { headers: { Cookie: cookies(login) } })).status, 200);
+    const noProvider = await fetch(ideaUrl, { method: 'POST', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json', 'Idempotency-Key': 'offline-provider-0001' }, body: JSON.stringify({expectedDraftRevision: 1, prompt: 'Explain binary search'}) });
+    assert.equal(noProvider.status, 503);
+    assert.equal((await noProvider.json()).error.code, 'AI_NOT_CONFIGURED');
+    assert.equal((await fetch(`${origin}/api/voices`)).status, 401);
+    assert.equal((await fetch(`${origin}/api/voices`, {headers: {Cookie: cookies(login)}})).status, 200);
+    const noVoice = await fetch(`${origin}/api/voices/daniel-test/preview`, {headers: {Cookie: cookies(login)}});
+    assert.equal(noVoice.status, 503);
+    assert.equal((await noVoice.json()).error.code, 'VOICE_NOT_CONFIGURED');
     const ideaPath = `/projects/${project.id}/idea`;
     const anonymousIdea = await fetch(`${origin}${ideaPath}`, { redirect: 'manual' });
     assert.equal(anonymousIdea.status, 307);

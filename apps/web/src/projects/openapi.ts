@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ideaRequestSchema, suggestionSchema } from '../ideas/contracts';
 import { patchDraft } from '../drafts/contracts';
 import { createProject, renameProject, deleteProject, projectId, idempotencyKey, filters } from './contracts';
 const schema = (value: z.ZodType) => z.toJSONSchema(value, { io: 'input' });
@@ -20,6 +21,7 @@ const body = (value: z.ZodType) => ({ required: true, content: content(schema(va
 const mutation = [{ in: 'header', name: 'Origin', required: true, schema: { type: 'string' }, description: 'Must exactly match configured application origin.' }];
 const keyed = [...mutation, { in: 'header', name: 'Idempotency-Key', required: true, schema: schema(idempotencyKey) }];
 const envelope = { type: 'object', required: ['data','meta'], properties: { data: projectRef, meta } };
+const ideaResponse = { description: 'Latest request receipt, or null when absent. Running returns 202; terminal receipts return 200.', headers: responseHeaders, content: content({ type: 'object', required: ['data','meta'], properties: { meta, data: { anyOf: [{ type: 'null' }, { type: 'object', additionalProperties: false, required: ['id','state','sourceDraftRevision','model','suggestions','errorCode','createdAt'], properties: { id: { type: 'string' }, state: { enum: ['running','completed','failed','unknown'] }, sourceDraftRevision: { type: 'integer', minimum: 1 }, model: { type: 'string' }, suggestions: { type: 'array', maxItems: 5, items: schema(suggestionSchema) }, errorCode: nullableId, createdAt: { type: 'string', format: 'date-time' } } }] } } }) };
 const success = (description: string) => ({ description, headers: responseHeaders, content: content(envelope) });
 export function projectsOpenApi() {
   // Zod custom Unicode refinement is represented explicitly in the exported JSON Schema.
@@ -41,9 +43,16 @@ export function projectsOpenApi() {
       validation: { type: 'object', required: ['valid','issues'], properties: { valid: { const: false }, issues: { type: 'array', items: { type: 'object', required: ['path','code','message'], properties: { path: { type: 'string' }, code: { type: 'string' }, message: { type: 'string' } } } } } },
     },
   } } }) };
-  return { openapi: '3.1.0', info: { title: 'NamasteVideo project and idea draft API', version: '0.2.0', description: 'Implemented slice only. DELETE completes synchronously for empty projects (204); populated project cleanup and selectedVideoId mutation are not yet supported.' },
+  return { openapi: '3.1.0', info: { title: 'NamasteVideo project and idea draft API', version: '0.3.0', description: 'Implemented slice only. DELETE completes synchronously for empty projects (204); populated project cleanup and selectedVideoId mutation are not yet supported.' },
     servers: [{ url: '/' }], security: [{ session: [] }], components: { schemas: { Project: project }, responses: { Error: errorResponse }, securitySchemes: { session: { type: 'apiKey', in: 'cookie', name: 'better-auth.session_token', description: 'Better Auth HttpOnly session cookie; production uses its __Secure- prefix. Obtain it via the session facade.' } } },
     paths: {
+      '/api/projects/{id}/idea-suggestions': {
+        parameters: [{ in: 'path', name: 'id', required: true, schema: schema(projectId) }],
+        get: { operationId: 'getLatestIdeaSuggestions', responses: { ...errors, 200: ideaResponse, 202: ideaResponse } },
+        post: { operationId: 'requestIdeaSuggestions', description: 'Bounded synchronous Gemini request with durable receipt. Same-key replay never repeats the provider call. Deadline expiry becomes unknown; explicit new requests may consume credits again. Does not edit the draft or create an Inngest job.', parameters: keyed, requestBody: body(ideaRequestSchema), responses: { ...errors, 200: ideaResponse, 202: ideaResponse } },
+      },
+      '/api/voices': { get: { operationId: 'getVoiceCatalog', responses: { ...errors, 200: { description: 'Daniel test preset only; not a provider entitlement check.', headers: responseHeaders, content: content({ type: 'object', required: ['data','meta'], properties: { meta, data: { type: 'object', required: ['defaultPreset','voices'], properties: { defaultPreset: { const: 'daniel-test' }, voices: { type: 'array', items: { type: 'object', required: ['preset','label','accent','testOnly','previewPath'], properties: { preset: { const: 'daniel-test' }, label: { const: 'Daniel' }, accent: { const: 'English' }, testOnly: { const: true }, previewPath: { const: '/api/voices/daniel-test/preview' } } } } } } } }) } } } },
+      '/api/voices/daniel-test/preview': { get: { operationId: 'getDanielSample', responses: { ...errors, 200: { description: 'Authenticated proxy of an existing provider MP3 sample, at most 2 MiB. Does not synthesize speech.', headers: responseHeaders, content: { 'audio/mpeg': { schema: { type: 'string', format: 'binary' } } } } } } },
       '/api/projects/{id}/draft': {
         parameters: [{ in: 'path', name: 'id', required: true, schema: schema(projectId) }],
         get: { operationId: 'getIdeaDraft', responses: { ...errors, 200: draftResponse } },

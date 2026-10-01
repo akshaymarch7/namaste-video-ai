@@ -214,3 +214,12 @@ For an explicitly configured development database, run `npm run db:setup` with t
 Run `npm run auth:local` under Node 24.21.0, sign in at `http://127.0.0.1:3001/sign-in`, create a project and choose **Edit idea**. Enter a topic, expand audience/notes, and wait for **All changes saved** before reloading. Open the same project in two tabs; save in one, then edit the stale tab to exercise compare/keep-local/use-saved resolution. Field limits preserve invalid input and require correction plus **Check & retry save**. Leaving with unresolved input uses the browser's native unload warning; full reload does not retain unsaved input.
 
 F08a implements the approved Cinema editor layout and existing draft APIs. F08b will add Gemini suggestions and voice previews. Storyboard generation remains F09; no generation action is presented as working here. Edited projects still cannot be deleted until the cleanup workflow is implemented. Stop the disposable launcher after testing.
+
+
+### F08b brainstorming checkpoint
+
+With Node 24, run `npm run auth:local -- --providers` to use the provider settings in ignored `apps/web/.env.local` with a disposable local database/account. Plain `npm run auth:local` explicitly disables providers. For an existing configured database, apply migration 004 with `npm run db:setup` first.
+
+In Edit idea, ask for suggestions, choose Use idea, wait for All changes saved and reload. Results persist; applying is disabled if their source draft has changed. Check request reuses the original receipt after an uncertain response. A new request after an unknown outcome may consume credits again. This is bounded brainstorming, not background storyboard generation.
+
+Required server-only configuration: `GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`. No provider value is returned to the client. Daniel preview proxies an existing sample; it does not synthesize speech. Current live verification: Gemini works; ElevenLabs metadata returned HTTP 401, so playback awaits valid provider authorization. Root prototype configuration remains separate. Run `npm run test:ideas` for offline provider and real local MongoDB contract tests. See PROJECT_STATUS.md for full evidence and limits.
