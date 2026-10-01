@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F08b — Gemini reliability fix implemented; ready for QA.** Brainstorming now uses the measured `gemini-3.5-flash-lite` configuration with minimal thinking, safe correlated server diagnostics and actionable failure messages. Six live Flash-Lite requests passed, including real browser application/autosave/reload and reload-during-generation recovery. This is a local verification sample, not a provider uptime guarantee. Daniel browser playback previously passed. Wait for user review before F09.
+**F08b — Reliability retest passed; topic-switching issue remains.** Independent QA on `bdaace1` completed three real Flash-Lite requests in 2.37–2.41 seconds with HTTP 200 and no unknown/unavailable outcomes. Real suggestion application/autosave/reload and reload-during-generation recovery passed. Two requests for water-cycle ideas instead followed the saved binary-search topic; see the reproducible content-relevance finding below. This local sample is not a provider uptime guarantee. Daniel browser playback previously passed. Wait for user review before F09.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -40,7 +40,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F06 | My videos library UI | Done; user approved | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
 | F07 | Idea draft API, autosave and conflict handling | Done; user approved progression | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
 | F08a | Cinema idea editor and autosave integration | Done locally; delegated testing passed, user review pending | Browser autosave/reload, both conflict choices, validation recovery, mobile editing and 87-second session-focus check passed; prior 56-test/typecheck/build evidence below |
-| F08b | AI brainstorming and voice previews | Implemented — awaiting review; live Gemini retest limited | Browser Daniel playback passed; fixture-backed Use idea/save/reload and recovery passed; latest live Gemini requests returned unknown/unavailable |
+| F08b | AI brainstorming and voice previews | Implemented — reliability retest passed; topic-switching finding open | Three live requests completed; real Use idea/save/reload and interrupted-request recovery passed; two water-cycle prompts returned binary-search ideas |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
@@ -669,3 +669,23 @@ Verification:
 Limits: six successful requests on the selected model are evidence for this checkpoint, not a statistical reliability guarantee. Upstream 503s and timeouts may recur; failure/recovery semantics remain truthful. No hosted/serverless interruption guarantee, durable background worker, automatic polling or model failover is claimed. Provider/browser/receipt/route bounds remain 30/40/45/60 seconds. Full prototype and unrelated project/library suites were not rerun for this provider-focused fix. No deployments or social publication occurred.
 
 References: Google's minimal-thinking guidance: https://ai.google.dev/gemini-api/docs/whats-new-gemini-3.5 ; model thinking support: https://ai.google.dev/gemini-api/docs/thinking .
+
+### F08b independent fix verification — October 2, 2026
+
+Retested clean `dev` commit `bdaace1` at the user's request, using Node 24.21.0, `npm run auth:local -- --providers` and a fresh disposable account/project. All three requests used real Gemini; no fixture results, mocks, configuration changes or implementation edits were used.
+
+| Attempt | Scenario | Server diagnostic and outcome |
+| --- | --- | --- |
+| 1 | Original binary-search topic and prompt, page left open | `gemini-3.5-flash-lite`, HTTP 200, category OK, 2,375 ms; three relevant cards; receipt completed with no error |
+| 2 | Water-cycle prompt with saved binary-search draft; reload while Exploring | HTTP 200, OK, 2,407 ms; reloaded GET returned 202, Check request recovered three cards; exactly one provider completion for this receipt; no unknown outcome; content was incorrectly about binary search |
+| 3 | Same water-cycle prompt, page left open | HTTP 200, OK, 2,367 ms; three cards, completed receipt, no error; binary-search content mismatch repeated |
+
+Functional passes: first live card's Read idea expanded; Use idea populated Topic and focused it; cards disabled while unsaved and remained disabled as stale after All changes saved. Reload retained the generated Topic and cards. Requests 2 and 3 left the saved Topic unchanged because no Use idea action was taken. Read-only database inspection confirmed exactly three completed receipts, three suggestions each, null error codes, and request hashes matching the water-cycle prompt for attempts 2 and 3. There was one correlated provider-completion log per attempt. No captured browser warning/error entries.
+
+**Open finding (P2): explicit brainstorm subject can be overridden by saved draft context.** Reproduction: save/apply a binary-search topic; enter `Suggest three visual ways to explain the water cycle to children: evaporation, condensation and rain, in a 60–90 second video.` in Explore an idea; click Suggest ideas. Expected: water-cycle suggestions, consistent with the adapter instruction to prioritize the explicit prompt subject. Actual: binary-search cards on both attempts, including `The Magic Phone Book` with a topic explicitly explaining binary search. One attempt involved reload recovery and the other did not; both stored request hashes matched the new prompt. This is a content-relevance failure, separate from the original timeout/availability problem. Root cause and a fix have not been established in this QA-only change.
+
+Verification: `npm run test:ideas` passed 18/18, including diagnostics classification/redaction, minimal-thinking configuration, replay, deadline fencing and durable receipt correlation. `git diff --check` passed. Typechecks, production build, other regression suites, mobile and voice playback were not rerun for this focused retest.
+
+Evidence: [real idea saved and reloaded](design/verification/f08b-qa-fix-saved.png), [recovered live result](design/verification/f08b-qa-fix-recovery.png), [prompt/result subject mismatch](design/verification/f08b-qa-fix-topic-mismatch.png). Synthetic content only; no credentials, provider response logs or audio committed. Signed out, closed the QA tab, removed temporary credentials, stopped the local launcher and confirmed ports 3001 and 53800 had no listeners. Restored only the known Next-generated route-type path changes in next-env.d.ts.
+
+Assessment: the reported unknown/provider-unavailable issue did not recur and the reliability fix passes this local retest. Three successful requests do not guarantee future upstream availability. Full F08b acceptance still needs review of the separate topic-switching finding; F09 remains unstarted.
