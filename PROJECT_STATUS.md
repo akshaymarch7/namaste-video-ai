@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F08a — Done locally; user testing/code review pending.** User authorized progression after F07 review fixes. F08 is split into a reviewable editor/persistence slice and F08b AI suggestions/voice previews. Acceptance: owner-protected project navigation, real autosave, conflict comparison and explicit resolution, input limits, unsaved-navigation guard, desktop/mobile and session focus checks.
+**F08a — Done locally; delegated browser testing passed; user feedback/code review pending.** User authorized progression after F07 review fixes. F08 is split into a reviewable editor/persistence slice and F08b AI suggestions/voice previews. Delegated persistence, conflict recovery, validation, desktop/mobile and session-focus results are recorded below. Wait for feedback before F08b.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -39,7 +39,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F05 | Personal project create/list/rename/delete APIs | Done; user approved | Five-group interactive checkpoint and extended two-user/pagination/revision/deletion checks passed; prior 65 automated tests/types/build recorded below |
 | F06 | My videos library UI | Done; user approved | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
 | F07 | Idea draft API, autosave and conflict handling | Done; user approved progression | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
-| F08a | Cinema idea editor and autosave integration | Done locally; user review pending | 56 tests, web typecheck/build and desktop/mobile save/reload/conflict/session-focus checks passed |
+| F08a | Cinema idea editor and autosave integration | Done locally; delegated testing passed, user review pending | Browser autosave/reload, both conflict choices, validation recovery, mobile editing and 87-second session-focus check passed; prior 56-test/typecheck/build evidence below |
 | F08b | AI brainstorming and voice previews | Planned | Gemini topic suggestions; use suggestion; available voice preview |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
@@ -516,6 +516,27 @@ All commands use cached Node 24.21.0. Browser checks used actual Next.js and dis
 
 Screenshots: [desktop](design/verification/f08a-editor-desktop.png), [mobile](design/verification/f08a-editor-mobile.png), [comparison](design/verification/f08a-conflict.png). Screens show synthetic data. Viewport override reset; disposable preview stopped after browser checks. No new paid calls, deployment, credentials or external publication.
 
+### Delegated browser testing — October 1, 2026
+
+At the user's request, Codex reviewed implementation commit `2575807` with cached Node 24.21.0, `npm run auth:local`, fresh synthetic credentials and a project created through the real library UI. No application code/configuration changed. This milestone updates `PROJECT_STATUS.md` and adds three screenshots under `design/verification/`.
+
+| Browser check | Observed result |
+| --- | --- |
+| Library entry | Created a project and followed its Edit idea link to the protected editor with correct project context |
+| Autosave and persistence | Topic, audience and multiline notes changed from Unsaved changes to All changes saved; Unicode/emoji and newlines were retained after reload; the sole available Daniel test narrator persisted |
+| Keep-local conflict recovery | Second tab saved a competing topic; stale first tab retained its input and showed Another version was saved; Compare saved version displayed both topics and focused the comparison heading; Keep my input & save restored Topic focus and reached All changes saved |
+| Use-saved conflict recovery | A new stale edit in the second tab produced another real conflict; comparison showed both versions; Use saved version adopted server text, cleared conflict and focused Topic |
+| Topic validation and retry | 2,001-character topic remained editable, displayed over-limit/error guidance and disabled Save now after validation; correcting it and choosing Check & retry save reached All changes saved |
+| Unsaved navigation | My videos click with invalid unsaved input retained the editor URL and input; no inspectable native dialog was exposed, so native warning appearance is not asserted |
+| Session poll and caret | Left Topic focused at caret 1 for 87.5 seconds without browser interactions; server logs recorded two new GET /api/session 200 responses; focus/caret remained at 1; typing `!` without refocusing inserted exactly there and autosaved |
+| Manual save | Removed the test insertion and clicked Save now; completed state was All changes saved and corrected topic survived mobile reload |
+| Mobile | At 390×844, document width was 375px with no horizontal overflow; optional fields expanded, persisted content remained visible, and a mobile audience edit autosaved |
+| Diagnostics and cleanup | No captured browser warning/error entries; returned to library, signed out, reset viewport, closed both test tabs and deleted temporary credentials; Ctrl+C stopped the launcher and neither web port 3001 nor its disposable MongoDB port retained a listener |
+
+Evidence: [desktop saved editor](design/verification/f08a-manual-editor-desktop.png), [mobile editor](design/verification/f08a-manual-editor-mobile.png), [two-tab comparison](design/verification/f08a-manual-conflict.png). All content is synthetic; no passwords/session cookies were printed or committed. No functional defect was observed in the completed checks. `git diff --check` passed.
+
+Scope limits: the prior 56 automated tests, web typecheck and production build were not rerun for this evidence-only milestone. Native unload-warning presentation, live network outages, provider availability, hosted production and mobile OS behavior remain unverified. Only the currently available Daniel test narrator was exercised. F08b remains unstarted pending user feedback/code review.
+
 ### Review checkpoint and limitations
 
 Run `npm run auth:local`, sign in, create a project and click Edit idea. Test autosave/reload, optional fields, field limits and competing edits in two tabs. Wait at least 65 seconds with Topic focused and continue typing without clicking it. Stop the launcher when finished. Share feedback before F08b.
@@ -530,6 +551,7 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | F08a delegated testing | Completed editor browser walkthrough; saved three synthetic-data screenshots; user feedback/code review pending before F08b | Autosave/reload, both conflict resolutions, validation retry, mobile edit and 87-second session/caret check passed; local servers stopped; `git diff --check` passed |
 | 2026-10-01 | F08a | Implemented Cinema idea editor, library entry links, real autosave/recovery/comparison UI and session focus scope; F08b remains planned | 56 automated tests, web typecheck/build, real desktop/mobile persistence/conflict/validation/session-poll checks passed; screenshots saved |
 | 2026-10-01 | F07 acceptance | User authorized the next feature after the unresolved-save fix | Conversation approval |
 | 2026-10-01 | F07 recovery fix | Keep timed-out saves unresolved after unchanged reads; require a revision-checked write before declaring reverted input saved | Three regressions reproduced before fix; 10/10 controller tests, web typecheck and diff check passed |
