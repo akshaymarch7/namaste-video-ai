@@ -234,6 +234,17 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     const projectResponse = await fetch(`${origin}/api/projects`, { method: 'POST', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json', 'Idempotency-Key': 'actual-route-test-0001' }, body: JSON.stringify({ title: 'HTTP project' }) });
     assert.equal(projectResponse.status, 201);
     const project = (await projectResponse.json()).data;
+    const ideaPath = `/projects/${project.id}/idea`;
+    const anonymousIdea = await fetch(`${origin}${ideaPath}`, { redirect: 'manual' });
+    assert.equal(anonymousIdea.status, 307);
+    const ideaPage = await fetch(`${origin}${ideaPath}`, { headers: { Cookie: cookies(login) } });
+    assert.equal(ideaPage.status, 200);
+    const ideaHtml = await ideaPage.text();
+    assert.match(ideaHtml, /<div hidden=""><div class="idea-shell"/);
+    assert.match(ideaHtml, /Checking your session/);
+    assert.equal(ideaHtml.includes('HTTP project'), false, 'Project data loads only through the owner-scoped API');
+    assert.equal((await fetch(`${origin}/projects/not-a-project/idea`, { headers: { Cookie: cookies(login) } })).status, 404);
+
     assert.equal((await fetch(`${origin}/api/projects/${project.id}`, { headers: { Cookie: cookies(login) } })).status, 200);
     assert.equal((await fetch(`${origin}/api/projects?limit=1`, { headers: { Cookie: cookies(login) } })).status, 200);
     assert.equal((await fetch(`${origin}/api/projects/${project.id}`, { method: 'PATCH', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Updated HTTP project', expectedRevision: 1 }) })).status, 200);

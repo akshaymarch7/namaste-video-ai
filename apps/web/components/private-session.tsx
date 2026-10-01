@@ -19,7 +19,7 @@ export function PrivateSession({ expiresAt, userId, children }: { expiresAt: str
     // Capture before hiding moves focus to BODY. Repeated checks must not overwrite it.
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && content.current?.contains(focused)) {
-      const dialog = focused.closest<HTMLElement>('[role="dialog"]');
+      const dialog = focused.closest<HTMLElement>('[role="dialog"],[data-private-focus-scope]');
       if (dialog) dialogFocus.current = { dialog, control: focused,
         selection: focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement
           ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection] : null };

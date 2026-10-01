@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F07 — Done locally, including unresolved-save recovery fix; user feedback/code review pending.** User approved moving beyond F06 and its focus fix. This slice adds idea draft persistence and a reusable autosave controller; the visible idea editor remains F08. Wait for user review before F08.
+**F08a — Done locally; user testing/code review pending.** User authorized progression after F07 review fixes. F08 is split into a reviewable editor/persistence slice and F08b AI suggestions/voice previews. Acceptance: owner-protected project navigation, real autosave, conflict comparison and explicit resolution, input limits, unsaved-navigation guard, desktop/mobile and session focus checks.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -38,8 +38,9 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F04 | Sign-in/recovery UI and private route protection | Done; user approved, including P2 fix | 51 automated tests and prior types/build passed; delegated desktop/mobile browser and interactive operator recovery walkthrough passed; evidence below |
 | F05 | Personal project create/list/rename/delete APIs | Done; user approved | Five-group interactive checkpoint and extended two-user/pagination/revision/deletion checks passed; prior 65 automated tests/types/build recorded below |
 | F06 | My videos library UI | Done; user approved | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
-| F07 | Idea draft API, autosave and conflict handling | Done locally; delegated testing passed, user review pending | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
-| F08 | Idea and brainstorming UI/integration | Planned | Save real idea; Gemini topic suggestions; use suggestion; available voice preview |
+| F07 | Idea draft API, autosave and conflict handling | Done; user approved progression | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
+| F08a | Cinema idea editor and autosave integration | Done locally; user review pending | 56 tests, web typecheck/build and desktop/mobile save/reload/conflict/session-focus checks passed |
+| F08b | AI brainstorming and voice previews | Planned | Gemini topic suggestions; use suggestion; available voice preview |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
@@ -482,6 +483,45 @@ Completed October 1, 2026. The P2 report was reproduced with three failing contr
 - `apps/web/tests/autosave.test.ts`: deterministic regression tests simulate both transaction orderings and a timed-out recovery write whose text matches the old persisted text. All three failed on the previous implementation and passed after the fix. Existing seven controller tests also passed (10/10 total).
 - `API_DESIGN.md`: recovery contract updated. Verification under cached Node 24.21.0: targeted autosave suite 10/10, `npm run typecheck:web`, and `git diff --check` passed. DB/API code is unchanged; the full DB/auth/prototype suites and production build were not rerun. The delayed-commit race is tested with a controlled revision-checking transport, not a browser/network fault injection. F08 remains unstarted.
 
+## F08a — Cinema idea editor and autosave UI
+
+Implemented October 1, 2026 after user authorization to proceed beyond F07. F08 is now two small slices: F08a delivers the real editor and persistence; F08b retains Gemini brainstorming and available voice previews. F09 still owns storyboard generation. No AI suggestions, voice playback or generation buttons are mocked as implemented.
+
+### Scope and files
+
+- `apps/web/app/projects/[id]/idea/page.tsx`: protected dynamic route using the per-page session guard and PrivateSession. Invalid ID syntax returns 404. Project/draft data loads only through existing owner-authorized APIs; server-rendered private content is initially hidden. Session-error paths reuse the existing sign-in/access-help destinations.
+- `components/idea/idea-editor.tsx`: approved Cinema direction from screens 07/19 with project context, four-step indicator, topic, expandable audience/notes, saved narrator and English/60–90s guidance. All fields use the F07 controller/API. Real loading/missing/error states, Unicode counters and invalid input feedback, saved/dirty/saving/error/conflict announcements, manual Save now and explicit check/retry recovery. Two-version field comparison exposes keep-local/save and use-saved decisions. Comparison/resolve actions manage keyboard focus.
+- Full-document home/library links and a native beforeunload guard protect unresolved in-memory changes on normal supported desktop browser navigation. No localStorage or cross-reload draft recovery. Session expiry/account changes still require reauthentication and can discard unsaved input; saved drafts remain server-side. The editor does not implement automatic merging or pretend an unchanged recovery read settles a pending save.
+- `components/library/project-library.tsx`: title and Edit idea links open the project editor; create/library copy reflects implemented editing. Existing create/rename/delete behavior retained. `components/private-session.tsx` extends the reviewed focus-scope capture to the editor so periodic hiding/reveal restores the textarea and caret; dialog behavior is retained.
+- `app/globals.css`: responsive Cinema editor, guide panel, narrator/validation/compare layouts and library link styling. Existing video rendering style remains unchanged. No provider/environment/database/API migration changes.
+- Updated auth integration assertions, README and AGENTS checkpoint. F08b remains planned; this is not full F08 completion.
+
+### Verification
+
+All commands use cached Node 24.21.0. Browser checks used actual Next.js and disposable MongoDB with a synthetic account.
+
+| Check | Result |
+| --- | --- |
+| Autosave/library/prototype suites | 39/39 passed (10 controller + 6 library + 23 prototype) |
+| Web TypeScript | `npm run typecheck:web` and final production TypeScript validation passed |
+| Auth/route integration | 17/17 passed, including unauthenticated editor redirect, hidden initial markup, absent server project data and malformed route-ID checks |
+| Production build | Passed, including dynamic `/projects/[id]/idea`; `git diff --check` passed |
+| Create → editor → save/reload | Created project through UI, opened Edit idea, saved topic/audience/multiline notes; topic and optional fields persisted after reload; Daniel test preset shown |
+| Two-tab conflict | Second tab saved a competing topic; stale tab preserved input, displayed both versions, Keep my input saved and survived reload. Use saved version in the other tab restored server text and focused Topic |
+| Input limits/recovery | 2,001-character topic remained editable, showed over-limit guidance and blocked saving; corrected text + Check & retry save reached All changes saved |
+| Navigation protection | Clicking My videos while invalid/unsaved input was present left the editor and text intact. In-app browser exposed no inspectable native dialog; native warning presentation remains browser-dependent and was not visually asserted |
+| Session poll focus | Waited approximately 76 seconds with Topic focused and caret at position 46; actual 60-second session checks returned 200. Field/caret remained at 46; typing `!` without refocusing inserted at that position and autosaved |
+| Layout and unavailable project | Desktop layout reviewed. Requested 390×844 mobile viewport reported effective CSS width 325 with document width 312 (no horizontal overflow). Missing project showed safe unavailable message and library link |
+| Browser diagnostics | No captured warnings/errors on the main editor walkthrough; expected missing-project 404 requests occurred in the separate tab |
+
+Screenshots: [desktop](design/verification/f08a-editor-desktop.png), [mobile](design/verification/f08a-editor-mobile.png), [comparison](design/verification/f08a-conflict.png). Screens show synthetic data. Viewport override reset; disposable preview stopped after browser checks. No new paid calls, deployment, credentials or external publication.
+
+### Review checkpoint and limitations
+
+Run `npm run auth:local`, sign in, create a project and click Edit idea. Test autosave/reload, optional fields, field limits and competing edits in two tabs. Wait at least 65 seconds with Topic focused and continue typing without clicking it. Stop the launcher when finished. Share feedback before F08b.
+
+AI suggestions/voice previews remain F08b; storyboard creation remains F09. Existing edited-project deletion restriction still applies. Network recovery and delayed-write semantics have controller coverage, but this slice did not inject a live browser outage. No hosted/production browser acceptance or mobile OS unload-warning guarantee is claimed. No AI-provider or new database functionality was added. Existing DB/project standalone suites were not rerun; this slice changes UI and route markup only.
+
 ## Earlier evidence
 
 The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three generated videos, Gemini/ElevenLabs integrations, timing checks, and renderer recovery tests. Those historical results are not evidence that a hosted pipeline or dashboard works. Existing design artifacts remain in design/SCREEN_REVIEW_INDEX.md; the founder approved proceeding with implementation on October 1, 2026, with background colors normalized to the Cinema tokens.
@@ -490,6 +530,8 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | F08a | Implemented Cinema idea editor, library entry links, real autosave/recovery/comparison UI and session focus scope; F08b remains planned | 56 automated tests, web typecheck/build, real desktop/mobile persistence/conflict/validation/session-poll checks passed; screenshots saved |
+| 2026-10-01 | F07 acceptance | User authorized the next feature after the unresolved-save fix | Conversation approval |
 | 2026-10-01 | F07 recovery fix | Keep timed-out saves unresolved after unchanged reads; require a revision-checked write before declaring reverted input saved | Three regressions reproduced before fix; 10/10 controller tests, web typecheck and diff check passed |
 | 2026-10-01 | F07 delegated testing | Completed interactive draft API checkpoint and live autosave failure/conflict recovery walkthrough; documentation only; user feedback/code review pending before F08 | Four verifier PASS groups, seven live controller PASS groups and 7/7 targeted autosave tests passed; local servers stopped; `git diff --check` passed |
 | 2026-10-01 | F07 | Implemented idea draft persistence, reviewed validator upgrade and reusable autosave/conflict recovery; added local API verification command | 85 distinct tests, both typechecks, final 25-test rerun and production build passed; F08 waits for review |

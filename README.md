@@ -208,3 +208,9 @@ npm run drafts:verify
 Expect four PASS groups for persistence, conflicts/validation and guarded deletion. Stop `auth:local` with Ctrl+C to remove the edited fixture; populated-project deletion is not implemented yet. This script signs out its own session and prints no credentials. Its API checks also run against actual Next.js routes in `test:auth`.
 
 For an explicitly configured development database, run `npm run db:setup` with the web operator configuration to install migration 003 before draft requests. Root prototype `.env.local` remains separate. The API supports topic/audience/notes and the existing `daniel-test` preset; it makes no AI calls. Autosave recovery is unit-tested and ready for F08 integration; there is no browser editor or unsaved-edit persistence across reloads yet.
+
+### F08a idea editor checkpoint
+
+Run `npm run auth:local` under Node 24.21.0, sign in at `http://127.0.0.1:3001/sign-in`, create a project and choose **Edit idea**. Enter a topic, expand audience/notes, and wait for **All changes saved** before reloading. Open the same project in two tabs; save in one, then edit the stale tab to exercise compare/keep-local/use-saved resolution. Field limits preserve invalid input and require correction plus **Check & retry save**. Leaving with unresolved input uses the browser's native unload warning; full reload does not retain unsaved input.
+
+F08a implements the approved Cinema editor layout and existing draft APIs. F08b will add Gemini suggestions and voice previews. Storyboard generation remains F09; no generation action is presented as working here. Edited projects still cannot be deleted until the cleanup workflow is implemented. Stop the disposable launcher after testing.
