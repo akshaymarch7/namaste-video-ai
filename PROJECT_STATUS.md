@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F08b — Implemented; live voice preview blocked by provider authorization.** Gemini brainstorming, request recovery and explicit suggestion application are ready for review. Live Gemini and browser autosave/reload checks passed. ElevenLabs voice metadata returned HTTP 401 with the configured key, so actual sample playback is not verified. F08a was user-approved; wait for F08b review before F09.
+**F08b — Implemented; ready for review.** Gemini brainstorming, request recovery and explicit suggestion application are available. The ElevenLabs `voices_read` permission issue is resolved: the live app adapter downloads Daniel's sample successfully after support for the provider's signed preview endpoint. Browser audio playback remains to be verified. F08a was user-approved; wait for F08b review before F09.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -40,7 +40,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F06 | My videos library UI | Done; user approved | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
 | F07 | Idea draft API, autosave and conflict handling | Done; user approved progression | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
 | F08a | Cinema idea editor and autosave integration | Done locally; delegated testing passed, user review pending | Browser autosave/reload, both conflict choices, validation recovery, mobile editing and 87-second session-focus check passed; prior 56-test/typecheck/build evidence below |
-| F08b | AI brainstorming and voice previews | Partial — voice provider authorization | Gemini topic suggestions; use suggestion; available voice preview |
+| F08b | AI brainstorming and voice previews | Implemented — awaiting review | Gemini topic suggestions; use suggestion; available voice preview |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
@@ -599,3 +599,10 @@ Verification:
 Remaining limits: one test narrator, no voice entitlement guarantee, no full chat history, automatic polling, resumable background generation, rate-limit UI, or populated-project deletion. Prompt text is not restored after reload; persisted suggestion results are. Unknown requests require explicit recovery/new-request decisions and may already have consumed provider credits. Hosted deployment, end-to-end successful MP3 playback and provider outage browser injection are not verified.
 
 Review checkpoint: run `npm run auth:local -- --providers` with Node 24, choose fresh test credentials, open http://127.0.0.1:3001/sign-in, create a project and choose Edit idea. Ask for suggestions, select Use idea, confirm All changes saved and reload. ElevenLabs requires a working key/voice-read permission before its live sample can be verified. Stop the disposable launcher with Ctrl+C. Do not start F09 until this slice is reviewed.
+
+
+### F08b preview authorization and URL compatibility fix — October 2, 2026
+
+The user enabled `voices_read` on the correct existing API key. Retesting returned HTTP 200 for voice metadata and the sample. Metadata now supplies a signed `api.us.elevenlabs.io/v1/voices/{Daniel ID}/previews/audio` URL rather than the static `.mp3` paths previously supported. Updated `apps/web/src/ideas/providers.ts` to accept only that exact host/voice/path, including its server-only query. HTTPS, URL length, no credentials/fragment, redirect rejection, MIME and byte bounds remain enforced. The sample fetch does not forward the API key. No keys or signed URLs are logged or committed.
+
+Verification: 6/6 provider tests passed, including the new signed-endpoint acceptance, wrong-host/voice/path rejection and no-key-forwarding regression test in `apps/web/tests/idea-providers.test.ts`; `npm run typecheck:web` passed. The actual app adapter downloaded 45,975 bytes successfully from ElevenLabs. No speech was synthesized. Browser playback and production build were not rerun for this narrow adapter change. Earlier 401 limitations are superseded by this evidence. README and AGENTS checkpoint updated; unrelated generated `next-env.d.ts` changes are excluded from this commit.

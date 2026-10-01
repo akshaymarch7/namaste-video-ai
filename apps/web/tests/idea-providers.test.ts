@@ -44,3 +44,17 @@ test('preview rejects SSRF, redirects, incorrect voice, missing configuration an
   let calls=0;
   await reject(voicePreview({ELEVENLABS_API_KEY:'key'},(async()=>++calls===1?Response.json({voice_id:danielVoiceId,preview_url:'https://static.elevenlabs.io/a.mp3'}):new Response('<html>bad</html>',{headers:{'Content-Type':'text/html'}})) as typeof fetch),'VOICE_UNAVAILABLE');
 });
+
+test('signed API preview permits only Daniel endpoint and never forwards the API key', async () => {
+  const sample = `https://api.us.elevenlabs.io/v1/voices/${danielVoiceId}/previews/audio?token=fixture`;
+  assert.equal(allowedPreview(sample), sample);
+  for (const url of [sample.replace(danielVoiceId, 'another-voice'), sample.replace('/previews/audio', '/settings'), sample.replace('api.us.elevenlabs.io', 'api.us.elevenlabs.io.evil.example'), `${sample}#fragment`, sample.replace('https:', 'http:')]) assert.throws(() => allowedPreview(url));
+  let calls = 0;
+  const mock = (async (url: string, options: RequestInit) => {
+    if (++calls === 1) return Response.json({voice_id: danielVoiceId, preview_url: sample});
+    assert.equal(url, sample); assert.equal(options.headers, undefined); assert.equal(options.redirect, 'error');
+    return new Response(new Uint8Array([73, 68, 51]), {headers: {'Content-Type': 'audio/mpeg'}});
+  }) as typeof fetch;
+  assert.equal((await voicePreview({ELEVENLABS_API_KEY: 'key'}, mock)).length, 3);
+  assert.equal(calls, 2);
+});

@@ -38,11 +38,16 @@ export async function suggest(input: { prompt: string; draft: IdeaFields }, conf
 }
 export const danielVoiceId = 'onwK4e9ZLuTAKqWW03F9';
 export function allowedPreview(raw: unknown) {
-  if (typeof raw !== 'string') throw new ProviderError('VOICE_UNAVAILABLE');
+  if (typeof raw !== 'string' || raw.length > 8192) throw new ProviderError('VOICE_UNAVAILABLE');
   const url = new URL(raw);
-  if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash
-    || !(url.hostname === 'storage.googleapis.com' && url.pathname.startsWith('/eleven-public-prod/') || url.hostname === 'static.elevenlabs.io')
-    || !url.pathname.endsWith('.mp3')) throw new ProviderError('VOICE_UNAVAILABLE');
+  const storedMp3 = !url.search && url.pathname.endsWith('.mp3')
+    && (url.hostname === 'storage.googleapis.com' && url.pathname.startsWith('/eleven-public-prod/') || url.hostname === 'static.elevenlabs.io');
+  // Provider metadata can return a signed API sample URL. Permit only this voice's
+  // exact US preview endpoint; its query stays server-side and receives no API key.
+  const signedPreview = url.hostname === 'api.us.elevenlabs.io'
+    && url.pathname === `/v1/voices/${danielVoiceId}/previews/audio`;
+  if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash
+    || !(storedMp3 || signedPreview)) throw new ProviderError('VOICE_UNAVAILABLE');
   return url.toString();
 }
 export async function voicePreview(env: Record<string, string | undefined> = process.env, request = fetch) {
