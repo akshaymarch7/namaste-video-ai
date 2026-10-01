@@ -21,6 +21,12 @@ No application authentication, persisted projects, hosted rendering or Instagram
 
 Repository contributors follow this workflow through AGENTS.md. No external automation is implied; the document must be updated during development.
 
+## Branch workflow
+
+- `dev`: active development branch; completed steps/milestones are committed and pushed here.
+- `main`: stable baseline, initially `dfe1883`. Finalized, verified changes are promoted through a pull request after explicit user approval to merge.
+- This workflow is recorded in AGENTS.md; GitHub branch protection has not been configured.
+
 ## Feature backlog — build in order
 
 | ID | Small feature | Status | Completion evidence required |
@@ -100,5 +106,6 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | Branch workflow | Created `dev` from the published initial scaffold and made it the active development branch; documented milestone pushes to `dev` and approval before promotion to `main` | Clean starting tree; remote had no `dev`; documentation-only change, checked with `git diff --check`; remote branch equality verified at handoff |
 | 2026-10-01 | Repository setup | Prepared initial public repository snapshot of the prototype, scaffold, specifications and design evidence; added standing milestone commit/push workflow | Remote confirmed empty; publishable text scanned for common credential patterns with no matches; environment and generated-media exclusions verified; F01 checks above remain applicable (no runtime code changed). Push result is verified against the remote and reported at handoff. |
 | 2026-10-01 | F01 | Completed isolated Next.js scaffold, Cinema primitives, runtime configuration and status workflow | Node 24 production build, both typechecks, 23 tests, HTTP boundary checks and desktop/mobile review passed; evidence above |
