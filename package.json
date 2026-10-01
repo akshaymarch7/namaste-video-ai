@@ -14,7 +14,11 @@
     "start": "npm run start --workspace=@namastevideo/web",
     "typecheck:web": "npm run typecheck --workspace=@namastevideo/web",
     "db:setup": "npm run db:setup --workspace=@namastevideo/web",
-    "test:db": "npm run test:db --workspace=@namastevideo/web"
+    "test:db": "npm run test:db --workspace=@namastevideo/web",
+    "test:auth": "npm run test:auth --workspace=@namastevideo/web --",
+    "auth:operator": "npm run auth:operator --workspace=@namastevideo/web --",
+    "auth:local": "npm run auth:local --workspace=@namastevideo/web --",
+    "auth:verify": "npm run auth:verify --workspace=@namastevideo/web --"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.529",

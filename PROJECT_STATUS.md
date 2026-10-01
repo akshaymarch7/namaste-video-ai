@@ -6,9 +6,9 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F02 — MongoDB foundation: Done (local verification).** Server-only connection, initial strict schemas/indexes and operator setup pass real replica-set tests. Hosted Atlas configuration remains outstanding. Next feature: F03, internal account admission and sessions.
+**F03 — Internal authentication backend: Implemented and verified locally; awaiting user testing.** Use `npm run auth:local` and `npm run auth:verify` as described below. Do not begin F04 until the user has tested and provided feedback. Hosted Atlas configuration remains outstanding.
 
-No application authentication, project CRUD API, hosted rendering or Instagram integration exists yet. Initial database collections are implemented and tested locally; no hosted database has been provisioned. The local video pipeline predates the application and remains separately usable.
+Internal authentication APIs and initial database collections are implemented and tested locally. No sign-in UI, project CRUD API, hosted rendering or Instagram integration exists yet; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
 ## How this document is maintained
 
@@ -34,7 +34,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F00 | Local idea-to-video proof of concept | Done (local prototype) | Existing three narrated exports and recovery reports; see PROTOTYPE_STATUS.md |
 | F01 | Next.js workspace, Cinema tokens, primitives and app boundary | Done | Production build; both TypeScript checks; 23 existing tests; desktop/mobile route smoke checks; root media inaccessible — evidence below |
 | F02 | MongoDB adapter, schema validation and initial indexes | Done (local) | 11 real replica-set tests; both typechecks; 23 prototype tests; production build; detailed evidence below. Atlas not configured. |
-| F03 | Internal account admission and session backend | Planned | Better Auth, provision approved users, no public signup, login/logout and disabled-user tests |
+| F03 | Internal account admission and session backend | Implemented; user test pending | 14 real auth/Next.js tests plus regression checks passed; local manual checkpoint below; stop before F04 |
 | F04 | Sign-in/recovery UI and private route protection | Planned | Approved sign-in flow; generic errors; expired session; private pages inaccessible anonymously |
 | F05 | Personal project create/list/rename/delete APIs | Planned | Ownership isolation, validation, pagination and deletion behavior tested |
 | F06 | My videos library UI | Planned | Real project data, filters, load more, empty/loading/error states and rename/delete dialogs |
@@ -130,6 +130,50 @@ Database tests cover configuration/CLI failure, shared connections/reconnect, se
 - These schemas do not enforce foreign keys, user authorization, valid IANA timezone names or state transitions. Those require the corresponding services. No public database endpoint has been added.
 - The initial migration only performs additive collection/index setup. Data backfills, upgrades and prototype imports are not implemented; future migrations need separate immutable definitions and checksums.
 
+## F03 — implementation record and user testing checkpoint
+
+Implemented October 1, 2026. Backend only; F04 is not started.
+
+- `apps/web/src/auth/config.ts`, `engine.ts`, `runtime.ts`: Better Auth 1.7.7 with MongoDB, explicit string user IDs, server-only lazy initialization, seven-day absolute sessions, no cookie token cache, secure production configuration, and admission checks. Public signup is disabled by configuration and creation hook; no native Better Auth HTTP handler is mounted.
+- `apps/web/src/auth/http.ts` and three `app/api/session` route files: strict input validation, exact Origin checks on mutations, bounded JSON bodies, safe response envelopes, private/no-store caching, cookie forwarding, generic credential failures and no session token in JSON. Session read returns a personal workspace ID matching the user ID; capabilities remain false until features exist.
+- `apps/web/src/auth/operator.ts`, `scripts/auth-operator.ts`: interactive account provisioning via supported Better Auth API with out-of-band identity verification, idempotent actual-user linking, disabled-account refusal and operator disabling. Passwords are hidden and never accepted in command arguments. Disabling first denies admission, then deletes the user's session records using the pinned adapter's string-ID schema. No password hashes are implemented by application code.
+- `apps/web/src/auth/setup.ts`: explicit additive operator setup derived from pinned auth schema metadata, including both field-level unique/index attributes and table-level indexes. The adapter's table-level index resolution omitted legacy field indexes; a real duplicate-email test caught this and operator setup now installs them. Runtime index administration is disabled and tested. Setup/provisioning refuse missing foundation setup; runtime checks required auth indexes before accepting requests. Auth version upgrades require a reviewed migration; this setup does not rewrite auth validators or delete data/indexes.
+- `apps/web/src/auth/throttle.ts`: database-backed fixed-window email/IP HMAC buckets with five/30 failure limits per 15 minutes, atomic reservation, successful-attempt release and Retry-After. Only explicitly trusted proxy headers are accepted; otherwise one conservative shared IP bucket is used. Raw email/IP are not stored in bucket identifiers. TTL is cleanup, not the enforcement mechanism.
+- `scripts/auth-local.ts`, `auth-input.ts`, `auth-verify.ts`: disposable MongoDB and actual Next.js API testing on port 3001; password input hidden, cookies only in memory, temporary secret, automatic cleanup. The launcher and verification commands are for user testing, not deployed product UI.
+- `tests/auth.test.ts`: real MongoDB 8.0.17 and actual Next.js routes. Environment examples, scripts/lockfile, README and AGENTS.md updated. No root prototype credentials were read or changed; no hosted account was created.
+
+### Verification
+
+Commands ran under Node 24.21.0 using `npm exec --yes --package=node@24.21.0 -- …`:
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Both TypeScript checks and all 23 prototype tests passed |
+| `npm run test:db` | 11/11 foundation tests passed |
+| `npm run test:auth` | 14/14 passed, including full HTTP login/session/logout through a temporary Next.js server |
+| Final `npm run typecheck:web` and `npm run build` | Passed; three dynamic session API routes compiled; build requires no database credentials |
+| `git diff --check` | Passed before commit |
+
+Auth coverage includes provisioning/idempotency/real user uniqueness, signup denial, safe session DTOs, cookie attributes, missing/cross-site Origin, unknown fields/body bounds, generic invalid credentials, email/IP throttling, disabled access and revocation, expiry/tampering, runtime absence of schema operations, fail-closed incomplete setup and no native auth endpoint exposure. Test servers/databases stop after completion. The interactive manual launcher has not been user-accepted yet.
+
+### Your test — required before F04
+
+From the repository root using Node 24.21.0:
+
+1. Terminal one: `npm run auth:local`. Enter a name/email and a fresh test-only password (12–128 characters). Wait for Next.js Ready at `http://127.0.0.1:3001`.
+2. Terminal two: `npm run auth:verify`. Enter that same email/password. Expect PASS messages for anonymous denial, wrong-password denial, login/workspace identity, session recognition and logout.
+3. Stop terminal one with Ctrl+C. Disposable test data is removed.
+4. Report the result; development waits for feedback before the designed sign-in/recovery UI (F04).
+
+This is an API test, not a browser sign-in screen. No Atlas credentials are required. Do not use a real/reused password. Port 3001 must be free; avoid another Next.js development server in this same workspace during the test.
+
+### Remaining limitations
+
+- Atlas configuration and actual hosted DB privileges remain unverified. Local checks do not establish production readiness.
+- No browser login/recovery UI or private page guards yet (F04). Operator-assisted one-use password recovery remains F04 scope; provisioning never silently resets passwords or re-enables disabled users.
+- No jobs/publishing exist to cancel or pause on disable; later features must integrate these transitions. Hosted reverse-proxy IP trust must be verified before deployment.
+- Local HTTP cookies intentionally lack Secure; HTTPS production configuration requires it. No deployment, AI calls or social publication occurred.
+
 ## Earlier evidence
 
 The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three generated videos, Gemini/ElevenLabs integrations, timing checks, and renderer recovery tests. Those historical results are not evidence that a hosted pipeline or dashboard works. Existing design artifacts remain in design/SCREEN_REVIEW_INDEX.md; the founder approved proceeding with implementation on October 1, 2026, with background colors normalized to the Cinema tokens.
@@ -138,6 +182,7 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | F03 | Implemented internal authentication backend, operator account tools and disposable user-testing commands; waiting for user test before F04 | 14 auth/HTTP tests, 11 database tests, 23 prototype tests, typechecks and production build passed; user acceptance pending |
 | 2026-10-01 | F02 | Completed local MongoDB foundation, initial schemas/indexes, operator setup and configuration documentation | 11 database tests, 23 prototype tests, both typechecks and production build passed on Node 24; hosted Atlas setup outstanding |
 | 2026-10-01 | Branch workflow | Created `dev` from the published initial scaffold and made it the active development branch; documented milestone pushes to `dev` and approval before promotion to `main` | Clean starting tree; remote had no `dev`; documentation-only change, checked with `git diff --check`; remote branch equality verified at handoff |
 | 2026-10-01 | Repository setup | Prepared initial public repository snapshot of the prototype, scaffold, specifications and design evidence; added standing milestone commit/push workflow | Remote confirmed empty; publishable text scanned for common credential patterns with no matches; environment and generated-media exclusions verified; F01 checks above remain applicable (no runtime code changed). Push result is verified against the remote and reported at handoff. |
