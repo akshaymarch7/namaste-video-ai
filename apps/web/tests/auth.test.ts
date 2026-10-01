@@ -228,7 +228,11 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     assert.equal(privatePage.status, 200);
     // Next's development server emits no-cache; force-dynamic production pages use private/no-store.
     assert.match(privatePage.headers.get('cache-control') ?? '', /no-(store|cache)/);
-    assert.match(await privatePage.text(), /tester@example.test/);
+    const privateHtml = await privatePage.text();
+    assert.match(privateHtml, /tester@example.test/);
+    // Cached HTML must not display the identity before client session validation.
+    assert.match(privateHtml, /<div hidden=""><header class="auth-header"/);
+    assert.match(privateHtml, /Checking your session/);
     const safeRedirect = await fetch(`${origin}/sign-in?returnTo=https://evil.example`, { headers: { Cookie: cookies(login) }, redirect: 'manual' });
     assert.equal(safeRedirect.headers.get('location'), '/projects');
     await client.db(dbName).collection('internalAccess').updateOne({ normalizedEmail: account.email }, { $set: { enabled: false } });
