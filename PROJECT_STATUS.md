@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F08b — Reliability accepted; topic-switch fix ready for QA.** The user accepted the independent reliability retest. Current brainstorming requests now explicitly take precedence over saved topic/notes. Four live adapter checks passed, including switching subjects in both directions and retaining context for implicit refinement. Full approval still awaits the user's topic-switch retest; do not start F09.
+**F08b — Topic-switch browser QA passed; ready for user approval.** Independent testing of `e144b8c` returned water-cycle suggestions despite saved binary-search topic/notes, preserved the draft until Use idea, recovered after reload during generation, and used saved binary-search context for an implicit refinement. Four real browser requests completed in 1.86–2.52 seconds; the prior topic-switching P2 finding is closed by this retest. Use idea/autosave/reload and 20 targeted tests passed. Reliability was previously accepted. Do not start F09 before user approval.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -40,7 +40,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F06 | My videos library UI | Done; user approved | Delegated desktop/mobile CRUD, all filters, 12-to-13 pagination, two-tab conflict resolution and keyboard checks passed; prior tests/build below |
 | F07 | Idea draft API, autosave and conflict handling | Done; user approved progression | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
 | F08a | Cinema idea editor and autosave integration | Done locally; delegated testing passed, user review pending | Browser autosave/reload, both conflict choices, validation recovery, mobile editing and 87-second session-focus check passed; prior 56-test/typecheck/build evidence below |
-| F08b | AI brainstorming and voice previews | Implemented — reliability retest passed; topic-switching finding open | Three live requests completed; real Use idea/save/reload and interrupted-request recovery passed; two water-cycle prompts returned binary-search ideas |
+| F08b | AI brainstorming and voice previews | Implemented — local QA passed; user approval pending | Live topic switching, implicit refinement, draft preservation, recovery, Use idea/save/reload and prior Daniel playback passed; topic-switching finding closed |
 | F09 | Storyboard generation backend | Planned | Validated scene contract, saved version, bounded repair and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
@@ -708,3 +708,22 @@ Live adapter verification with the actual configured Flash-Lite model (no substi
 `tests/idea-providers.test.ts` checks outgoing context/request separation and precedence instructions. `tests/ideas.test.ts` verifies a changed subject is passed separately from saved context and that returned fixture suggestions do not change the saved draft or source revision; this fixture test does not prove model relevance. `npm run test:ideas`: 20/20 passed; web typecheck and production build passed. No browser walkthrough was repeated for this adapter-only change. Independent browser topic-switch acceptance remains pending. Synthetic generated text was inspected for relevance, not fact-checked for publication; generative relevance cannot be guaranteed by prompt instructions alone.
 
 QA checkpoint: save a binary-search topic and notes, request water-cycle ideas twice, then verify the cards discuss the water cycle while the saved topic stays binary search. Use idea should be the only action that replaces Topic. Also test a vague request such as “give me more approaches to this topic” to ensure saved context is still useful.
+
+### F08b independent topic-switch browser acceptance — October 2, 2026
+
+Retested clean `dev` commit `e144b8c` at the user's request, using Node 24.21.0, `npm run auth:local -- --providers` and a fresh disposable account/project. All suggestions came from real Gemini; no fixtures, mocks or provider/configuration changes. Saved the exact prior phone-book/binary-search topic, audience `Beginning programmers`, and deliberately conflicting notes: `Keep explaining binary search only. Use sorted arrays and repeatedly halve the search range.`
+
+| Request | Browser scenario | Observed outcome |
+| --- | --- | --- |
+| 1 | Exact previous water-cycle prompt, while saved topic/notes remain binary search | HTTP 200, OK, 2,517 ms; three water-cycle cards. Expanded and reviewed all topics; no binary-search blending. Topic, audience, notes and narrator unchanged. |
+| 2 | Repeat identical prompt; reload during Exploring, then Check request | HTTP 200, OK, 1,859 ms; recovered from running/202 to three water-cycle cards covering evaporation, condensation and rain. One provider completion for the receipt. Saved fields matched the original after reload. |
+| 3 | `Give me more approaches to this topic.` without applying the water-cycle suggestions | HTTP 200, OK, 2,292 ms; three binary-search approaches (guessing game, dictionary, threshold search), correctly using the still-saved context rather than the previous suggestions. Saved fields unchanged. |
+| 4 | Repeat explicit water-cycle prompt for application check | HTTP 200, OK, 2,303 ms; three water-cycle ideas. Used the first idea, waited for All changes saved, then reloaded; the exact water-cycle Topic persisted and all prior cards were disabled as stale. |
+
+Read-only database evidence before Use idea: four completed receipts, null error codes, three suggestions each, all source revisions 3; draft revision still 3 and Topic still binary search. After explicit application: draft revision 4 and water-cycle Topic, with original audience and notes preserved. Browser focus moved to Topic after application; no captured browser warning/error entries. No unknown, unavailable or wrong-subject result appeared in this retest.
+
+`npm run test:ideas`: 20/20 passed. `git diff --check` passed. This evidence-only milestone does not rerun typechecks/build, unrelated regression suites, mobile, voice playback or the opposite-direction browser switch. Existing implementation verification and prior playback evidence remain separate. Generated content was checked for subject relevance, not certified for factual completeness or publication. A small successful live sample is not a guarantee of future provider availability or model behavior.
+
+Evidence: [water-cycle cards beside unchanged binary-search draft](design/verification/f08b-qa-topic-switch.png), [implicit saved-context refinement](design/verification/f08b-qa-implicit-context.png), [water-cycle idea saved and reloaded](design/verification/f08b-qa-water-cycle-saved.png). Synthetic data only. Signed out, closed the QA tab, removed temporary credentials and stopped the launcher. Ports 3001 and 56978 had no remaining listeners; restored only the known Next-generated route-type path changes.
+
+Result: **PASS for the requested browser checkpoint; prior topic-switching P2 finding closed.** F08b is ready for user approval under the documented local scope. No implementation changes or new feature work; F09 remains unstarted.
