@@ -95,3 +95,20 @@ test('success emits one safe diagnostic and a broken logger cannot discard usabl
   assert.equal(events.length,1); assert.equal(events[0].category,'OK'); assert.equal(events[0].httpStatus,200);
   assert.deepEqual(await suggest(input,{key:'key',model:'test'},mock,()=>{throw new Error('logger failed');}),suggestions);
 });
+
+test('current request is separate and last; saved topic is explicitly optional context', async () => {
+  const switching = {prompt: 'Give me water-cycle ideas instead', draft: {topic: 'Binary search', audience: 'Beginners', notes: 'Use sorted arrays', voicePreset: 'daniel-test'}};
+  const mock = (async (_url: string, options: RequestInit) => {
+    const body = JSON.parse(options.body as string);
+    assert.equal(body.contents.length, 2);
+    assert.match(body.contents[0].parts[0].text, /^SAVED DRAFT CONTEXT/);
+    assert.match(body.contents[0].parts[0].text, /Binary search/);
+    assert.equal(body.contents[1].parts[0].text, `CURRENT REQUEST (use this subject and direction):\n${switching.prompt}`);
+    assert.equal(body.contents[1].parts[0].text.includes('Binary search'), false);
+    assert.match(body.systemInstruction.parts[0].text, /switch completely/);
+    assert.match(body.systemInstruction.parts[0].text, /Only use the saved topic when/);
+    return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({suggestions})}]}}]});
+  }) as typeof fetch;
+  await suggest(switching, {key:'key',model:'test'}, mock);
+  assert.equal(switching.draft.topic, 'Binary search');
+});

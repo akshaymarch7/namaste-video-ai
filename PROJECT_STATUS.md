@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F08b — Reliability retest passed; topic-switching issue remains.** Independent QA on `bdaace1` completed three real Flash-Lite requests in 2.37–2.41 seconds with HTTP 200 and no unknown/unavailable outcomes. Real suggestion application/autosave/reload and reload-during-generation recovery passed. Two requests for water-cycle ideas instead followed the saved binary-search topic; see the reproducible content-relevance finding below. This local sample is not a provider uptime guarantee. Daniel browser playback previously passed. Wait for user review before F09.
+**F08b — Reliability accepted; topic-switch fix ready for QA.** The user accepted the independent reliability retest. Current brainstorming requests now explicitly take precedence over saved topic/notes. Four live adapter checks passed, including switching subjects in both directions and retaining context for implicit refinement. Full approval still awaits the user's topic-switch retest; do not start F09.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -689,3 +689,22 @@ Verification: `npm run test:ideas` passed 18/18, including diagnostics classific
 Evidence: [real idea saved and reloaded](design/verification/f08b-qa-fix-saved.png), [recovered live result](design/verification/f08b-qa-fix-recovery.png), [prompt/result subject mismatch](design/verification/f08b-qa-fix-topic-mismatch.png). Synthetic content only; no credentials, provider response logs or audio committed. Signed out, closed the QA tab, removed temporary credentials, stopped the local launcher and confirmed ports 3001 and 53800 had no listeners. Restored only the known Next-generated route-type path changes in next-env.d.ts.
 
 Assessment: the reported unknown/provider-unavailable issue did not recur and the reliability fix passes this local retest. Three successful requests do not guarantee future upstream availability. Full F08b acceptance still needs review of the separate topic-switching finding; F09 remains unstarted.
+
+
+### F08b topic-switch precedence correction — October 2, 2026
+
+User QA accepted the timeout/availability repair but reproduced water-cycle requests following the saved binary-search topic twice. The old provider payload serialized `{prompt,draft}` in one message with the draft last, described saved material as supporting context, and included a binary-search example in the system instruction. This gave competing topic cues without a sufficiently explicit conflict policy. It is a prompt-context ambiguity; there was no evidence of a stale API result being served as a new generation.
+
+Changed `apps/web/src/ideas/providers.ts`: send optional saved topic/audience/notes as an earlier labelled message and the current request as a separate, final message. The system instruction explicitly prioritizes the current subject, discards conflicting old topic/notes, avoids blending subjects unless requested, and uses saved context for implicit refinements. Removed the hardcoded binary-search example and irrelevant voice preset from the provider context. Model, minimal thinking, JSON schema, timeout, retries and persistence are unchanged.
+
+Live adapter verification with the actual configured Flash-Lite model (no substituted suggestions):
+| Saved context | Current request | Outcome |
+| --- | --- | --- |
+| Binary search; sorted-array notes | Water-cycle ideas for school students | HTTP 200, 2,364 ms; three water-cycle ideas |
+| Binary search; notes saying to keep explaining it only | Switch to water-cycle ideas | HTTP 200, 2,001 ms; three water-cycle ideas |
+| Water cycle; evaporation/rain notes | Binary-search ideas for beginners | HTTP 200, 1,635 ms; three binary-search ideas |
+| Binary search | More approaches to this topic | HTTP 200, 1,837 ms; three binary-search ideas |
+
+`tests/idea-providers.test.ts` checks outgoing context/request separation and precedence instructions. `tests/ideas.test.ts` verifies a changed subject is passed separately from saved context and that returned fixture suggestions do not change the saved draft or source revision; this fixture test does not prove model relevance. `npm run test:ideas`: 20/20 passed; web typecheck and production build passed. No browser walkthrough was repeated for this adapter-only change. Independent browser topic-switch acceptance remains pending. Synthetic generated text was inspected for relevance, not fact-checked for publication; generative relevance cannot be guaranteed by prompt instructions alone.
+
+QA checkpoint: save a binary-search topic and notes, request water-cycle ideas twice, then verify the cards discuss the water cycle while the saved topic stays binary search. Use idea should be the only action that replaces Topic. Also test a vague request such as “give me more approaches to this topic” to ensure saved context is still useful.

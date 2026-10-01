@@ -495,3 +495,8 @@ New requests require saved input. The client disables application after source r
 ### F08b provider diagnostics refinement (October 2, 2026)
 
 No request/response shape changes. Terminal failed receipts can now distinguish `PROVIDER_AUTHORIZATION` (upstream 401/403), `PROVIDER_CONFIGURATION` (400/404), `PROVIDER_LIMIT` (429), `PROVIDER_UNAVAILABLE` (other unsuccessful responses), and `PROVIDER_RESPONSE_INVALID`. Network/deadline ambiguity remains `PROVIDER_OUTCOME_UNKNOWN` and state unknown. Error messages are fixed UI copy, not forwarded provider text. Server completion logs contain receipt ID, configured model, HTTP status/null, fixed category and duration; they exclude input and generated content. Logging does not repeat provider calls or change outcomes. The web model is explicitly configured to Flash-Lite with minimal thinking; all deadlines and idempotency behavior are unchanged.
+
+
+### F08b brainstorming context precedence (October 2, 2026)
+
+The current `prompt` is authoritative when it names a subject or audience. Saved topic/notes are optional context for implicit refinement and must not override an explicit topic switch. Suggestions do not mutate the saved draft; sourceDraftRevision remains the revision of the context snapshot regardless of the suggested subject. No public DTO or persistence schema change.

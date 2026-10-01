@@ -126,3 +126,18 @@ test('provider diagnostics receive the durable receipt ID and replay does not em
   assert.equal((await svc.create(owner,item.id,key,input)).id,result.id);
   assert.equal(observed.length,1);
 });
+
+test('switching requested subject preserves the saved draft and source revision until explicit application', async () => {
+  const item = await make();
+  await drafts.save(owner,item.id,{expectedRevision:1,changes:{topic:'Binary search',notes:'Use sorted arrays'}});
+  const saved = await drafts.get(owner,item.id);
+  const waterIdeas = Array.from({length:3},(_,i)=>({title:`Water cycle ${i}`,topic:'Explain evaporation, condensation and precipitation.',angle:'Follow a water droplet'}));
+  const svc = ideaService(db,client,()=>({model:'fixture',run:async(input)=>{
+    assert.equal(input.prompt,'Suggest water-cycle ideas instead');
+    assert.equal(input.draft.topic,'Binary search');
+    return waterIdeas;
+  }}));
+  const result = await svc.create(owner,item.id,randomUUID(),{expectedDraftRevision:2,prompt:'Suggest water-cycle ideas instead'});
+  assert.equal(result.sourceDraftRevision,2); assert.deepEqual(result.suggestions,waterIdeas);
+  assert.deepEqual(await drafts.get(owner,item.id),saved);
+});
