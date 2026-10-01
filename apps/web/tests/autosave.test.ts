@@ -63,3 +63,55 @@ test('transport uses private requests and surfaces session errors without discar
     await assert.rejects(draftTransport(initial.projectId).read(), (e: unknown) => (e as DraftRequestError).code === 'UNAUTHENTICATED');
   } finally { globalThis.fetch = original; }
 });
+
+for (const winner of ['delayed-original', 'recovery-write'] as const) {
+  test(`unchanged recovery read cannot settle reverted input: ${winner} wins CAS`, async () => {
+    let remote = { ...initial }, delayed!: DraftPatch;
+    const calls: DraftPatch[] = [];
+    const commit = (input: DraftPatch) => {
+      if (input.expectedRevision !== remote.revision) throw new DraftRequestError('REVISION_CONFLICT');
+      remote = { ...remote, ...input.changes, revision: remote.revision + 1 };
+      return remote;
+    };
+    const c = createAutosave(initial, { read: async () => remote, save: async input => {
+      calls.push(input);
+      if (calls.length === 1) { delayed = input; throw new DraftRequestError('CONNECTION'); }
+      return commit(input);
+    } }, () => {}, 60000);
+    try {
+      c.edit({ topic: 'Delayed text' }); await c.flush();
+      c.edit({ topic: initial.topic }); await c.recover();
+      assert.equal(c.snapshot().status, 'dirty', 'Old revision does not prove the PATCH stopped');
+      c.edit({ topic: initial.topic });
+      assert.equal(c.snapshot().status, 'dirty', 'Further edits must not clear the unsettled write');
+      if (winner === 'delayed-original') commit(delayed);
+      await c.flush();
+      assert.equal(calls[1].expectedRevision, 1);
+      assert.equal(calls[1].changes.topic, initial.topic);
+      if (winner === 'delayed-original') {
+        assert.equal(c.snapshot().status, 'conflict'); await c.recover();
+        assert.equal(c.snapshot().remote?.topic, 'Delayed text');
+        assert.equal(c.snapshot().local.topic, initial.topic);
+        c.resolve('keep-local'); await c.flush();
+        assert.equal(calls[2].expectedRevision, 2);
+      } else {
+        assert.throws(() => commit(delayed), (e: unknown) => (e as DraftRequestError).code === 'REVISION_CONFLICT');
+      }
+      assert.equal(c.snapshot().status, 'saved');
+      assert.equal(c.snapshot().saved.revision, remote.revision);
+      assert.equal(remote.topic, initial.topic);
+    } finally { c.dispose(); }
+  });
+}
+
+test('a timed-out recovery write matching the old text still requires a revision fence', async () => {
+  const f = fixture(async () => { throw new DraftRequestError('CONNECTION'); });
+  try {
+    f.controller.edit({ topic: 'Delayed text' }); await f.controller.flush();
+    f.controller.edit({ topic: initial.topic }); await f.controller.recover(); await f.controller.flush();
+    assert.equal(f.calls.length, 2);
+    await f.controller.recover();
+    assert.equal(f.controller.snapshot().status, 'dirty');
+    assert.equal(f.controller.snapshot().saved.revision, 1);
+  } finally { f.controller.dispose(); }
+});

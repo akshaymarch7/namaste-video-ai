@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F07 — Done locally; delegated API/autosave testing passed; user feedback/code review pending.** User approved moving beyond F06 and its focus fix. This slice adds idea draft persistence and a reusable autosave controller; the visible idea editor remains F08. Wait for user review before F08.
+**F07 — Done locally, including unresolved-save recovery fix; user feedback/code review pending.** User approved moving beyond F06 and its focus fix. This slice adds idea draft persistence and a reusable autosave controller; the visible idea editor remains F08. Wait for user review before F08.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -474,6 +474,14 @@ Scope limits: the full 85-test suite, both typechecks and production build were 
 - Edited projects still return PROJECT_DELETE_UNAVAILABLE. Durable populated-content cleanup must be implemented before lifting the guard. Migration 003 needs operator setup on any configured development database; no hosted database was altered.
 - Conflict resolution deliberately requires a user decision; it offers no automatic field merge. Voice acceptance reflects registered application presets, not current provider plan/credit availability.
 
+## F07 review fix — unchanged reads cannot settle timed-out saves
+
+Completed October 1, 2026. The P2 report was reproduced with three failing controller regressions before the fix: a recovery read at revision 1 incorrectly reported reverted text saved while a timed-out PATCH could still commit at revision 2.
+
+- `apps/web/src/drafts/autosave.ts`: an unchanged recovery read retains the attempted write and marks the state dirty, requiring a same-revision CAS write even if input equals the last acknowledged text. Further edits cannot clear this unsettled state. Read-based acknowledgement of attempted content requires an advanced revision. If the delayed original commits first, the recovery write conflicts and preserves local input for explicit resolution; if the recovery write commits first, the old revision can no longer commit. A second timeout with unchanged text/revision remains unresolved.
+- `apps/web/tests/autosave.test.ts`: deterministic regression tests simulate both transaction orderings and a timed-out recovery write whose text matches the old persisted text. All three failed on the previous implementation and passed after the fix. Existing seven controller tests also passed (10/10 total).
+- `API_DESIGN.md`: recovery contract updated. Verification under cached Node 24.21.0: targeted autosave suite 10/10, `npm run typecheck:web`, and `git diff --check` passed. DB/API code is unchanged; the full DB/auth/prototype suites and production build were not rerun. The delayed-commit race is tested with a controlled revision-checking transport, not a browser/network fault injection. F08 remains unstarted.
+
 ## Earlier evidence
 
 The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three generated videos, Gemini/ElevenLabs integrations, timing checks, and renderer recovery tests. Those historical results are not evidence that a hosted pipeline or dashboard works. Existing design artifacts remain in design/SCREEN_REVIEW_INDEX.md; the founder approved proceeding with implementation on October 1, 2026, with background colors normalized to the Cinema tokens.
@@ -482,6 +490,7 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | F07 recovery fix | Keep timed-out saves unresolved after unchanged reads; require a revision-checked write before declaring reverted input saved | Three regressions reproduced before fix; 10/10 controller tests, web typecheck and diff check passed |
 | 2026-10-01 | F07 delegated testing | Completed interactive draft API checkpoint and live autosave failure/conflict recovery walkthrough; documentation only; user feedback/code review pending before F08 | Four verifier PASS groups, seven live controller PASS groups and 7/7 targeted autosave tests passed; local servers stopped; `git diff --check` passed |
 | 2026-10-01 | F07 | Implemented idea draft persistence, reviewed validator upgrade and reusable autosave/conflict recovery; added local API verification command | 85 distinct tests, both typechecks, final 25-test rerun and production build passed; F08 waits for review |
 | 2026-10-01 | F06 acceptance | User authorized the next feature after the session-focus fix | Conversation approval |

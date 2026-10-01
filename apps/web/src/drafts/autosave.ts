@@ -53,7 +53,7 @@ export function createAutosave(initial: DraftView, transport: DraftTransport, on
     edit(changes: Partial<IdeaFields>) {
       if (disposed) return;
       state.local = { ...state.local, ...changes };
-      if (!busy && !['error', 'conflict'].includes(state.status)) state.status = sameIdea(state.local, state.saved) ? 'saved' : 'dirty';
+      if (!busy && !['error', 'conflict'].includes(state.status)) state.status = !attempted && sameIdea(state.local, state.saved) ? 'saved' : 'dirty';
       emit(); schedule();
     },
     flush,
@@ -64,7 +64,12 @@ export function createAutosave(initial: DraftView, transport: DraftTransport, on
       try {
         const remote = await transport.read();
         if (disposed) return;
-        if ((attempted && sameIdea(remote, attempted)) || remote.revision === state.saved.revision) accept(remote);
+        if (attempted && remote.revision === state.saved.revision) {
+          // A timed-out PATCH may still commit. Preserve the unresolved attempt and force
+          // a CAS write even when local input was reverted to the last acknowledged text.
+          state = { ...state, status: 'dirty', remote: null, error: null };
+        } else if ((attempted && remote.revision > state.saved.revision && sameIdea(remote, attempted))
+          || (!attempted && remote.revision === state.saved.revision)) accept(remote);
         else { state.remote = remote; state.status = 'conflict'; state.error = 'REVISION_CONFLICT'; }
       } catch (error) { if (!disposed) state.error = error instanceof DraftRequestError ? error.code : 'CONNECTION'; }
       finally { busy = false; if (!disposed) { emit(); schedule(); } }
