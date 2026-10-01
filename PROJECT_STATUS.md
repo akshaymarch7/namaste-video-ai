@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F04 — Sign-in/recovery UI and private route protection: Done locally; user browser review pending.** The user approved F03 testing and code review on October 1, 2026. F04 is implemented and verified below. Wait for user feedback before F05. Hosted Atlas configuration remains outstanding.
+**F04 — Sign-in/recovery UI and private route protection: Done locally; delegated browser and operator recovery checks passed; user feedback pending.** The user approved F03 testing and code review on October 1, 2026. F04 is implemented and verified below. Wait for user feedback before F05. Hosted Atlas configuration remains outstanding.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. No project CRUD API, hosted rendering or Instagram integration exists yet; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -35,7 +35,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F01 | Next.js workspace, Cinema tokens, primitives and app boundary | Done | Production build; both TypeScript checks; 23 existing tests; desktop/mobile route smoke checks; root media inaccessible — evidence below |
 | F02 | MongoDB adapter, schema validation and initial indexes | Done (local) | 11 real replica-set tests; both typechecks; 23 prototype tests; production build; detailed evidence below. Atlas not configured. |
 | F03 | Internal account admission and session backend | Done; user approved | User confirmed testing and code review October 1, 2026; backend and manual evidence below |
-| F04 | Sign-in/recovery UI and private route protection | Done locally; user review pending | 17 auth tests, 11 DB tests, 23 prototype tests, types/build and desktop/mobile browser checks passed; evidence below |
+| F04 | Sign-in/recovery UI and private route protection | Done locally; delegated testing passed, user feedback pending | 51 automated tests and prior types/build passed; delegated desktop/mobile browser and interactive operator recovery walkthrough passed; evidence below |
 | F05 | Personal project create/list/rename/delete APIs | Planned | Ownership isolation, validation, pagination and deletion behavior tested |
 | F06 | My videos library UI | Planned | Real project data, filters, load more, empty/loading/error states and rename/delete dialogs |
 | F07 | Idea draft API, autosave and conflict handling | Planned | Persist topic/notes/voice; revisions; failed saves preserve input; cross-user checks |
@@ -223,6 +223,28 @@ Commands ran under Node 24.21.0 using `npm exec --yes --package=node@24.21.0 -- 
 
 Total: 51 automated tests passed. Browser checks used a temporary Next.js server and disposable local MongoDB with synthetic credentials; that preview is stopped. No real credentials, paid API calls, deployment or social publication occurred.
 
+### Delegated browser and operator testing — October 1, 2026
+
+At the user's request, Codex tested implementation commit `4f8e29a` under cached Node 24.21.0. Started `npm run auth:local`, entered a fresh synthetic account through the interactive prompts, and exercised the actual pages in the Codex in-app browser. No application code or configuration changed. This milestone changes this status document and adds two screenshots under `design/verification/`.
+
+| Manual check | Observed result |
+| --- | --- |
+| Empty sign-in form | Native required-field validation blocked submission and focused Work email |
+| Password visibility | Show changed the input to text; Hide restored password masking; tested with an incorrect test value |
+| Incorrect password | Generic error shown, password cleared, controls usable again; pending state disabled inputs and showed Signing in |
+| Recovery guidance | Help link opened `/access-help`; instructions described contacting an operator and verifying identity, with no email-sent claim; Back to sign in worked |
+| Successful sign-in | Correct synthetic name/email shown at `/projects`; workspace survived reload |
+| Sign-out and private access | Signed-out notice shown; subsequent direct `/projects` visit redirected to sign-in with return destination preserved |
+| Mobile, 390 × 844 | Sign-in, recovery and workspace inspected; no horizontal overflow (375px document width on auth pages, 390px on workspace); mobile sign-in succeeded |
+| Operator recovery: mismatch | Ran the actual `scripts/auth-operator.ts recover` interactive CLI with isolated fixture configuration; both password prompts hidden; mismatched confirmation returned `RECOVERY_INPUT_INVALID` and exit 1; existing browser session still worked |
+| Operator recovery: success | Matching confirmation returned success and exit 0; reloading the old browser session redirected to sign-in with session-ended notice; old password rejected; recovered password signed in successfully |
+| Browser diagnostics | No warning/error entries captured by the browser log tool |
+| Cleanup | Signed out, restored the browser viewport and closed the test tab; deleted temporary credentials/harness; Ctrl+C stopped the launcher, with no remaining listeners on web port 3001 or the disposable MongoDB port |
+
+Evidence: [desktop workspace after recovery](design/verification/f04-manual-workspace-desktop.png) and [mobile sign-in](design/verification/f04-manual-sign-in-mobile.png). Screenshots contain only synthetic account information; no passwords or tokens. Operator testing used a temporary wrapper outside the repository to provide disposable database configuration and a temporary operator auth secret without reading environment files. It invoked the actual CLI, including its hidden-input and confirmation handling.
+
+All listed checks passed; no functional defect was observed. `git diff --check` passed for this evidence-only milestone. The previously reported 51 tests, TypeScript checks and production build were not rerun. This walkthrough does not establish Atlas/production readiness, seven-day elapsed expiry, disabled-account recovery, one-use token replay behavior or browser cooldown/offline behavior; existing automated coverage and remaining limitations still apply. F05 remains unstarted pending user feedback.
+
 ### User browser checkpoint — review before F05
 
 1. From the repository root with Node 24.21.0, run `npm run auth:local`. Enter a test name/email and a fresh test-only password of 12–128 characters. No Atlas configuration is needed.
@@ -233,7 +255,7 @@ Total: 51 automated tests passed. Browser checks used a temporary Next.js server
 ### Remaining limitations
 
 - Atlas credentials/privileges, production HTTPS and deployment remain unverified. This is local acceptance evidence.
-- Throttling is backend-tested; the UI cooldown and offline branches were not browser fault-injected. Expired-session redirects are integration-tested, not verified by waiting seven days in a browser. Operator recovery is function-tested; interactive recovery prompts have not had a separate manual walkthrough.
+- Throttling is backend-tested; the UI cooldown and offline branches were not browser fault-injected. Session-ended browser redirects after operator recovery were manually verified, but seven-day elapsed expiry was not. Interactive operator recovery was manually verified for mismatch and success; disabled-account recovery and reset-token replay remain automated-test coverage.
 - Project CRUD/library, AI generation and Instagram integration remain future features. The private workspace explicitly says video creation is coming soon.
 - Recovery requires a trusted operator and out-of-band identity verification. Automated recovery email, public signup and an admin web console are outside this slice.
 
@@ -245,6 +267,7 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | F04 delegated testing | Completed requested desktop/mobile browser and interactive operator recovery walkthrough; saved two screenshots and results; user feedback pending before F05 | Sign-in/error/show-hide/help/private-route/sign-out checks passed; recovery mismatch rejected, successful recovery revoked old session/password, new password worked; local servers stopped; `git diff --check` passed |
 | 2026-10-01 | F04 | Implemented Cinema sign-in/recovery, private workspace guards and operator recovery; browser review pending before F05 | 51 tests, both typechecks, production build and desktop/mobile browser walkthrough passed; four screenshots saved |
 | 2026-10-01 | F03 acceptance | User confirmed feature testing and code review; authorized F04 | User approval in this conversation |
 | 2026-10-01 | F03 manual testing | Completed user-delegated interactive API checkpoint and additional negative/security checks; recorded evidence only; awaiting user feedback before F04 | `auth:verify` exit 0 with five PASS messages; extra origin/input/cookie/disabled-account/rate-limit checks passed; local servers stopped; documentation checked with `git diff --check` |
