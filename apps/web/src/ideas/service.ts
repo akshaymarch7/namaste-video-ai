@@ -8,7 +8,7 @@ import { fieldsOf, type IdeaFields } from '../drafts/contracts';
 import { suggestionsSchema, type IdeaRequest, type IdeaResult, type Suggestion } from './contracts';
 import { ProviderError } from './providers';
 type Doc = Document & { _id: string };
-export type IdeaProvider = { model: string; run(input: {prompt: string; draft: IdeaFields}): Promise<Suggestion[]> };
+export type IdeaProvider = { model: string; run(input: {prompt: string; draft: IdeaFields}, context: { requestId: string }): Promise<Suggestion[]> };
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 function view(doc: Doc): IdeaResult {
   return { id: doc._id, state: doc.state, sourceDraftRevision: doc.sourceDraftRevision, model: doc.model, suggestions: doc.suggestions, errorCode: doc.errorCode, createdAt: doc.createdAt.toISOString() };
@@ -57,7 +57,7 @@ export function ideaService(db: Db, client: MongoClient, provider: () => IdeaPro
       });
       if ('replay' in claim) return claim.replay!;
       let suggestions: Suggestion[] = [], state = 'completed', errorCode: string | null = null;
-      try { suggestions = suggestionsSchema.parse({ suggestions: await claim.adapter.run({ prompt: input.prompt, draft: claim.draft }) }).suggestions; }
+      try { suggestions = suggestionsSchema.parse({ suggestions: await claim.adapter.run({ prompt: input.prompt, draft: claim.draft }, { requestId: claim.doc._id }) }).suggestions; }
       catch (error) { errorCode = error instanceof ProviderError ? error.code : 'PROVIDER_OUTCOME_UNKNOWN'; state = errorCode === 'PROVIDER_OUTCOME_UNKNOWN' ? 'unknown' : 'failed'; }
       return inTransaction(client, async session => {
         const p = await live(ownerId, projectId, session);

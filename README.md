@@ -223,3 +223,12 @@ With Node 24, run `npm run auth:local -- --providers` to use the provider settin
 In Edit idea, ask for suggestions, choose Use idea, wait for All changes saved and reload. Results persist; applying is disabled if their source draft has changed. Check request reuses the original receipt after an uncertain response. A new request after an unknown outcome may consume credits again. This is bounded brainstorming, not background storyboard generation.
 
 Required server-only configuration: `GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`. No provider value is returned to the client. Daniel preview proxies an existing sample; it does not synthesize speech. Current live verification: Gemini works; after granting `voices_read` on the correct key, the app adapter downloads Daniel’s existing sample successfully. Browser audio playback remains to be verified. Root prototype configuration remains separate. Run `npm run test:ideas` for offline provider and real local MongoDB contract tests. See PROJECT_STATUS.md for full evidence and limits.
+
+
+### Gemini brainstorming reliability and diagnostics
+
+The verified web brainstorming configuration is `GEMINI_MODEL=gemini-3.5-flash-lite`. The adapter explicitly selects minimal thinking for this model and `gemini-3.5-flash`; the root prototype model is separate. Restart the web process after environment changes. Existing deployments must set their own environment values; `.env.example` is not loaded automatically.
+
+Run `npm run ideas:probe` under Node 24 for **one live request** using synthetic binary-search input. It can consume provider credits. It prints status/category/duration and suggestion count without model text or secrets. Application attempts emit `idea_provider_result` in server logs, correlated by the receipt ID returned by the suggestions API. Categories come from HTTP status/local validation, not raw provider messages. Logs are not stored in the database or returned to the browser. Retain server logs if you need historical investigation.
+
+No automatic retry or fallback is enabled. Unknown outcomes remain unresolved; Check request recovers the existing receipt, while a new request can consume usage again. The October 2 fix passed six selected-model live checks (including dashboard application and recovery after reload); see Project Status for exact timings and limitations.

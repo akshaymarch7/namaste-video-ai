@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F08b — Implemented; QA has a live Gemini limitation.** Daniel sample browser playback, pause and completion now pass. Recovery and fixture-backed suggestion application/autosave/reload pass. This manual run produced two unknown Gemini outcomes and one `PROVIDER_UNAVAILABLE` failure, so successful live suggestion generation was not reproduced. Earlier successful generation evidence remains historical. F08a was user-approved; wait for F08b review before F09.
+**F08b — Gemini reliability fix implemented; ready for QA.** Brainstorming now uses the measured `gemini-3.5-flash-lite` configuration with minimal thinking, safe correlated server diagnostics and actionable failure messages. Six live Flash-Lite requests passed, including real browser application/autosave/reload and reload-during-generation recovery. This is a local verification sample, not a provider uptime guarantee. Daniel browser playback previously passed. Wait for user review before F09.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -641,3 +641,31 @@ Following the manual QA report, two sequential synthetic binary-search requests 
 This independently reproduces both reported failure classes. Attempt 1 demonstrates upstream availability failure rather than an authentication error for that request; attempt 2 demonstrates the configured client/provider deadline, without proving why upstream was slow. Neither required browser reload. The original three QA requests still cannot be retrospectively classified beyond their stored safe codes. Google documents 503 UNAVAILABLE as temporary overload/unavailability: https://ai.google.dev/gemini-api/docs/troubleshooting .
 
 No implementation, model, timeouts, retry semantics or credentials changed. No prompts, keys, raw provider messages or generated output were logged. Existing automated/UI passes remain separate from live reliability; F08b live Gemini acceptance remains incomplete. Recommended next slice: bounded server-side diagnostics (HTTP status, allowlisted category, duration and request correlation) with redaction tests, then a controlled model/latency comparison. Do not blindly increase only the provider timeout: browser, receipt and route limits are respectively 40/45/60 seconds. Do not automatically retry ambiguous outcomes. This is diagnosis, not a provider reliability fix.
+
+
+### F08b Gemini latency and diagnostics fix — October 2, 2026
+
+Implemented after user authorization to fix the live QA failures. The earlier 503 and timeout were real; this change reduces latency and changes the configured brainstorming model rather than claiming to repair Google's service availability.
+
+Changes:
+- `apps/web/src/ideas/providers.ts`: explicit minimal thinking for the verified `gemini-3.5-flash` and `gemini-3.5-flash-lite` model IDs. Other explicitly configured models retain their provider defaults. Structured output validation and the 30-second bound remain. No automatic retries or fallback models were added.
+- Selected `gemini-3.5-flash-lite` in ignored web configuration and `.env.example` after live comparison. Root prototype configuration and credentials were not changed. Model catalog returned HTTP 200 and included both tested IDs.
+- `src/ideas/http.ts` and `service.ts`: provider completion emits one structured server log correlated by durable receipt ID, with model, HTTP status (or null), a fixed safe category and duration. Categories distinguish success, authorization, configuration, rate limit, availability, timeout, network and invalid output. No prompts, raw provider errors, response text, headers, signed URLs or keys are logged. Diagnostics stay in server logs, not the public DTO or Mongo receipt; deployment log retention is operational, not a new database feature. A logging failure cannot change a successful result.
+- `components/idea/brainstorm.tsx`: actionable messages for provider authorization/configuration, rate limits, unavailability and malformed output. Unknown outcomes still explicitly warn that a new request may consume credits again. Existing receipt replay/single-slot/late-completion fencing remains intact.
+- `scripts/ideas-probe.ts`, package scripts: `npm run ideas:probe` performs exactly one explicit live request with synthetic input and prints only safe diagnostic fields plus validated suggestion count. It uses the web environment file and may consume provider credits; it is not part of automated tests.
+- API/README documentation and AGENTS checkpoint updated. No DB migration or response shape change is required; receipt errorCode already permits the new fixed codes.
+
+Verification:
+| Check | Evidence |
+| --- | --- |
+| Minimal-thinking comparison | Flash-Lite: 2,413 ms; Flash: 4,122 ms. Both HTTP 200, three schema-valid, binary-search-related ideas. This small comparison does not isolate provider-load effects from thinking configuration. |
+| Selected model topic checks | Water cycle: 1,962 ms; RAM/storage: 2,166 ms; binary search: 1,839 ms. Each HTTP 200 with three usable-format suggestions and relevant titles. |
+| Live dashboard request | Three real binary-search cards appeared; provider duration 2,213 ms. Use idea → autosave → reload retained the topic; earlier cards were disabled as stale. No fixtures used. |
+| Reload during live request | Requested RAM/storage ideas, reloaded while running, recovered 202 receipt, then Check request returned three real cards. One provider completion log, 2,291 ms, HTTP 200. Existing draft unchanged. No second generation was triggered by recovery. |
+| Targeted automated checks | `npm run test:ideas`: 18/18; `npm run test:auth`: 17/17. New tests cover outgoing thinking config, fixed diagnostic fields/redaction, HTTP classes, timeout vs network, invalid output, throwing logger, receipt correlation and no repeat diagnostics/provider execution on replay. |
+| Static/build | `npm run typecheck:web`, `npm run build`, `git diff --check` passed. |
+| Screenshots | `design/verification/f08b-live-gemini-fixed.png`, `design/verification/f08b-live-reload-recovered.png`. Synthetic disposable account/project only. Browser and local server stopped afterward. |
+
+Limits: six successful requests on the selected model are evidence for this checkpoint, not a statistical reliability guarantee. Upstream 503s and timeouts may recur; failure/recovery semantics remain truthful. No hosted/serverless interruption guarantee, durable background worker, automatic polling or model failover is claimed. Provider/browser/receipt/route bounds remain 30/40/45/60 seconds. Full prototype and unrelated project/library suites were not rerun for this provider-focused fix. No deployments or social publication occurred.
+
+References: Google's minimal-thinking guidance: https://ai.google.dev/gemini-api/docs/whats-new-gemini-3.5 ; model thinking support: https://ai.google.dev/gemini-api/docs/thinking .

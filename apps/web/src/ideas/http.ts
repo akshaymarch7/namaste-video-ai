@@ -9,7 +9,7 @@ import { ideaRequestSchema } from './contracts';
 import { assertIdeasReady } from './setup';
 import { ideaService } from './service';
 import { geminiConfig, suggest, voicePreview, ProviderError } from './providers';
-const defaultProvider = () => { const config = geminiConfig(); return { model: config.model, run: (input: Parameters<typeof suggest>[0]) => suggest(input, config) }; };
+const defaultProvider = () => { const config = geminiConfig(); return { model: config.model, run: (input: Parameters<typeof suggest>[0], context: { requestId: string }) => suggest(input, config, fetch, event => console.info(JSON.stringify({ event: 'idea_provider_result', requestId: context.requestId, model: config.model, ...event }))) }; };
 export async function handleIdeas(request: Request, action: 'read' | 'create' | 'voices' | 'preview', rawId?: string, deps = dependencies, provider = defaultProvider, preview = voicePreview) {
   const requestId = `req_${randomUUID().replaceAll('-', '')}`;
   const headers = { 'Cache-Control': 'private, no-store', 'X-Request-Id': requestId, 'Referrer-Policy': 'no-referrer' };

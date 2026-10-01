@@ -42,6 +42,11 @@ export function Brainstorm({ projectId, draft, apply }: { projectId: string; dra
   const stale = Boolean(result && (draft.status !== 'saved' || result.sourceDraftRevision !== draft.saved.revision));
   const messages: Record<string, string> = {
     AI_NOT_CONFIGURED: 'AI suggestions need server configuration. Your idea is still saved.',
+    PROVIDER_LIMIT: 'The AI service has reached its request or credit limit. Try again later.',
+    PROVIDER_UNAVAILABLE: 'The AI service is temporarily unavailable. Your draft is saved; try a new request later.',
+    PROVIDER_AUTHORIZATION: 'The AI service needs an administrator to check its API key permissions.',
+    PROVIDER_CONFIGURATION: 'The AI service needs an administrator to check its model configuration.',
+    PROVIDER_RESPONSE_INVALID: 'The AI service returned an unusable response. You can request new ideas.',
     PROJECT_BUSY: 'Another request is active for this project. Check its status before trying again.',
     REVISION_CONFLICT: 'The saved idea changed. Reload or resolve your draft before requesting new suggestions.',
     VALIDATION_FAILED: 'Save your idea and enter a prompt between 1 and 2,000 characters.',
@@ -55,7 +60,7 @@ export function Brainstorm({ projectId, draft, apply }: { projectId: string; dra
     {draft.status !== 'saved' && <p className="hint">Finish saving your draft before requesting or applying ideas.</p>}
     {error && <p className="auth-error" role="alert">{messages[error] ?? 'Suggestions are temporarily unavailable. Your draft has not changed.'}</p>}
     {result?.state === 'running' && <p role="status">Your request is still in progress. Check again shortly.</p>}
-    {result && ['unknown','failed'].includes(result.state) && <p className="auth-error" role="status">{result.state === 'unknown' ? 'The previous request could not be confirmed. A new request may use provider credits again.' : 'The AI service could not return usable suggestions. You can make a new request.'}</p>}
+    {result && ['unknown','failed'].includes(result.state) && <p className="auth-error" role="status">{result.state === 'unknown' ? 'The previous request could not be confirmed. A new request may use provider credits again.' : messages[result.errorCode ?? ''] ?? 'The AI service could not return usable suggestions. You can make a new request.'}</p>}
     {stale && result?.state === 'completed' && <p className="hint">These ideas came from an earlier draft. Request new suggestions for your saved changes.</p>}
     <div className="suggestion-list">{result?.state === 'completed' && result.suggestions.map((idea, index) => <article key={`${result.id}-${index}`}><span className="suggestion-number">0{index + 1}</span><h3>{idea.title}</h3><p>{idea.angle}</p><details><summary>Read idea</summary><p>{idea.topic}</p></details><Button variant="secondary" disabled={stale || busy} onClick={() => { if (apply(idea, result.sourceDraftRevision)) setNotice('Idea added to Topic. It will save automatically.'); else setNotice('Your draft changed. Finish saving and request new suggestions.'); }}>Use idea</Button></article>)}</div>
     <p role="status" className="hint">{notice}</p><p className="hint">AI suggestions may be inaccurate. Review your topic before continuing.</p>

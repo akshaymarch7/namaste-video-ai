@@ -113,3 +113,16 @@ test('deleted parent refuses new work; voice endpoints require authentication an
     else assert.equal((await response.json()).data.voices[0].preset,'daniel-test');
   }
 });
+
+test('provider diagnostics receive the durable receipt ID and replay does not emit another attempt', async () => {
+  const item = await make(), key = randomUUID(); const observed: string[] = [];
+  const svc = ideaService(db, client, () => ({model: 'test', run: async (_input, context) => {
+    observed.push(context.requestId); throw new ProviderError('PROVIDER_AUTHORIZATION');
+  }}));
+  const input = {expectedDraftRevision: 1, prompt: 'Ideas'};
+  const result = await svc.create(owner,item.id,key,input);
+  assert.deepEqual(observed,[result.id]); assert.equal(result.state,'failed');
+  assert.equal(result.errorCode,'PROVIDER_AUTHORIZATION');
+  assert.equal((await svc.create(owner,item.id,key,input)).id,result.id);
+  assert.equal(observed.length,1);
+});
