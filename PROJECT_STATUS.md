@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F05 — Personal project APIs: Done locally; user API review pending. F04 and its P2 fix are user-approved.** The user approved F03 testing and code review on October 1, 2026. F04 is implemented and verified below. The user approved moving to F05; provide an API testing checkpoint before F06. Hosted Atlas configuration remains outstanding.
+**F05 — Personal project APIs: Done locally; delegated API checkpoint and extended checks passed; user feedback pending. F04 and its P2 fix are user-approved.** The user approved F03 testing and code review on October 1, 2026. F04 is implemented and verified below. Wait for user feedback before F06. Hosted Atlas configuration remains outstanding.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the library UI, hosted rendering and Instagram integration are not implemented yet; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -36,7 +36,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F02 | MongoDB adapter, schema validation and initial indexes | Done (local) | 11 real replica-set tests; both typechecks; 23 prototype tests; production build; detailed evidence below. Atlas not configured. |
 | F03 | Internal account admission and session backend | Done; user approved | User confirmed testing and code review October 1, 2026; backend and manual evidence below |
 | F04 | Sign-in/recovery UI and private route protection | Done; user approved, including P2 fix | 51 automated tests and prior types/build passed; delegated desktop/mobile browser and interactive operator recovery walkthrough passed; evidence below |
-| F05 | Personal project create/list/rename/delete APIs | Done locally; user review pending | 14 project tests, real Next.js HTTP coverage, local interactive checkpoint and full regressions passed; evidence below |
+| F05 | Personal project create/list/rename/delete APIs | Done locally; delegated testing passed, user feedback pending | Five-group interactive checkpoint and extended two-user/pagination/revision/deletion checks passed; prior 65 automated tests/types/build recorded below |
 | F06 | My videos library UI | Planned | Real project data, filters, load more, empty/loading/error states and rename/delete dialogs |
 | F07 | Idea draft API, autosave and conflict handling | Planned | Persist topic/notes/voice; revisions; failed saves preserve input; cross-user checks |
 | F08 | Idea and brainstorming UI/integration | Planned | Save real idea; Gemini topic suggestions; use suggestion; available voice preview |
@@ -301,6 +301,26 @@ All commands used Node 24.21.0 via `npm exec --yes --package=node@24.21.0 -- …
 
 Total: **65 automated tests passed**. Project cases cover owner isolation, Unicode title limits, unknown fields, preconditions, payload bounds, disabled admission, origin denial, key reuse, concurrent duplicate creation/deletion, child-write rollback, concurrent rename CAS, rename/delete races, tie-safe pagination, cursor tampering/expiry/owner/filter binding, preferences snapshot, migration readiness/checksum refusal, content scrubbing and deleted-parent replay denial. No provider calls, hosted DB mutation, deployment or social publication occurred. UI did not change, so no new visual acceptance is claimed.
 
+### Delegated API testing — October 1, 2026
+
+At the user's request, Codex tested implementation commit `348958e` using cached Node 24.21.0, `npm run auth:local`, fresh synthetic credentials and the launcher's disposable MongoDB. No application code/configuration changed; this verification milestone changes `PROJECT_STATUS.md` only.
+
+| Check | Observed result |
+| --- | --- |
+| `npm run projects:verify` | Exit 0 and all five PASS groups: anonymous/authenticated access, creation/replay, read/filtered list, rename/stale revision and deletion/replay/deleted-content denial |
+| Two-user ownership | Provisioned a second synthetic account in the same guarded disposable fixture; foreign read/rename/delete returned 404; second user's list contained only its own project; the same create key worked independently for each owner |
+| Pagination and filters | Five primary-user projects traversed as 2/2/1, terminating with no missing/duplicate IDs; drafts included them and ready was empty |
+| Cursor/query protections | Another owner's cursor, changed filter and tampered cursor each returned 400; limit 51 and duplicate limit parameters returned 422 |
+| Request/retry protections | Changed create payload with reused key returned 409; missing key and injected owner field returned 422; foreign mutation Origin returned 403; create responses had private/no-store and correct Location headers |
+| Revision concurrency | Two simultaneous renames at revision 1 produced one 200 and one 409; current revision was 2 and draft revision stayed 1; stale delete returned 409 with currentRevision 2; confirm:false returned 422 |
+| Create replay after rename | Returned the accepted revision-1 snapshot with replay header; subsequent read still returned revision 2, so replay did not overwrite current state |
+| Empty-project deletion | Deletes/replays returned 204; deleted reads and original create-key retries returned 404; list became empty; direct fixture checks confirmed blank drafts/conversations removed, parent title scrubbed and stored create responses cleared; the other owner's project remained accessible until separately cleaned up |
+| Cleanup | Both extended-check sessions signed out with 204; temporary harness removed; Ctrl+C stopped the launcher, with no remaining listeners on port 3001 or its disposable MongoDB port |
+
+Extended checks ran against actual mounted Next.js APIs using a temporary ad hoc TypeScript harness outside the repository; it exited 0 with six additional PASS groups. Direct database access was limited to provisioning the second synthetic account and inspecting cleanup in the verified disposable fixture. Password input was hidden; passwords/session cookies were not printed or committed. No functional defect was observed. `git diff --check` passed.
+
+Scope limits: the previously recorded 65 automated tests, both typechecks and production build were not rerun for this documentation-only milestone. No browser/library UI, hosted Atlas, media cleanup, long-running cursor expiry or production behavior was validated. Empty-project deletion remains the supported boundary. F06 remains unstarted pending user feedback.
+
 ### User testing checkpoint — before F06
 
 1. Run `npm run auth:local` with Node 24.21.0 and enter a fresh test name/email/password. It creates a disposable database; Atlas is not needed. Keep port 3001 free.
@@ -322,6 +342,7 @@ The local pipeline history is retained in PROTOTYPE_STATUS.md. It records three 
 
 | Date | Feature | Change | Verification |
 | --- | --- | --- | --- |
+| 2026-10-01 | F05 delegated testing | Completed requested interactive API checkpoint and extended two-user/pagination/revision/retry/deletion checks; evidence only; user feedback pending before F06 | Five verifier PASS groups and six extended PASS groups, both exit 0; disposable servers stopped; `git diff --check` passed |
 | 2026-10-01 | F04 delegated testing | Completed requested desktop/mobile browser and interactive operator recovery walkthrough; saved two screenshots and results; user feedback pending before F05 | Sign-in/error/show-hide/help/private-route/sign-out checks passed; recovery mismatch rejected, successful recovery revoked old session/password, new password worked; local servers stopped; `git diff --check` passed |
 | 2026-10-01 | F05 | Added personal project API, transactional blank aggregates/deletion, revision checks, signed pagination, retries, OpenAPI and local verification command; awaiting review before F06 | 65 tests, both typechecks, build and interactive five-group checkpoint passed |
 | 2026-10-01 | F04 acceptance | User approved F04 and P2 fix and authorized F05 | User approval in this conversation |
