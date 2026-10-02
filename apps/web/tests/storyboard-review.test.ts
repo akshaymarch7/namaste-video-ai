@@ -60,3 +60,13 @@ test('history pagination deduplicates shared boundary rows and preserves results
  const review=createReview(h.transport,h.store,()=>{});await review.load();await review.more();assert.equal(review.snapshot().history.length,2);assert.equal(review.snapshot().cursor,null);
  await review.refresh();h.transport.history=async()=>{throw {code:'INVALID_CURSOR'};};await review.more();assert.equal(review.snapshot().history.length,1);assert.equal(review.snapshot().error,'INVALID_CURSOR');
 });
+
+test('polling an active background request automatically opens its completed candidate',async()=>{
+ const h=harness();h.setLatest(receipt);const review=createReview(h.transport,h.store,()=>{});await review.load();
+ const running={...receipt,id:'job_'+'d'.repeat(32),state:'running' as const,storyboardId:null,stage:'queued' as const,attempt:0,issueCodes:[]};
+ h.transport.create=async()=>running;await review.generate();assert.equal(review.snapshot().candidate?.id,candidateId);
+ const newer={...candidate,id:'stb_'+'e'.repeat(32)};h.setLatest({...running,state:'completed',stage:'ready',storyboardId:newer.id});h.transport.get=async()=>newer;
+ // Refresh recovers the stored command with the same key, rather than creating a new one.
+ h.transport.create=async()=>({...running,state:'completed',stage:'ready',storyboardId:newer.id});
+ await review.refresh();assert.equal(review.snapshot().candidate?.id,newer.id);assert.equal(h.stored(),null);
+});

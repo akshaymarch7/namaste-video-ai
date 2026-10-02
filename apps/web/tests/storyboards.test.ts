@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {validateStoryboard, StoryboardInvalid} from '../src/storyboards/contracts';
-import {planStoryboard, decodePlannerCandidate, plannerResponseSchema, type PlanningDiagnostic} from '../src/storyboards/planner';
+import {normalizeCandidate, planStoryboard, decodePlannerCandidate, plannerResponseSchema, type PlanningDiagnostic} from '../src/storyboards/planner';
 const input={topic:'How the water cycle works',audience:'School students',notes:'Water evaporates and condenses.',voicePreset:'daniel-test'};
 const sentence='Water moves through our world in a repeating cycle. The sun warms the surface and turns some liquid into invisible vapor. As this vapor rises and cools it condenses into tiny droplets. These droplets gather in clouds before returning to the ground as rain and collecting in rivers and lakes.';
 function fixture(){return {schemaVersion:2,title:'The water cycle',audience:'School students',learningObjective:'Understand the journey of water.',language:'en',voicePreset:'daniel-test',sources:[],scenes:Array.from({length:3},(_,i)=>({id:`scene-${i}`,title:'A journey',kicker:'WATER',narration:sentence,pronunciation:[],visual:{component:i===2?'takeaway':'title',version:1,data:{labels:['Water']}},events:[{id:'reveal',targetId:'label-1',action:'reveal',cue:{phrase:'Water',occurrence:1,offsetMs:0},durationMs:400}],sourceIds:[]}))};}
@@ -54,14 +54,14 @@ test('one completed invalid candidate receives one bounded repair with safe issu
  const result=await planStoryboard(input,{key:'key',model:'test'},(async(_url:string,options:RequestInit)=>{calls++;if(calls===1)return response(invalid);const repair=JSON.parse(JSON.parse(options.body as string).contents[0].parts[0].text).repair;assert.ok(repair.issues.some((x:any)=>x.code==='MISSING_CUE'));return response(fixture());}) as typeof fetch);
  assert.equal(calls,2);assert.equal(result.attempts,2);
 });
-test('repair exhaustion stops; provider failures, timeouts and truncation never retry',async()=>{
- let calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return response({});}) as typeof fetch),'STORYBOARD_INVALID');assert.equal(calls,2);
- for(const value of ['timeout','503','truncated']){calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;if(value==='timeout')throw Object.assign(new Error('private'),{name:'TimeoutError'});return value==='503'?new Response('private',{status:503}):Response.json({candidates:[{finishReason:'MAX_TOKENS'}]});}) as typeof fetch),value==='timeout'?'PROVIDER_OUTCOME_UNKNOWN':value==='503'?'PROVIDER_UNAVAILABLE':'PROVIDER_RESPONSE_INVALID');assert.equal(calls,1);}
+test('repair exhaustion stops; authorization failures, timeouts and truncation never retry',async()=>{
+ let calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return response({});}) as typeof fetch),'STORYBOARD_INVALID');assert.equal(calls,4);
+ for(const value of ['timeout','truncated']){calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;if(value==='timeout')throw Object.assign(new Error('private'),{name:'TimeoutError'});return value==='503'?new Response('private',{status:503}):Response.json({candidates:[{finishReason:'MAX_TOKENS'}]});}) as typeof fetch),value==='timeout'?'PROVIDER_OUTCOME_UNKNOWN':value==='503'?'PROVIDER_UNAVAILABLE':'PROVIDER_RESPONSE_INVALID');assert.equal(calls,1);}
 });
 test('invalid inputs make no provider call; diagnostics omit content and tolerate broken loggers',async()=>{
  let calls=0;const mock=(async()=>{calls++;return response(fixture());}) as typeof fetch;
  await rejects(planStoryboard({...input,topic:' '},{key:'key',model:'test'},mock),'INVALID_DRAFT');assert.equal(calls,0);
- const events:PlanningDiagnostic[]=[];await planStoryboard(input,{key:'key',model:'test'},mock,e=>events.push(e));assert.deepEqual(Object.keys(events[0]).sort(),['attempt','category','durationMs','httpStatus']);
+ const events:PlanningDiagnostic[]=[];await planStoryboard(input,{key:'key',model:'test'},mock,e=>events.push(e));assert.deepEqual(Object.keys(events[0]).sort(),['attempt','category','durationMs','httpStatus','issueCodes']);
  await planStoryboard(input,{key:'key',model:'test'},mock,()=>{throw Error('logger unavailable');});
 });
 
@@ -74,4 +74,21 @@ test('wire JSON decodes into the strict registry and rejects arbitrary or oversi
 test('provider grammar omits unsupported complexity while runtime bounds remain strict',()=>{
  const schema=JSON.stringify(plannerResponseSchema());assert.equal(schema.includes('maxItems'),false);assert.equal(schema.includes('pattern'),false);assert.ok(schema.includes('dataJson'));
  const p=fixture();p.scenes[0].title='x'.repeat(66);assert.throws(()=>validateStoryboard(p,input));
+});
+test('repairs can succeed on fourth call and expose only bounded validation codes',async()=>{
+ let calls=0;const events:PlanningDiagnostic[]=[];
+ const result=await planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return response(calls<4?{}:fixture());}) as typeof fetch,e=>events.push(e));
+ assert.equal(result.attempts,4);assert.equal(calls,4);assert.ok(events[0].issueCodes.length);assert.equal(JSON.stringify(events).includes(sentence),false);
+});
+test('transient HTTP failures back off within four calls; auth and expired budgets stop immediately',async()=>{
+ let calls=0;const waits:number[]=[];
+ const result=await planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return calls<3?new Response('',{status:503}):response(fixture());}) as typeof fetch,()=>{},{sleep:async ms=>{waits.push(ms);}});
+ assert.equal(result.attempts,3);assert.deepEqual(waits,[1000,2000]);
+ calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return new Response('',{status:401});}) as typeof fetch),'PROVIDER_AUTHORIZATION');assert.equal(calls,1);
+ calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return response(fixture());}) as typeof fetch,()=>{},{deadline:Date.now()-1}),'PLANNING_DEADLINE');assert.equal(calls,0);
+});
+test('local normalization fixes identifier naming and unique cue casing without changing narration or guessing cues',()=>{
+ const raw=fixture();raw.scenes[0].events[0].cue.phrase='water';const result=normalizeCandidate(raw) as any;
+ assert.equal(result.scenes[0].events[0].cue.phrase,'Water');assert.equal(result.scenes[0].narration,raw.scenes[0].narration);assert.equal(raw.scenes[0].events[0].cue.phrase,'water');
+ raw.scenes[0].events[0].cue.phrase='missing';bad(normalizeCandidate(raw),'MISSING_CUE');
 });

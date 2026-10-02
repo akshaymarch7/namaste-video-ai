@@ -50,9 +50,10 @@ export function createReview(transport:ReviewTransport, store:AttemptStore, publ
     await context();
     if(disposed)return;
     const receipt=state.pending?await send(state.pending):await transport.latest();
+    const justCompleted=state.receipt?.state==='running'&&receipt?.state==='completed';
     if(receipt)await accept(receipt);else emit({receipt:null});
     await history();
-    const target=state.candidate?.id??(receipt?.state==='completed'?receipt.storyboardId:null)??state.history[0]?.id;
+    const target=(justCompleted?receipt?.storyboardId:null)??state.candidate?.id??(receipt?.state==='completed'?receipt.storyboardId:null)??state.history[0]?.id;
     if(target)await select(target);
     emit({ready:true});
   }

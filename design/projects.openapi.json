@@ -228,7 +228,7 @@
       ],
       "post": {
         "operationId": "generateStoryboardCandidate",
-        "description": "Bounded synchronous planner (up to two 30-second calls, one validation repair only). Persists receipt before provider work. Same-key replay never reruns the planner. Receipt expires after 75 seconds; expiry becomes unknown and fences late results. No Inngest job, automatic apply or approval.",
+        "description": "Enqueues a persisted MongoDB job and returns 202 before provider work. A separate worker makes up to four 30-second calls total, including targeted validation repairs and bounded transient HTTP retries. Receipt deadline is 180 seconds from enqueue; expiry becomes unknown and fences late results. Optional stage, attempt and sanitized issueCodes support polling. Same-key replay never enqueues again. Running work is never reclaimed after a worker crash. No Inngest job, automatic apply or approval.",
         "parameters": [
           {
             "in": "header",
@@ -358,6 +358,31 @@
                         },
                         "deadline": {
                           "type": "string"
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "planning",
+                            "repairing",
+                            "retrying",
+                            "checking",
+                            "ready",
+                            "stopped"
+                          ]
+                        },
+                        "attempt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4
+                        },
+                        "issueCodes": {
+                          "maxItems": 30,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          }
                         }
                       },
                       "required": [
@@ -476,6 +501,31 @@
                         },
                         "deadline": {
                           "type": "string"
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "planning",
+                            "repairing",
+                            "retrying",
+                            "checking",
+                            "ready",
+                            "stopped"
+                          ]
+                        },
+                        "attempt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4
+                        },
+                        "issueCodes": {
+                          "maxItems": 30,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          }
                         }
                       },
                       "required": [
@@ -850,6 +900,31 @@
                             },
                             "deadline": {
                               "type": "string"
+                            },
+                            "stage": {
+                              "type": "string",
+                              "enum": [
+                                "queued",
+                                "planning",
+                                "repairing",
+                                "retrying",
+                                "checking",
+                                "ready",
+                                "stopped"
+                              ]
+                            },
+                            "attempt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 4
+                            },
+                            "issueCodes": {
+                              "maxItems": 30,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
                             }
                           },
                           "required": [
@@ -975,6 +1050,31 @@
                             },
                             "deadline": {
                               "type": "string"
+                            },
+                            "stage": {
+                              "type": "string",
+                              "enum": [
+                                "queued",
+                                "planning",
+                                "repairing",
+                                "retrying",
+                                "checking",
+                                "ready",
+                                "stopped"
+                              ]
+                            },
+                            "attempt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 4
+                            },
+                            "issueCodes": {
+                              "maxItems": 30,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
                             }
                           },
                           "required": [

@@ -1,3 +1,4 @@
+import { setupStoryboardQueue } from '../src/storyboards/queue-setup';
 import { setupStoryboards } from '../src/storyboards/setup';
 import { readFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
@@ -18,9 +19,11 @@ let replica: MongoMemoryReplSet | undefined;
 let client: MongoClient | undefined;
 let web: ChildProcess | undefined;
 let stopping = false;
+let worker: ChildProcess | undefined;
 async function stop() {
   if (stopping) return;
   stopping = true;
+  if(worker && worker.exitCode===null){worker.kill('SIGTERM');await new Promise<void>(resolve=>worker!.once('exit',()=>resolve()));}
   if (web && web.exitCode === null) {
     const exited = new Promise<void>(resolve => web!.once('exit', () => resolve()));
     web.kill('SIGTERM');
@@ -42,7 +45,7 @@ try {
   await setupProjects(db);
   await setupDrafts(db);
   await setupIdeas(db);
-  await setupStoryboards(db);
+  await setupStoryboards(db); await setupStoryboardQueue(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, input);
   // Explicit environment wins over any web env file. Do not inherit provider or migration credentials.
@@ -59,6 +62,7 @@ try {
     // Next loads .env.local itself: explicitly mask provider values in the offline launcher.
     for (const key of ['GEMINI_API_KEY', 'GEMINI_MODEL', 'ELEVENLABS_API_KEY']) env[key] = '';
   }
+  worker=spawn(process.execPath,['--conditions=react-server','--import','tsx','scripts/storyboards-worker.ts'],{env,stdio:'inherit'});
   console.log('Test account ready. Open http://127.0.0.1:3001/sign-in when Next.js is ready.\nProject API checkpoint in a second terminal: npm run projects:verify (auth-only checks: npm run auth:verify)\nPress Ctrl+C here when finished.');
   web = spawn(process.execPath, [createRequire(import.meta.url).resolve('next/dist/bin/next'), 'dev', '--hostname', '127.0.0.1', '--port', '3001'], { env, stdio: 'inherit' });
   await new Promise<void>((resolve, reject) => { web!.once('exit', code => code && !stopping ? reject(new Error('Web server failed')) : resolve()); web!.once('error', reject); });

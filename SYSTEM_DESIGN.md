@@ -607,3 +607,12 @@ No further product questionnaire is required to start. The following are bounded
 - Record observed latency/resource usage and revise operational defaults before widening internal access.
 
 Documentation verification used official Better Auth, MongoDB, Inngest, Cloudflare, Vercel, Remotion and Meta sources linked at the relevant decisions above. Account-specific behavior and hosted performance have not been tested by this design exercise.
+
+
+## Implemented storyboard execution update — internal local version
+
+Storyboard execution now uses a persisted Mongo queue plus a separate Node worker instead of doing Gemini work inside the Next request. Admission commits a source snapshot, receipt and project fence; HTTP returns 202 immediately. The browser polls its original receipt and displays actual planning/repair/checking stages. Browser reloads or navigation do not terminate provider work. Next and worker share runtime database configuration, while migration credentials stay operator-only.
+
+The planner permits four total calls within 180 seconds from enqueue (30-second individual calls), targeted repairs for completed invalid responses, and bounded backoff for explicit transient HTTP responses. Safe ID normalization and unambiguous cue-case correction precede strict semantic validation. Narration, facts and unresolved cues are never invented by local correction. Unknown provider outcomes and interrupted running workers are fenced and expire without automatic replay. A new user-requested generation may consume quota again.
+
+The local launcher starts and stops the worker alongside Next. A persistent setup runs `storyboards:worker` separately; Vercel alone does not run this loop. One worker handles one job at a time, so queue wait consumes the same deadline. No cancellation, autoscaling or process supervisor is implemented. This brings only local storyboard orchestration forward from F13; planned hosted Inngest/video jobs remain unimplemented.

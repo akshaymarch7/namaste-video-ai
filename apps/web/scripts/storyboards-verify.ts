@@ -16,6 +16,11 @@ try {
   let result;
   try { const response=await call(path,'POST',body,key);assert.ok([200,202].includes(response.status));result=storyboardReceipt.parse((await response.json()).data); }
   catch { console.log('Response not confirmed; replaying the same key to recover, without repeating provider work.');const response=await call(path,'POST',body,key);assert.ok([200,202].includes(response.status));result=storyboardReceipt.parse((await response.json()).data); }
+  const stopAt=Date.now()+185000;
+  while(result.state==='running'&&Date.now()<stopAt){
+    await new Promise(resolve=>setTimeout(resolve,1500));
+    const response=await call(path,'POST',body,key);assert.ok([200,202].includes(response.status));result=storyboardReceipt.parse((await response.json()).data);
+  }
   if(result.state!=='completed')throw Error(`RECEIPT_${result.state}:${result.errorCode??'PENDING'}`);
   const read=await call(`/api/storyboards/${result.storyboardId}`);assert.equal(read.status,200);const candidate=storyboardView.parse((await read.json()).data);
   const history=await call(path);assert.equal(history.status,200);assert.equal((await history.json()).data[0].id,candidate.id);
@@ -24,7 +29,7 @@ try {
   assert.deepEqual((await (await call(`/api/projects/${project.id}/draft`)).json()).data,draft);
   await call(`/api/projects/${project.id}/draft`,'PATCH',{expectedRevision:draft.revision,changes:{topic:'A new idea saved after generation'}});
   assert.equal((await (await call(`/api/storyboards/${candidate.id}`)).json()).data.stale,true);
-  console.log(`PASS: candidate ${candidate.id}; ${candidate.content.scenes.length} scenes; ${candidate.wordCount} words; ${candidate.estimatedDurationSeconds}s estimate. History, replay, receipt recovery, draft preservation and stale detection passed. Review UI and rendering are not implemented in this slice.`);
+  console.log(`PASS: candidate ${candidate.id}; ${candidate.content.scenes.length} scenes; ${candidate.wordCount} words; ${candidate.estimatedDurationSeconds}s estimate. History, replay, receipt recovery, draft preservation and stale detection passed. The review UI is available; rendering is not part of this checkpoint.`);
 } catch(error) {
   console.error(error instanceof Error&&/^RECEIPT_[a-z]+:[A-Z_]+$/.test(error.message)?error.message:'CHECKPOINT_FAILED: Check the local launcher, credentials and sanitized provider diagnostics.');process.exitCode=1;
 } finally {

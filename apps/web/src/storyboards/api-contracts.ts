@@ -16,5 +16,6 @@ export const storyboardReceipt = z.object({
   id: z.string().regex(/^job_[a-f0-9]{32}$/), projectId: z.string(), state: z.enum(['running','completed','failed','unknown']),
   sourceDraftRevision: z.number().int(), model: z.string(), storyboardId: storyboardId.nullable(), errorCode: z.string().nullable(),
   createdAt: z.string(), updatedAt: z.string(), deadline: z.string(),
+  stage:z.enum(['queued','planning','repairing','retrying','checking','ready','stopped']).optional(), attempt:z.number().int().min(0).max(4).optional(), issueCodes:z.array(z.string().max(80)).max(30).optional(),
 }).strict();
 export type StoryboardReceipt = z.infer<typeof storyboardReceipt>;

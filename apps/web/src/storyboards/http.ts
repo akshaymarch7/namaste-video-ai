@@ -7,12 +7,12 @@ import { HttpError, readBody } from '../auth/http';
 import { projectId, idempotencyKey, ProjectError } from '../projects/contracts';
 import { geminiConfig, ProviderError } from '../ideas/providers';
 import { storyboardId, storyboardRequest, listStoryboards } from './api-contracts';
-import { assertStoryboardsReady } from './setup';
+import { assertStoryboardQueueReady } from './queue-setup';
 import { storyboardService, type StoryboardProvider } from './service';
 import { planStoryboard } from './planner';
-const defaultProvider = (): StoryboardProvider => {
+export const defaultProvider = (): StoryboardProvider => {
   const config = geminiConfig();
-  return {model:config.model,run:(input,context)=>planStoryboard(input,config,fetch,event=>console.info(JSON.stringify({event:'storyboard_provider_result',requestId:context.requestId,model:config.model,...event})))};
+  return {model:config.model,run:(input,context)=>planStoryboard(input,config,fetch,event=>console.info(JSON.stringify({event:'storyboard_provider_result',requestId:context.requestId,model:config.model,...event})),{deadline:context.deadline,progress:context.progress})};
 };
 export async function handleStoryboards(request: Request, action: 'create'|'list'|'read'|'latest', rawId: string, deps = dependencies, provider = defaultProvider) {
   const requestId = `req_${randomUUID().replaceAll('-','')}`;
@@ -30,8 +30,8 @@ export async function handleStoryboards(request: Request, action: 'create'|'list
     if (!parsed.success) throw new ProjectError(404,'NOT_FOUND','Resource not found.');
     const query = new URL(request.url).searchParams;
     if ((action!=='list' && query.size) || new Set(query.keys()).size!==query.size) throw new ProjectError(422,'VALIDATION_FAILED','Unsupported query parameters.');
-    await assertStoryboardsReady(db);
-    const service = storyboardService(db,client,config.secret,provider), owner = session.user.id, id = parsed.data;
+    await assertStoryboardQueueReady(db);
+    const service = storyboardService(db,client,config.secret,provider,undefined,true), owner = session.user.id, id = parsed.data;
     if (action==='list') { const result=await service.list(owner,id,listStoryboards.parse(Object.fromEntries(query)));return reply(result.data,200,result.page); }
     if (action==='read') return reply(await service.get(owner,id));
     if (action==='latest') { const data=await service.latest(owner,id);return reply(data,data?.state==='running'?202:200); }

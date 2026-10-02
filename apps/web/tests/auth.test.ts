@@ -1,3 +1,4 @@
+import { setupStoryboardQueue } from '../src/storyboards/queue-setup';
 import { setupStoryboards } from '../src/storyboards/setup';
 import assert from 'node:assert/strict';
 import { setupIdeas } from '../src/ideas/setup';
@@ -38,7 +39,7 @@ before(async () => {
   await setupProjects(db);
   await setupDrafts(db);
   await setupIdeas(db);
-  await setupStoryboards(db);
+  await setupStoryboards(db); await setupStoryboardQueue(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, account);
   const auth = createAuth(db, client, config);

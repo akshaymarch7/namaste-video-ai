@@ -8,10 +8,10 @@ import { fieldsOf, type IdeaFields } from '../drafts/contracts';
 import { liveProject } from '../generation/live-project';
 import { ProviderError } from '../ideas/providers';
 import { validateStoryboard, StoryboardInvalid, type Storyboard } from './contracts';
-import { plannerPromptVersion } from './planner';
+import { StoryboardPlanningError, type PlanningProgress, plannerPromptVersion } from './planner';
 import type { StoryboardReceipt } from './api-contracts';
 type Doc = Document & { _id: string };
-export type StoryboardProvider = { model: string; run(input: IdeaFields, context: { requestId: string }): Promise<{ content: unknown }> };
+export type StoryboardProvider = { model: string; run(input: IdeaFields, context: { requestId: string; deadline:number; progress:(value:PlanningProgress)=>Promise<void> }): Promise<{ content: unknown }> };
 const hash = (value: unknown) => createHash('sha256').update(canonical(value)).digest('hex');
 export function storyboardHashes(content: Storyboard) {
   // Retain all semantic text/data/order; omit animation timing/presentation events.
@@ -20,7 +20,7 @@ export function storyboardHashes(content: Storyboard) {
 }
 function receipt(doc: Doc): StoryboardReceipt {
   return { id: doc._id, projectId: doc.projectId, state: doc.state, sourceDraftRevision: doc.sourceDraftRevision, model: doc.model,
-    storyboardId: doc.storyboardId, errorCode: doc.errorCode, createdAt: doc.createdAt.toISOString(), updatedAt: doc.updatedAt.toISOString(), deadline: doc.deadline.toISOString() };
+    storyboardId: doc.storyboardId, errorCode: doc.errorCode, createdAt: doc.createdAt.toISOString(), updatedAt: doc.updatedAt.toISOString(), deadline: doc.deadline.toISOString(), ...(doc.stage ? {stage:doc.stage,attempt:doc.attempt,issueCodes:doc.issueCodes} : {}) };
 }
 function summary(doc: Doc, revision: number) {
   return { id: doc._id, projectId: doc.projectId, parentId: null, sourceDraftRevision: doc.sourceDraftRevision, state: 'review_ready' as const,
@@ -28,11 +28,42 @@ function summary(doc: Doc, revision: number) {
     estimatedDurationSeconds: doc.estimatedDurationSeconds as number, wordCount: doc.wordCount as number,
     stale: doc.sourceDraftRevision !== revision, warnings: [], changeSummary: null, changedSceneIds: [], approvalId: null, createdAt: doc.createdAt.toISOString() };
 }
-export function storyboardService(db: Db, client: MongoClient, secret: string, provider: () => StoryboardProvider, now = () => new Date()) {
+export function storyboardService(db: Db, client: MongoClient, secret: string, provider: () => StoryboardProvider, now = () => new Date(), background = false) {
   const requests = db.collection<Doc>('storyboardRequests'), candidates = db.collection<Doc>('storyboards'), projects = db.collection<Doc>('projects');
   const live = (ownerId: string, projectId: string, session: Parameters<typeof liveProject>[3]) => liveProject(db, ownerId, projectId, session, now());
   const sign = (payload: string) => createHmac('sha256', secret).update(`storyboards-cursor-v1:${payload}`).digest('base64url');
+  async function execute(ownerId:string,projectId:string,claim:{doc:Doc;adapter:StoryboardProvider;draft:IdeaFields}) {
+      let result: ReturnType<typeof validateStoryboard> | undefined, state = 'completed', errorCode: string | null = null, issueCodes:string[]=[];
+      try { result = validateStoryboard((await claim.adapter.run(claim.draft,{requestId:claim.doc._id,deadline:claim.doc.deadline.getTime(),progress:async value=>{
+        const updated=await requests.updateOne({_id:claim.doc._id,state:'running',deadline:{$gt:now()}},{$set:{...value,updatedAt:now()}});
+        if(!updated.matchedCount)throw new ProviderError('PLANNING_DEADLINE');
+      }})).content,claim.draft); }
+      catch (error) {
+        if(error instanceof StoryboardPlanningError)issueCodes=[...new Set(error.issues.map(i=>i.code))].slice(0,30);
+        const known = new Set(['STORYBOARD_INVALID','PROVIDER_OUTCOME_UNKNOWN','PROVIDER_LIMIT','PROVIDER_AUTHORIZATION','PROVIDER_CONFIGURATION','PROVIDER_UNAVAILABLE','PROVIDER_RESPONSE_INVALID','PLANNING_DEADLINE','ACCESS_DISABLED']);
+        errorCode = error instanceof StoryboardInvalid ? 'STORYBOARD_INVALID' : error instanceof ProviderError && known.has(error.code) ? error.code : 'PROVIDER_OUTCOME_UNKNOWN';
+        state = errorCode === 'PROVIDER_OUTCOME_UNKNOWN' ? 'unknown' : 'failed';
+      }
+      // Provider work is never inside a retryable transaction. Candidate + receipt + fence commit together.
+      return inTransaction(client, async session => {
+        const parent = await live(ownerId,projectId,session);
+        const current = await requests.findOne({_id:claim.doc._id,ownerId,projectId},{session});
+        if (!current) throw Error('Missing storyboard receipt');
+        if (current.state !== 'running' || parent.activeJobId !== current._id) return {data:receipt(current),replayed:false};
+        const date = now(); let storyboardId: string | null = null;
+        if (result) {
+          storyboardId = `stb_${randomUUID().replaceAll('-','')}`;
+          await candidates.insertOne({_id:storyboardId,schemaVersion:1,ownerId,projectId,sourceDraftRevision:current.sourceDraftRevision,
+            ...result,...storyboardHashes(result.content),canonicalizationVersion:1,state:'review_ready',
+            plannerConfig:{provider:'gemini',model:current.model,promptVersion:plannerPromptVersion},createdByJobId:current._id,createdAt:date,updatedAt:date},{session});
+        }
+        await requests.updateOne({_id:current._id,state:'running'},{$set:{state,storyboardId,errorCode,...(current.stage?{stage:state==='completed'?'ready':'stopped',issueCodes}:{}),updatedAt:date}},{session});
+        await projects.updateOne({_id:projectId,ownerId,activeJobId:current._id},{$unset:{activeJobId:''},$inc:{contentRevision:Long.ONE}},{session});
+        return {data:receipt({...current,state,storyboardId,errorCode,...(current.stage?{stage:state==='completed'?'ready':'stopped',issueCodes}:{}),updatedAt:date}),replayed:false};
+      });
+  }
   return {
+    execute,
     latest: (ownerId: string, projectId: string) => inTransaction(client, async session => {
       await live(ownerId, projectId, session);
       const doc = await requests.findOne({ ownerId, projectId }, { sort: { createdAt: -1, _id: -1 }, session });
@@ -84,36 +115,16 @@ export function storyboardService(db: Db, client: MongoClient, secret: string, p
         if (draft.voicePreset !== 'daniel-test') throw new ProjectError(422,'VOICE_UNAVAILABLE','Select an available voice.');
         const adapter = provider(), date = now(), id = `job_${randomUUID().replaceAll('-','')}`;
         const doc = {_id:id,schemaVersion:1,ownerId,projectId,keyHash,requestHash,model:adapter.model,sourceDraftRevision:draft.revision,
-          state:'running',storyboardId:null,errorCode:null,createdAt:date,updatedAt:date,deadline:new Date(date.getTime()+75000)};
+          state:'running',storyboardId:null,errorCode:null,...(background?{stage:'queued',attempt:0,issueCodes:[]}:{}),createdAt:date,updatedAt:date,deadline:new Date(date.getTime()+180000)};
         await projects.updateOne({_id:projectId,ownerId,deletedAt:null},{$set:{activeJobId:id,updatedAt:date},$inc:{contentRevision:Long.ONE}},{session});
         await requests.insertOne(doc,{session});
+        if(background)await db.collection<Doc>('storyboardQueue').insertOne({_id:id,ownerId,projectId,model:adapter.model,state:'queued',draft:fieldsOf(draft as unknown as IdeaFields),createdAt:date,deadline:doc.deadline},{session});
         return {doc,adapter,draft:fieldsOf(draft as unknown as IdeaFields)};
       });
       if ('replay' in claim) return {data:claim.replay!,replayed:true};
-      let result: ReturnType<typeof validateStoryboard> | undefined, state = 'completed', errorCode: string | null = null;
-      try { result = validateStoryboard((await claim.adapter.run(claim.draft,{requestId:claim.doc._id})).content,claim.draft); }
-      catch (error) {
-        const known = new Set(['STORYBOARD_INVALID','PROVIDER_OUTCOME_UNKNOWN','PROVIDER_LIMIT','PROVIDER_AUTHORIZATION','PROVIDER_CONFIGURATION','PROVIDER_UNAVAILABLE','PROVIDER_RESPONSE_INVALID']);
-        errorCode = error instanceof StoryboardInvalid ? 'STORYBOARD_INVALID' : error instanceof ProviderError && known.has(error.code) ? error.code : 'PROVIDER_OUTCOME_UNKNOWN';
-        state = errorCode === 'PROVIDER_OUTCOME_UNKNOWN' ? 'unknown' : 'failed';
-      }
-      // Provider work is never inside a retryable transaction. Candidate + receipt + fence commit together.
-      return inTransaction(client, async session => {
-        const parent = await live(ownerId,projectId,session);
-        const current = await requests.findOne({_id:claim.doc._id,ownerId,projectId},{session});
-        if (!current) throw Error('Missing storyboard receipt');
-        if (current.state !== 'running' || parent.activeJobId !== current._id) return {data:receipt(current),replayed:false};
-        const date = now(); let storyboardId: string | null = null;
-        if (result) {
-          storyboardId = `stb_${randomUUID().replaceAll('-','')}`;
-          await candidates.insertOne({_id:storyboardId,schemaVersion:1,ownerId,projectId,sourceDraftRevision:current.sourceDraftRevision,
-            ...result,...storyboardHashes(result.content),canonicalizationVersion:1,state:'review_ready',
-            plannerConfig:{provider:'gemini',model:current.model,promptVersion:plannerPromptVersion},createdByJobId:current._id,createdAt:date,updatedAt:date},{session});
-        }
-        await requests.updateOne({_id:current._id,state:'running'},{$set:{state,storyboardId,errorCode,updatedAt:date}},{session});
-        await projects.updateOne({_id:projectId,ownerId,activeJobId:current._id},{$unset:{activeJobId:''},$inc:{contentRevision:Long.ONE}},{session});
-        return {data:receipt({...current,state,storyboardId,errorCode,updatedAt:date}),replayed:false};
-      });
+      if(background)return {data:receipt(claim.doc),replayed:false};
+      return execute(ownerId,projectId,claim);
+
     },
   };
 }

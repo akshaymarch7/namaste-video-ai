@@ -1,3 +1,5 @@
+import {runStoryboardJob} from '../src/storyboards/worker';
+import { setupStoryboardQueue } from '../src/storyboards/queue-setup';
 import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
@@ -29,7 +31,7 @@ const config = { origin: 'http://127.0.0.1:3002', secure: false, secret: randomB
 before(async () => {
   replica = await MongoMemoryReplSet.create({ binary: { version: '8.0.17' }, replSet: { count: 1, ip: '127.0.0.1', storageEngine: 'wiredTiger' } });
   client = await new MongoClient(replica.getUri(), { promoteLongs: false }).connect(); db = client.db('drafts_test');
-  await setupDatabase(db); await setupProjects(db); await setupDrafts(db); await setupIdeas(db); await setupStoryboards(db); await setupAuth(db, client, config);
+  await setupDatabase(db); await setupProjects(db); await setupDrafts(db); await setupIdeas(db); await setupStoryboards(db); await setupStoryboardQueue(db); await setupAuth(db, client, config);
   const auth = createAuth(db, client, config); deps = { db, client, config, auth };
   drafts = draftService(db, client); projects = projectService(db, client, config.secret);
   const identities = [];
@@ -56,7 +58,7 @@ const input={expectedDraftRevision:2};
 const req=(id:string,action:'create'|'read'|'list'|'latest',body?:unknown,headers:Record<string,string>={},query='')=>handleStoryboards(new Request(`${config.origin}/api/test${query}`,{method:action==='create'?'POST':'GET',headers:{Cookie:cookie,Origin:config.origin,'Content-Type':'application/json','Idempotency-Key':randomUUID(),...headers},...(body===undefined?{}:{body:JSON.stringify(body)})}),action,id,async()=>deps,provider);
 function deferredProvider(){let release!:(value:{content:unknown})=>void,enter!:()=>void;const started=new Promise<void>(r=>{enter=r});const factory=():StoryboardProvider=>({model:'fixture-model',run:async()=>{enter();return new Promise(r=>{release=r});}});return {factory,started,finish:()=>release({content:fixture()})};}
 test('migration replays, enforces nested schema and unique receipt/result indexes',async()=>{
- await setupStoryboards(db);await assertStoryboardsReady(db);await rejects(assertStoryboardsReady(client.db('no_storyboards')),'STORYBOARD_SETUP_REQUIRED');
+ await setupStoryboards(db); await setupStoryboardQueue(db);await assertStoryboardsReady(db);await rejects(assertStoryboardsReady(client.db('no_storyboards')),'STORYBOARD_SETUP_REQUIRED');
  await assert.rejects(db.collection('storyboards').insertOne({unexpected:true}));
  const item=await make(),result=await service().create(owner,item.id,randomUUID(),input);
  const doc=await db.collection('storyboards').findOne({_id:result.data.storyboardId as never});assert.ok(doc);
@@ -66,8 +68,8 @@ test('migration replays, enforces nested schema and unique receipt/result indexe
 });
 test('valid candidate persists atomically, has canonical hashes and never edits or selects the draft',async()=>{
  const item=await make(),saved=await drafts.get(owner,item.id),key=randomUUID(),before=calls;
- const response=await req(item.id,'create',input,{'Idempotency-Key':key});assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'private, no-store');
- const data=storyboardReceipt.parse((await response.json()).data);assert.equal(data.state,'completed');assert.ok(data.storyboardId);
+ const response=await req(item.id,'create',input,{'Idempotency-Key':key});assert.equal(response.status,202);assert.equal(response.headers.get('Cache-Control'),'private, no-store');
+ const queued=storyboardReceipt.parse((await response.json()).data);assert.equal(queued.state,'running');assert.equal(queued.stage,'queued');assert.equal(calls,before);await runStoryboardJob(db,client,provider);const data=(await service().latest(owner,item.id))!;assert.equal(data.state,'completed');assert.ok(data.storyboardId);
  const read=await req(data.storyboardId!,'read');assert.equal(read.status,200);const candidate=storyboardView.parse((await read.json()).data);
  assert.deepEqual(candidate.content,fixture());assert.equal(candidate.stale,false);assert.equal(candidate.estimatedDurationSeconds,60);assert.equal(candidate.contentHash,storyboardHashes(candidate.content).contentHash);
  assert.deepEqual(await drafts.get(owner,item.id),saved);assert.equal((await projects.get(owner,item.id)).currentStoryboardId,null);assert.equal((await projects.get(owner,item.id)).activeJobId,null);
@@ -109,7 +111,7 @@ test('same-key running replay, shared slot and edits during generation retain th
 });
 test('deadline expires through brainstorming and late storyboard completion cannot release a newer slot',async()=>{
  const item=await make();let date=new Date();const old=deferredProvider(),svc=service(()=>date,old.factory);
- const key=randomUUID(),first=svc.create(owner,item.id,key,input);await old.started;date=new Date(date.getTime()+76000);
+ const key=randomUUID(),first=svc.create(owner,item.id,key,input);await old.started;date=new Date(date.getTime()+181000);
  let release!:()=>void,entered!:()=>void;const started=new Promise<void>(r=>{entered=r});
  const ideas=ideaService(db,client,()=>({model:'fixture',run:async()=>{entered();await new Promise<void>(r=>{release=r});return Array.from({length:3},()=>({title:'Water',topic:'Water cycle',angle:'Journey'}));}}),()=>date);
  const newer=ideas.create(owner,item.id,randomUUID(),{...input,prompt:'Ideas'});await started;
@@ -165,5 +167,39 @@ test('failed candidate insert rolls back completion; recovery expires without an
  try { deferred.finish();await assert.rejects(pending); } finally {await db.command({collMod:'storyboards',validator:info.options!.validator});}
  assert.equal((await svc.latest(owner,item.id))?.state,'running');assert.equal(await db.collection('storyboards').countDocuments({projectId:item.id}),0);
  assert.equal((await svc.create(owner,item.id,key,input)).data.state,'running');
- date=new Date(date.getTime()+76000);assert.equal((await svc.latest(owner,item.id))?.state,'unknown');assert.equal((await projects.get(owner,item.id)).activeJobId,null);
+ date=new Date(date.getTime()+181000);assert.equal((await svc.latest(owner,item.id))?.state,'unknown');assert.equal((await projects.get(owner,item.id)).activeJobId,null);
+});
+
+test('queued work survives the response, uses its saved snapshot, and two workers claim it once',async()=>{
+ const item=await make(),key=randomUUID(),deferred=deferredProvider();
+ const svc=storyboardService(db,client,config.secret,provider,undefined,true);
+ const queued=await svc.create(owner,item.id,key,input);assert.equal(queued.data.stage,'queued');
+ await drafts.save(owner,item.id,{expectedRevision:2,changes:{topic:'Changed after enqueue'}});
+ let seen='';const factory=()=>{const adapter=deferred.factory();return {...adapter,run:async(draft:Parameters<StoryboardProvider['run']>[0],context:Parameters<StoryboardProvider['run']>[1])=>{seen=draft.topic;await context.progress({stage:'repairing',attempt:2,issueCodes:['MISSING_CUE']});return adapter.run(draft,context);}};};
+ const running=runStoryboardJob(db,client,factory);await deferred.started;
+ assert.equal(await runStoryboardJob(db,client,factory),false);
+ const replay=await svc.create(owner,item.id,key,input);assert.equal(replay.data.attempt,2);assert.deepEqual(replay.data.issueCodes,['MISSING_CUE']);
+ assert.equal(seen,'How the water cycle works');deferred.finish();await running;
+ const done=(await svc.latest(owner,item.id))!;assert.equal(done.stage,'ready');assert.equal((await svc.get(owner,done.storyboardId!)).stale,true);
+ const job=await db.collection('storyboardQueue').findOne({_id:queued.data.id as never});assert.equal(job?.state,'done');assert.equal(job?.draft,null);
+ assert.equal(await runStoryboardJob(db,client,factory),false);
+});
+test('expired queued work and abandoned running work never dispatch or replay provider calls',async()=>{
+ for(const queueState of ['queued','running']){
+ const item=await make();let date=new Date();const svc=storyboardService(db,client,config.secret,provider,()=>date,true);
+ const result=await svc.create(owner,item.id,randomUUID(),input);
+ await db.collection('storyboardQueue').updateOne({_id:result.data.id as never},{$set:{state:queueState}});
+ date=new Date(date.getTime()+181000);let invoked=0;
+ assert.equal(await runStoryboardJob(db,client,()=>({model:'fixture',run:async()=>{invoked++;return {content:fixture()};}}),()=>date),false);
+ assert.equal(invoked,0);assert.equal((await svc.latest(owner,item.id))?.state,'unknown');assert.equal((await projects.get(owner,item.id)).activeJobId,null);
+ assert.equal((await db.collection('storyboardQueue').findOne({_id:result.data.id as never}))?.draft,null);
+ }
+});
+test('worker rechecks admission before dispatch and refuses invalid queue records',async()=>{
+ const item=await make(),svc=storyboardService(db,client,config.secret,provider,undefined,true);
+ await svc.create(owner,item.id,randomUUID(),input);const before=calls;
+ await db.collection('internalAccess').updateOne({normalizedEmail:'owner@example.test'},{$set:{enabled:false}});
+ try{await runStoryboardJob(db,client,provider);}finally{await db.collection('internalAccess').updateOne({normalizedEmail:'owner@example.test'},{$set:{enabled:true}});}
+ assert.equal(calls,before);assert.equal((await svc.latest(owner,item.id))?.errorCode,'ACCESS_DISABLED');assert.equal((await projects.get(owner,item.id)).activeJobId,null);
+ await assert.rejects(db.collection('storyboardQueue').insertOne({unexpected:true}));
 });
