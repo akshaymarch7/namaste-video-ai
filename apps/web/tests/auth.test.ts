@@ -278,6 +278,13 @@ test('actual Next.js routes allow the full session round trip and expose no nati
       method, headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json', 'Idempotency-Key': randomBytes(16).toString('hex') },
       ...(method === 'GET' ? {} : { body: JSON.stringify(body) }),
     }));
+    const storyboardPath=`/projects/${project.id}/storyboard`;
+    assert.equal((await fetch(`${origin}${storyboardPath}`,{redirect:'manual'})).status,307);
+    const storyboardPage=await fetch(`${origin}${storyboardPath}`,{headers:{Cookie:cookies(login)}});
+    assert.equal(storyboardPage.status,200);const storyboardHtml=await storyboardPage.text();
+    assert.match(storyboardHtml, /<div hidden=""><div class="idea-shell"/);
+    assert.match(storyboardHtml, /Checking your session/);
+    assert.equal((await fetch(`${origin}/projects/not-a-project/storyboard`,{headers:{Cookie:cookies(login)}})).status,404);
     const privatePage = await fetch(`${origin}/projects`, { headers: { Cookie: cookies(login) } });
     assert.equal(privatePage.status, 200);
     // Next's development server emits no-cache; force-dynamic production pages use private/no-store.
