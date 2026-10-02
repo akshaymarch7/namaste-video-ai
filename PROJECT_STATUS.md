@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F08b — User approved. F09a — Implemented locally; ready for planner QA.** The strict core PlanV2 contract, bounded Gemini planner and private local inspection command are implemented. Live RAM/storage and water-cycle candidates passed validation (six scenes, 66 and 70.4 seconds estimated). F09b still owns immutable database versions and owner-protected APIs; F10 owns review UI. No new storyboard dashboard controls or rendering integration are claimed.
+**F08b — User approved. F09a — Local planner QA passed; user review pending.** Independent QA on `f4234d3` generated a RAM/storage candidate after exactly one validation repair: six scenes, 156 spoken words, 62.4 seconds estimated. Thirteen targeted tests and additional artifact/boundary checks passed. Narration has editorial caveats; validation does not confer factual or publication approval. F09b still owns immutable database versions and owner-protected APIs; F10 owns review UI. No new storyboard dashboard controls or rendering integration are claimed.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -41,7 +41,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F07 | Idea draft API, autosave and conflict handling | Done; user approved progression | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
 | F08a | Cinema idea editor and autosave integration | Done; user approved | Browser autosave/reload, both conflict choices, validation recovery, mobile editing and 87-second session-focus check passed; prior 56-test/typecheck/build evidence below |
 | F08b | AI brainstorming and voice previews | Done; user approved | Live topic switching, implicit refinement, draft preservation, recovery, Use idea/save/reload and prior Daniel playback passed; topic-switching finding closed |
-| F09a | Storyboard contract and planner | Implemented locally; review pending | Validated PlanV2 subset, bounded repair, live local probe; no persistence/UI |
+| F09a | Storyboard contract and planner | Local QA passed; user review pending | Live RAM/storage candidate passed after one repair, 62.4-second estimate; 13 tests plus artifact/boundary checks passed; no persistence/UI or content approval |
 | F09b | Storyboard candidate storage and APIs | Planned | Saved immutable versions, owner isolation, idempotency and recoverable failure |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
@@ -756,3 +756,22 @@ Development probes exposed real upstream schema rejections and invalid candidate
 Remaining work: F09b must add owner isolation, immutable candidate documents/hashes, idempotent request admission, active-project fencing, source-revision/stale-result behavior, pagination/read APIs and crash recovery. Its time budget must allow up to two planner attempts; the existing F08b 45-second receipt cannot simply be reused unchanged. F10 will add schematic storyboard/script review. PlanV2 is not yet accepted by the prototype PlanV1 renderer, and the wider registry (binary search, water-specific drawings, charts, diagrams, timelines) is not enabled. Semantic/factual review and measured narration/event bounds remain later checks. No DB changes, dashboard changes, audio spending, deployment or social publishing occurred in this slice.
 
 QA command: `npm run storyboards:probe -- "Explain RAM versus storage to beginners"` under Node 24. This is a live provider request and may consume credits; one validation repair may make a second call. Open its printed JSON path and inspect narration, visuals, cues and estimated duration. Share results before moving to F09b.
+
+### F09a independent planner QA — October 2, 2026
+
+Tested clean `dev` commit `f4234d3` with Node 24.21.0. Ran the requested `npm run storyboards:probe -- "Explain RAM versus storage to beginners"` against configured live Gemini. Attempt 1 returned HTTP 200 but failed validation (`INVALID_RESPONSE`, 6,452 ms); its single repair returned HTTP 200/OK in 4,894 ms. The command exited 0 and produced a six-scene PlanV2 candidate with 156 spoken words and a 62.4-second estimate. Exactly two attempts were reported. The first candidate's specific validation issues were not emitted by this probe, so its precise rejection cause is not asserted.
+
+Local artifact: `apps/web/runs/storyboards/1aa35b22-c24d-4cf8-8a83-c21de0b48326.json`. Read the full narration, visuals and cues. The sequence covers introduction, RAM, storage, speed comparison, volatility and a desk/filing-cabinet takeaway, using title/flow/comparison/takeaway version 1. Events reference valid targets and exact narration cues. This is an ignored local inspection artifact, not a database version, approved storyboard or rendered video; it remains uncommitted with mode 0600.
+
+| Check | Result |
+| --- | --- |
+| `npm run test:storyboards` | 13/13 passed, including bounded repair/exhaustion, strict registry, sources, pronunciation, cues and provider failures |
+| Artifact revalidation | Independently revalidated the new RAM/storage file and supplied water-cycle file `93323574-c08b-4a2c-abe0-48782b0e2e96.json`; recalculated word counts/estimates match 156/62.4 and 176/70.4; both mode 0600 and ignored by Git |
+| Mutated live candidate | Case-mismatched cue, offset 501 ms, duration 3,001 ms and unknown visual-data field were rejected |
+| Pronunciation estimate | Expanding one spoken RAM occurrence to R A M increased the calculated count by exactly two words |
+| Additional fixture-only failure checks | Invalid visual JSON repaired in exactly two calls; repeated invalid JSON stopped at two; HTTP 401 and 429 stopped at one call with the expected safe error code. These injected checks used no provider calls. |
+| Workspace | No source/configuration changes, credentials or generated plans committed; `git diff --check` passed; probe completed with no server to stop |
+
+Content review caveat: the new RAM/storage candidate includes overly absolute wording about apps responding instantly without delays and storage retaining everything safely until manual deletion. These should be revised during editorial review; the strict schema cannot establish those claims. Motion cues are structurally valid, but their timing and rendered appearance were not evaluated. The water-cycle artifact was an existing sample, not a second fresh generation in this QA run.
+
+Result: **PASS for the F09a local contract/planner checkpoint**, with the documented editorial limitations. No new technical blocker was observed. Typechecks/build and the prototype suite were not rerun for this documentation-only milestone; prior implementation evidence remains separate. No TTS, rendering, database/API persistence, UI, deployment or publication was exercised. Wait for user review before F09b.
