@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F10a — Implemented; ready for independent QA/code review.** F09b QA/code review was user-approved. The Cinema storyboard screen now connects saved ideas to explicit generation, recoverable requests, scene schematics, narration, full script and immutable candidate history. Two live browser generations produced six-scene candidates at 68 and 60.8 seconds estimated, each after one validation repair. Reload recovery, saved-idea navigation gate, scene/script switching, earlier-draft warning and history selection passed. F10b owns saved text editing; F11 owns conversational revisions/application/approval. No render or approval controls are simulated.
+**F10a — Independent browser QA passed; awaiting user/code review.** The Cinema storyboard screen connects saved ideas to explicit generation, request recovery, scene schematics, narration, full script and candidate history. Independent desktop/mobile QA and 11 client tests passed. Of three live generation requests, the first failed validation after its one repair; the UI recovered and reported that failure correctly. Explicit retry and a second-topic request succeeded on their first attempts, producing six-scene candidates at 60.8 and 61.2 seconds estimated. Reload recovery, unchanged source idea, two-tab revision rejection, earlier-candidate warning and history selection passed. Generation quality remains variable. F10b owns saved text editing; F11 owns conversational revisions/application/approval.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -43,7 +43,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F08b | AI brainstorming and voice previews | Done; user approved | Live topic switching, implicit refinement, draft preservation, recovery, Use idea/save/reload and prior Daniel playback passed; topic-switching finding closed |
 | F09a | Storyboard contract and planner | Done; user approved | Live RAM/storage candidate passed after one repair, 62.4-second estimate; 13 tests plus artifact/boundary checks passed; no persistence/UI or content approval |
 | F09b | Storyboard candidate storage and APIs | Done; user approved | 24 targeted tests rerun, two live candidates and extended HTTP isolation/recovery/pagination checks; prior 109 web tests/types/build recorded below |
-| F10a | Storyboard generation and review UI | Done; QA/code review pending | Live desktop/mobile review, reload recovery, history/stale checks, 11 client tests and production build |
+| F10a | Storyboard generation and review UI | Done; independent browser QA passed; user/code review pending | Desktop/mobile review, successful and failed reload recovery, two-tab conflict/history checks, 11 client tests; prior types/build below |
 | F10b | Saved storyboard text editing | Planned | Editable narration/on-screen text with persisted drafts, validation and conflicts |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
 | F12 | Private R2 asset adapter and media access | Planned | Private upload/read, owner-authorized access, expiry and missing-asset behavior |
@@ -846,3 +846,32 @@ Verification:
 QA checkpoint: run `npm run auth:local -- --providers`, sign in to the disposable account, open/create a project, save a topic, choose **Continue to storyboard →** then **Create storyboard**. Check scenes/script, reload recovery, two-tab saved-idea changes, history, keyboard navigation and mobile layout. Generation uses Gemini quota. Persistent installations still require migration 005 from F09b; no new DB migration is introduced here.
 
 Remaining: saved narration/on-screen text editing (F10b), conversational changes, apply/approval and rendering are not implemented. No automatic polling/background-worker guarantee; users select Check request/Refresh to reconcile. sessionStorage recovery lasts only within its browser tab session; a new tab discovers the latest receipt. History multi-page behavior is supported but large-history browser QA is still pending. Independent QA/code review approval is required before the next slice.
+
+
+### F10a independent browser QA — October 2, 2026
+
+Tested clean `dev` commit `2cb093d` under Node 24 with `npm run auth:local -- --providers`, a fresh disposable account/project and real Gemini. `npm run test:storyboard-ui` passed **11/11**. No application source or configuration was changed.
+
+| Live request | Outcome |
+| --- | --- |
+| Water cycle, initial generation; browser reloaded during request | Initial output and its single repair returned HTTP 200 but failed local validation (4,369 + 5,175 ms). Reload replay returned the existing running receipt; Check request recovered the terminal failure and displayed the explicit retry guidance. No candidate was fabricated. |
+| Water cycle, explicit retry | First attempt HTTP 200/OK in 4,497 ms; six scenes, 152 words, **60.8-second estimate**. |
+| RAM versus storage after a saved idea change; browser reloaded during request | First attempt HTTP 200/OK in 5,976 ms; six scenes, 153 words, **61.2-second estimate**. Check request recovered completion and added the candidate to history, preserving the earlier candidate being viewed until explicit selection. |
+
+Provider diagnostics showed three distinct request IDs and four total attempts, including the first request's allowed repair. Reload/recovery did not create an extra provider request. No provider-unavailable or unknown terminal result occurred. The safe diagnostic reports INVALID_RESPONSE without the rejected fields, so the precise validation failure is not asserted. This live sample demonstrates a remaining generation-quality limitation, not reliable first-attempt success.
+
+| Browser check | Result |
+| --- | --- |
+| Saved idea gate and empty screen | Continue was disabled immediately after editing, enabled after save; navigation showed the saved topic and an empty storyboard without generating. |
+| Review controls | Title, flow connections, comparison panels, takeaway, narration, motion cues, supplied source notes and all six script sections were readable. Scene/script switching worked by mouse and keyboard. |
+| Idea preservation | A second tab showed the original topic, audience, notes and narrator unchanged after the water-cycle generation. |
+| Two-tab revision conflict | Changed and saved topic/audience/notes in the second tab. Generate another from the stale review tab returned 409 with refresh guidance and retained the previous candidate. Refresh showed the new topic and marked the existing storyboard as an earlier idea version. |
+| Candidate history | Both successful candidates were selectable. Returning to the older candidate and refreshing preserved that selection and the earlier-version warning. A fresh tab independently loaded the newest saved candidate. |
+| Mobile | Tested 390×844. Document client/scroll widths both measured 375px, excluding the scrollbar, in scene and full-script views. Comparison panels remained readable; keyboard activation reached scene 6 in the horizontally scrolling scene navigator. |
+| Session and diagnostics | Sign-out followed by storyboard reload redirected to sign-in. Captured desktop/mobile browser warning/error lists were empty. |
+
+Evidence: [desktop review and history](design/verification/f10a-qa-desktop.jpg), [mobile comparison review](design/verification/f10a-qa-mobile.jpg), [recovered validation failure](design/verification/f10a-qa-validation-failure.jpg). Screenshots contain synthetic test content only. The generated RAM/storage narration uses overly broad claims about storage keeping files securely/intact; these need editorial revision before approval. This QA checks the review functionality, not factual certification or rendered motion/audio.
+
+Result: **PASS for the F10a browser checkpoint, with the observed model-validation failure documented.** No new UI blocker was found. History beyond the first page was not exercised in this browser run; its pagination controller test passed. Provider outage injection, real server-crash recovery, saved text editing, approval and rendering were outside this slice. Typechecks/build and unrelated regression suites were not rerun for this evidence-only milestone; prior implementation results remain separate.
+
+Signed out, closed all three QA tabs, reset the viewport override and stopped the disposable launcher/database; port 3001 had no listener afterward. No credentials or generated candidate JSON are committed. Wait for user/code review before F10b.
