@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "NamasteVideo project and idea draft API",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "Implemented slice only. DELETE completes synchronously for empty projects (204); populated project cleanup and selectedVideoId mutation are not yet supported."
   },
   "servers": [
@@ -213,6 +213,1487 @@
     }
   },
   "paths": {
+    "/api/projects/{id}/storyboards": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "generateStoryboardCandidate",
+        "description": "Bounded synchronous planner (up to two 30-second calls, one validation repair only). Persists receipt before provider work. Same-key replay never reruns the planner. Receipt expires after 75 seconds; expiry becomes unknown and fences late results. No Inngest job, automatic apply or approval.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "string",
+              "pattern": "^[\\x21-\\x7e]{16,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "expectedDraftRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647
+                  }
+                },
+                "required": [
+                  "expectedDraftRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Owner-scoped result. Running receipts return 202; terminal receipts return 200.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "const": "true"
+                },
+                "description": "Present only on a same-key POST replay."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^job_[a-f0-9]{32}$"
+                        },
+                        "projectId": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "running",
+                            "completed",
+                            "failed",
+                            "unknown"
+                          ]
+                        },
+                        "sourceDraftRevision": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "storyboardId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^stb_[a-f0-9]{32}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "errorCode": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "deadline": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "projectId",
+                        "state",
+                        "sourceDraftRevision",
+                        "model",
+                        "storyboardId",
+                        "errorCode",
+                        "createdAt",
+                        "updatedAt",
+                        "deadline"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Owner-scoped result. Running receipts return 202; terminal receipts return 200.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "const": "true"
+                },
+                "description": "Present only on a same-key POST replay."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^job_[a-f0-9]{32}$"
+                        },
+                        "projectId": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "running",
+                            "completed",
+                            "failed",
+                            "unknown"
+                          ]
+                        },
+                        "sourceDraftRevision": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "storyboardId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^stb_[a-f0-9]{32}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "errorCode": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "deadline": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "projectId",
+                        "state",
+                        "sourceDraftRevision",
+                        "model",
+                        "storyboardId",
+                        "errorCode",
+                        "createdAt",
+                        "updatedAt",
+                        "deadline"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "get": {
+        "operationId": "listStoryboardCandidates",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "description": "Signed owner/project-bound tuple cursor; expires after 24 hours."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Immutable candidates, newest first. Content excluded.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "const": "true"
+                },
+                "description": "Present only on a same-key POST replay."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta",
+                    "page"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^stb_[a-f0-9]{32}$"
+                          },
+                          "projectId": {
+                            "type": "string"
+                          },
+                          "parentId": {
+                            "type": "null"
+                          },
+                          "sourceDraftRevision": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "state": {
+                            "type": "string",
+                            "const": "review_ready"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "contentHash": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "storyHash": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "estimatedDurationSeconds": {
+                            "type": "number"
+                          },
+                          "wordCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "stale": {
+                            "type": "boolean"
+                          },
+                          "warnings": {
+                            "type": "array",
+                            "items": {
+                              "not": {}
+                            }
+                          },
+                          "changeSummary": {
+                            "type": "null"
+                          },
+                          "changedSceneIds": {
+                            "type": "array",
+                            "items": {
+                              "not": {}
+                            }
+                          },
+                          "approvalId": {
+                            "type": "null"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "projectId",
+                          "parentId",
+                          "sourceDraftRevision",
+                          "state",
+                          "title",
+                          "contentHash",
+                          "storyHash",
+                          "estimatedDurationSeconds",
+                          "wordCount",
+                          "stale",
+                          "warnings",
+                          "changeSummary",
+                          "changedSceneIds",
+                          "approvalId",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "page": {
+                      "type": "object",
+                      "required": [
+                        "hasMore",
+                        "nextCursor"
+                      ],
+                      "properties": {
+                        "hasMore": {
+                          "type": "boolean"
+                        },
+                        "nextCursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/storyboard-requests/latest": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getLatestStoryboardRequest",
+        "description": "Recover newest receipt, or null. To recover a particular command, replay its exact POST body and key. GET never invokes the provider.",
+        "responses": {
+          "200": {
+            "description": "Owner-scoped result. Running receipts return 202; terminal receipts return 200.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "const": "true"
+                },
+                "description": "Present only on a same-key POST replay."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^job_[a-f0-9]{32}$"
+                            },
+                            "projectId": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "running",
+                                "completed",
+                                "failed",
+                                "unknown"
+                              ]
+                            },
+                            "sourceDraftRevision": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "model": {
+                              "type": "string"
+                            },
+                            "storyboardId": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^stb_[a-f0-9]{32}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "errorCode": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            },
+                            "deadline": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "projectId",
+                            "state",
+                            "sourceDraftRevision",
+                            "model",
+                            "storyboardId",
+                            "errorCode",
+                            "createdAt",
+                            "updatedAt",
+                            "deadline"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Owner-scoped result. Running receipts return 202; terminal receipts return 200.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "const": "true"
+                },
+                "description": "Present only on a same-key POST replay."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^job_[a-f0-9]{32}$"
+                            },
+                            "projectId": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "running",
+                                "completed",
+                                "failed",
+                                "unknown"
+                              ]
+                            },
+                            "sourceDraftRevision": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "model": {
+                              "type": "string"
+                            },
+                            "storyboardId": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^stb_[a-f0-9]{32}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "errorCode": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            },
+                            "deadline": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "projectId",
+                            "state",
+                            "sourceDraftRevision",
+                            "model",
+                            "storyboardId",
+                            "errorCode",
+                            "createdAt",
+                            "updatedAt",
+                            "deadline"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/storyboards/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "pattern": "^stb_[a-f0-9]{32}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getStoryboardCandidate",
+        "responses": {
+          "200": {
+            "description": "Owner-scoped result. Running receipts return 202; terminal receipts return 200.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "const": "true"
+                },
+                "description": "Present only on a same-key POST replay."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^stb_[a-f0-9]{32}$"
+                        },
+                        "projectId": {
+                          "type": "string"
+                        },
+                        "parentId": {
+                          "type": "null"
+                        },
+                        "sourceDraftRevision": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "state": {
+                          "type": "string",
+                          "const": "review_ready"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "contentHash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "storyHash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "estimatedDurationSeconds": {
+                          "type": "number"
+                        },
+                        "wordCount": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "warnings": {
+                          "type": "array",
+                          "items": {
+                            "not": {}
+                          }
+                        },
+                        "changeSummary": {
+                          "type": "null"
+                        },
+                        "changedSceneIds": {
+                          "type": "array",
+                          "items": {
+                            "not": {}
+                          }
+                        },
+                        "approvalId": {
+                          "type": "null"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "object",
+                          "properties": {
+                            "schemaVersion": {
+                              "type": "number",
+                              "const": 2
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100,
+                              "pattern": "\\S"
+                            },
+                            "audience": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "learningObjective": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 500,
+                              "pattern": "\\S"
+                            },
+                            "language": {
+                              "type": "string",
+                              "const": "en"
+                            },
+                            "voicePreset": {
+                              "type": "string",
+                              "const": "daniel-test"
+                            },
+                            "sources": {
+                              "maxItems": 20,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "provided_notes",
+                                      "illustrative"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 20000,
+                                    "pattern": "\\S"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "text"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "scenes": {
+                              "minItems": 3,
+                              "maxItems": 10,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 65,
+                                    "pattern": "\\S"
+                                  },
+                                  "kicker": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 35,
+                                    "pattern": "\\S"
+                                  },
+                                  "narration": {
+                                    "type": "string",
+                                    "minLength": 20,
+                                    "maxLength": 1400,
+                                    "pattern": "\\S"
+                                  },
+                                  "pronunciation": {
+                                    "maxItems": 20,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "phrase": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 150,
+                                          "pattern": "\\S"
+                                        },
+                                        "occurrence": {
+                                          "type": "integer",
+                                          "minimum": 1,
+                                          "maximum": 20
+                                        },
+                                        "spokenAs": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 150,
+                                          "pattern": "\\S"
+                                        }
+                                      },
+                                      "required": [
+                                        "phrase",
+                                        "occurrence",
+                                        "spokenAs"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "visual": {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "component": {
+                                            "type": "string",
+                                            "const": "title"
+                                          },
+                                          "version": {
+                                            "type": "number",
+                                            "const": 1
+                                          },
+                                          "data": {
+                                            "type": "object",
+                                            "properties": {
+                                              "labels": {
+                                                "minItems": 1,
+                                                "maxItems": 4,
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 30,
+                                                  "pattern": "\\S"
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "labels"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "required": [
+                                          "component",
+                                          "version",
+                                          "data"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "component": {
+                                            "type": "string",
+                                            "const": "takeaway"
+                                          },
+                                          "version": {
+                                            "type": "number",
+                                            "const": 1
+                                          },
+                                          "data": {
+                                            "type": "object",
+                                            "properties": {
+                                              "labels": {
+                                                "minItems": 1,
+                                                "maxItems": 4,
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 30,
+                                                  "pattern": "\\S"
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "labels"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "required": [
+                                          "component",
+                                          "version",
+                                          "data"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "component": {
+                                            "type": "string",
+                                            "const": "flow"
+                                          },
+                                          "version": {
+                                            "type": "number",
+                                            "const": 1
+                                          },
+                                          "data": {
+                                            "type": "object",
+                                            "properties": {
+                                              "steps": {
+                                                "minItems": 2,
+                                                "maxItems": 4,
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "id": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                    },
+                                                    "label": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 30,
+                                                      "pattern": "\\S"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "id",
+                                                    "label"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              },
+                                              "edges": {
+                                                "minItems": 1,
+                                                "maxItems": 6,
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "id": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                    },
+                                                    "from": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                    },
+                                                    "to": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "id",
+                                                    "from",
+                                                    "to"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "steps",
+                                              "edges"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "required": [
+                                          "component",
+                                          "version",
+                                          "data"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "component": {
+                                            "type": "string",
+                                            "const": "comparison"
+                                          },
+                                          "version": {
+                                            "type": "number",
+                                            "const": 1
+                                          },
+                                          "data": {
+                                            "type": "object",
+                                            "properties": {
+                                              "left": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "heading": {
+                                                    "type": "string",
+                                                    "minLength": 1,
+                                                    "maxLength": 18,
+                                                    "pattern": "\\S"
+                                                  },
+                                                  "points": {
+                                                    "minItems": 1,
+                                                    "maxItems": 3,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 26,
+                                                      "pattern": "\\S"
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "heading",
+                                                  "points"
+                                                ],
+                                                "additionalProperties": false
+                                              },
+                                              "right": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "heading": {
+                                                    "type": "string",
+                                                    "minLength": 1,
+                                                    "maxLength": 18,
+                                                    "pattern": "\\S"
+                                                  },
+                                                  "points": {
+                                                    "minItems": 1,
+                                                    "maxItems": 3,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 26,
+                                                      "pattern": "\\S"
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "heading",
+                                                  "points"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "left",
+                                              "right"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "required": [
+                                          "component",
+                                          "version",
+                                          "data"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  },
+                                  "events": {
+                                    "minItems": 1,
+                                    "maxItems": 20,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string",
+                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                        },
+                                        "targetId": {
+                                          "type": "string",
+                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                        },
+                                        "action": {
+                                          "type": "string",
+                                          "enum": [
+                                            "reveal",
+                                            "emphasize",
+                                            "connect",
+                                            "compare"
+                                          ]
+                                        },
+                                        "cue": {
+                                          "type": "object",
+                                          "properties": {
+                                            "phrase": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "maxLength": 150,
+                                              "pattern": "\\S"
+                                            },
+                                            "occurrence": {
+                                              "type": "integer",
+                                              "minimum": 1,
+                                              "maximum": 20
+                                            },
+                                            "offsetMs": {
+                                              "type": "integer",
+                                              "minimum": -500,
+                                              "maximum": 500
+                                            }
+                                          },
+                                          "required": [
+                                            "phrase",
+                                            "occurrence",
+                                            "offsetMs"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        "durationMs": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 3000
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "targetId",
+                                        "action",
+                                        "cue",
+                                        "durationMs"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "sourceIds": {
+                                    "maxItems": 20,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "title",
+                                  "kicker",
+                                  "narration",
+                                  "pronunciation",
+                                  "visual",
+                                  "events",
+                                  "sourceIds"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "schemaVersion",
+                            "title",
+                            "audience",
+                            "learningObjective",
+                            "language",
+                            "voicePreset",
+                            "sources",
+                            "scenes"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "projectId",
+                        "parentId",
+                        "sourceDraftRevision",
+                        "state",
+                        "title",
+                        "contentHash",
+                        "storyHash",
+                        "estimatedDurationSeconds",
+                        "wordCount",
+                        "stale",
+                        "warnings",
+                        "changeSummary",
+                        "changedSceneIds",
+                        "approvalId",
+                        "createdAt",
+                        "content"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/projects/{id}/idea-suggestions": {
       "parameters": [
         {

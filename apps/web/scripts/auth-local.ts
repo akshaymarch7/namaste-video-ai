@@ -1,3 +1,4 @@
+import { setupStoryboards } from '../src/storyboards/setup';
 import { readFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
 import { setupIdeas } from '../src/ideas/setup';
@@ -41,6 +42,7 @@ try {
   await setupProjects(db);
   await setupDrafts(db);
   await setupIdeas(db);
+  await setupStoryboards(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, input);
   // Explicit environment wins over any web env file. Do not inherit provider or migration credentials.

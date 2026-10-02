@@ -28,7 +28,8 @@
     "test:ideas": "npm run test:ideas --workspace=@namastevideo/web --",
     "ideas:probe": "npm run ideas:probe --workspace=@namastevideo/web --",
     "test:storyboards": "npm run test:storyboards --workspace=@namastevideo/web --",
-    "storyboards:probe": "npm run storyboards:probe --workspace=@namastevideo/web --"
+    "storyboards:probe": "npm run storyboards:probe --workspace=@namastevideo/web --",
+    "storyboards:verify": "npm run storyboards:verify --workspace=@namastevideo/web --"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.529",

@@ -1,3 +1,4 @@
+import { setupStoryboards } from '../src/storyboards/setup';
 import assert from 'node:assert/strict';
 import { setupIdeas } from '../src/ideas/setup';
 import { setupDrafts } from '../src/drafts/setup';
@@ -37,6 +38,7 @@ before(async () => {
   await setupProjects(db);
   await setupDrafts(db);
   await setupIdeas(db);
+  await setupStoryboards(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, account);
   const auth = createAuth(db, client, config);
@@ -258,6 +260,16 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     assert.equal(ideaHtml.includes('HTTP project'), false, 'Project data loads only through the owner-scoped API');
     assert.equal((await fetch(`${origin}/projects/not-a-project/idea`, { headers: { Cookie: cookies(login) } })).status, 404);
 
+    for (const suffix of ['storyboards', 'storyboard-requests/latest']) {
+      const path = `${origin}/api/projects/${project.id}/${suffix}`;
+      assert.equal((await fetch(path)).status, 401);
+      const read = await fetch(path, { headers: { Cookie: cookies(login) } });
+      assert.equal(read.status, 200);
+      assert.deepEqual((await read.json()).data, suffix === 'storyboards' ? [] : null);
+    }
+    const invalidStoryboard = await fetch(`${origin}/api/projects/${project.id}/storyboards`, {method:'POST',headers:{Cookie:cookies(login),Origin:origin,'Content-Type':'application/json','Idempotency-Key':'storyboard-http-test-0001'},body:JSON.stringify({expectedDraftRevision:1})});
+    assert.equal(invalidStoryboard.status,422);assert.equal((await invalidStoryboard.json()).error.code,'INVALID_DRAFT');
+    assert.equal((await fetch(`${origin}/api/storyboards/stb_00000000000000000000000000000000`,{headers:{Cookie:cookies(login)}})).status,404);
     assert.equal((await fetch(`${origin}/api/projects/${project.id}`, { headers: { Cookie: cookies(login) } })).status, 200);
     assert.equal((await fetch(`${origin}/api/projects?limit=1`, { headers: { Cookie: cookies(login) } })).status, 200);
     assert.equal((await fetch(`${origin}/api/projects/${project.id}`, { method: 'PATCH', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Updated HTTP project', expectedRevision: 1 }) })).status, 200);

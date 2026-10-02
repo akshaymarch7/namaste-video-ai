@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F08b — User approved. F09a — Local planner QA passed; user review pending.** Independent QA on `f4234d3` generated a RAM/storage candidate after exactly one validation repair: six scenes, 156 spoken words, 62.4 seconds estimated. Thirteen targeted tests and additional artifact/boundary checks passed. Narration has editorial caveats; validation does not confer factual or publication approval. F09b still owns immutable database versions and owner-protected APIs; F10 owns review UI. No new storyboard dashboard controls or rendering integration are claimed.
+**F09b — Implemented; ready for QA/code review.** F09a was user-approved on October 2. Generated storyboards now persist as private immutable candidates with owner-protected generation/read/history APIs, idempotent receipts and late-result fencing. Live Gemini through the actual Next.js API passed on its first attempt: six scenes, 160 spoken words, 64-second estimate, 6.938-second provider call. Read/history, same-key replay, receipt recovery, draft preservation and stale detection passed. Review UI (F10), application/approval (F11) and durable workers (F13) remain unimplemented; no new dashboard controls or rendering integration are claimed. Structural validation does not confer factual or publication approval.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -41,8 +41,8 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F07 | Idea draft API, autosave and conflict handling | Done; user approved progression | Four-group interactive checkpoint, seven live controller checks and seven targeted autosave tests passed; prior 85-test/types/build evidence below |
 | F08a | Cinema idea editor and autosave integration | Done; user approved | Browser autosave/reload, both conflict choices, validation recovery, mobile editing and 87-second session-focus check passed; prior 56-test/typecheck/build evidence below |
 | F08b | AI brainstorming and voice previews | Done; user approved | Live topic switching, implicit refinement, draft preservation, recovery, Use idea/save/reload and prior Daniel playback passed; topic-switching finding closed |
-| F09a | Storyboard contract and planner | Local QA passed; user review pending | Live RAM/storage candidate passed after one repair, 62.4-second estimate; 13 tests plus artifact/boundary checks passed; no persistence/UI or content approval |
-| F09b | Storyboard candidate storage and APIs | Planned | Saved immutable versions, owner isolation, idempotency and recoverable failure |
+| F09a | Storyboard contract and planner | Done; user approved | Live RAM/storage candidate passed after one repair, 62.4-second estimate; 13 tests plus artifact/boundary checks passed; no persistence/UI or content approval |
+| F09b | Storyboard candidate storage and APIs | Done; QA/code review pending | 24 targeted tests, 109 web tests, live API checkpoint; immutable candidates, isolation, concurrent replay and transactional recovery |
 | F10 | Combined storyboard/script review UI | Planned | Schematic scene cards, editable narration/on-screen text and estimates |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
 | F12 | Private R2 asset adapter and media access | Planned | Private upload/read, owner-authorized access, expiry and missing-asset behavior |
@@ -775,3 +775,27 @@ Local artifact: `apps/web/runs/storyboards/1aa35b22-c24d-4cf8-8a83-c21de0b48326.
 Content review caveat: the new RAM/storage candidate includes overly absolute wording about apps responding instantly without delays and storage retaining everything safely until manual deletion. These should be revised during editorial review; the strict schema cannot establish those claims. Motion cues are structurally valid, but their timing and rendered appearance were not evaluated. The water-cycle artifact was an existing sample, not a second fresh generation in this QA run.
 
 Result: **PASS for the F09a local contract/planner checkpoint**, with the documented editorial limitations. No new technical blocker was observed. Typechecks/build and the prototype suite were not rerun for this documentation-only milestone; prior implementation evidence remains separate. No TTS, rendering, database/API persistence, UI, deployment or publication was exercised. Wait for user review before F09b.
+
+
+## F09b — immutable storyboard candidates and owner-protected APIs
+
+October 2, 2026. F09a QA/code review accepted by the user before this slice. Implementation is ready for independent QA; F10 has not started.
+
+- Migration 005 installs strict `storyboardRequests` and `storyboards` validators/indexes. Runtime checks migration readiness; operator setup and the disposable local launcher install it.
+- POST generation snapshots the saved draft and revision, claims the shared project slot, invokes the existing planner outside transactions, revalidates the result, and atomically stores one immutable candidate plus the completed receipt. It does not modify/select the draft or storyboard, generate speech, or render.
+- GET candidate/history/latest-receipt APIs enforce admitted session and live owner parent. POST additionally requires exact Origin and an idempotency key. Signed, owner/project-bound 24-hour cursors paginate summaries without full content. Candidate reads compute stale status against the current draft revision.
+- Same-key replay never calls Gemini again. Shared idea/storyboard deadline recovery releases only the matching slot; late results cannot insert or unlock newer work. Failed finalization rolls back candidate and completion together. The 75-second bounded receipt is not an Inngest job. Empty-delete rejects storyboard histories.
+- Canonical content/story hashes are versioned and documented. No update/delete/approval endpoint exists. Candidate immutability is enforced by application behavior, not an administrator-proof database restriction.
+
+Files: `apps/web/src/storyboards/{api-contracts,setup,service,http,openapi}.ts`; `apps/web/src/generation/live-project.ts`; three API route modules; shared idea/project service integration; setup/local launcher; `apps/web/scripts/storyboards-verify.ts`; `apps/web/tests/storyboard-storage.test.ts`; actual route checks in `apps/web/tests/auth.test.ts`. API_DESIGN.md, DB_DESIGN.md, README.md and generated `design/projects.openapi.json` document this implemented boundary.
+
+Verification:
+- `npm run test:storyboards`: **24/24 passed** (13 planner/contract + 11 storage/API groups). Includes nested Mongo rejection, unique result index, owner/disabled-session/origin isolation, unchanged draft, stale source, concurrent same-key admission, cross-kind busy/expiry, late-completion fencing, safe terminal failures, signed cursor tamper/expiry, deleted-parent rejection and rollback on forced candidate insert failure.
+- Complete web suite, `node --conditions=react-server --import tsx --test tests/*.test.ts` from apps/web: **109/109 passed**, including actual Next.js routes, checked-in OpenAPI drift and previous feature regressions.
+- `npm run check`: both TypeScript checks and **23/23 prototype tests passed**. A test-only Mongo listCollections type error was corrected before this successful check.
+- Live `auth:local -- --providers` + `storyboards:verify` against the actual Next.js server: **passed**, Gemini `gemini-3.5-flash-lite`, one HTTP 200 provider attempt, 6.938 seconds; six scenes, 160 words, 64-second estimate. Candidate read/list, exact-key replay with no further provider log/call, latest receipt, unchanged saved draft and stale detection all passed. Disposable test database/server stopped afterward; this is not a retained user project. No credentials/content were written to logs/status.
+- `npm run build`: **passed**; all three new route modules compiled as dynamic Node routes. `git diff --check`: passed.
+
+QA checkpoint: restart `npm run auth:local -- --providers`, then run `npm run storyboards:verify` in a second interactive terminal with that disposable account. This consumes Gemini quota. Existing persistent databases need `npm run db:setup`. API and DB design appendices contain exact contracts and failure semantics. There is no new browser review screen until F10 is accepted for implementation.
+
+Limitations: one live provider success is not a reliability benchmark. Estimates are not measured audio duration; factual/editorial review remains necessary. No background continuation after server termination; interrupted receipts become unknown lazily after their deadline. No candidate application/editing/approval, R2, hosted rendering or cleanup lifecycle. Public deployment is not part of this milestone.

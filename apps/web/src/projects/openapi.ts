@@ -1,3 +1,4 @@
+import { storyboardPaths } from '../storyboards/openapi';
 import { z } from 'zod';
 import { ideaRequestSchema, suggestionSchema } from '../ideas/contracts';
 import { patchDraft } from '../drafts/contracts';
@@ -43,9 +44,10 @@ export function projectsOpenApi() {
       validation: { type: 'object', required: ['valid','issues'], properties: { valid: { const: false }, issues: { type: 'array', items: { type: 'object', required: ['path','code','message'], properties: { path: { type: 'string' }, code: { type: 'string' }, message: { type: 'string' } } } } } },
     },
   } } }) };
-  return { openapi: '3.1.0', info: { title: 'NamasteVideo project and idea draft API', version: '0.3.0', description: 'Implemented slice only. DELETE completes synchronously for empty projects (204); populated project cleanup and selectedVideoId mutation are not yet supported.' },
+  return { openapi: '3.1.0', info: { title: 'NamasteVideo project and idea draft API', version: '0.4.0', description: 'Implemented slice only. DELETE completes synchronously for empty projects (204); populated project cleanup and selectedVideoId mutation are not yet supported.' },
     servers: [{ url: '/' }], security: [{ session: [] }], components: { schemas: { Project: project }, responses: { Error: errorResponse }, securitySchemes: { session: { type: 'apiKey', in: 'cookie', name: 'better-auth.session_token', description: 'Better Auth HttpOnly session cookie; production uses its __Secure- prefix. Obtain it via the session facade.' } } },
     paths: {
+      ...storyboardPaths(),
       '/api/projects/{id}/idea-suggestions': {
         parameters: [{ in: 'path', name: 'id', required: true, schema: schema(projectId) }],
         get: { operationId: 'getLatestIdeaSuggestions', responses: { ...errors, 200: ideaResponse, 202: ideaResponse } },

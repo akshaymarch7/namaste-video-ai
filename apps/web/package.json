@@ -25,8 +25,9 @@
     "drafts:verify": "node --import tsx scripts/drafts-verify.ts",
     "test:ideas": "node --conditions=react-server --import tsx --test tests/ideas.test.ts tests/idea-providers.test.ts",
     "ideas:probe": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/ideas-probe.ts",
-    "test:storyboards": "node --conditions=react-server --import tsx --test tests/storyboards.test.ts",
-    "storyboards:probe": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/storyboards-probe.ts"
+    "test:storyboards": "node --conditions=react-server --import tsx --test tests/storyboards.test.ts tests/storyboard-storage.test.ts",
+    "storyboards:probe": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/storyboards-probe.ts",
+    "storyboards:verify": "node --import tsx scripts/storyboards-verify.ts"
   },
   "dependencies": {
     "@fontsource/inter": "5.3.0",

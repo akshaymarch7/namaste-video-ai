@@ -1,3 +1,4 @@
+import { setupStoryboards } from '../src/storyboards/setup';
 import { setupIdeas } from '../src/ideas/setup';
 import { setupDrafts } from '../src/drafts/setup';
 import { setupProjects } from '../src/projects/setup';
@@ -13,7 +14,8 @@ try {
   const projects = await setupProjects(db);
   const drafts = await setupDrafts(db);
   const ideas = await setupIdeas(db);
-  console.log(JSON.stringify({ status: 'ok', migrations: [result, projects, drafts, ideas] }));
+  const storyboards = await setupStoryboards(db);
+  console.log(JSON.stringify({ status: 'ok', migrations: [result, projects, drafts, ideas, storyboards] }));
 } catch (error) {
   // Driver diagnostics can include connection strings or document data. Do not print them.
   console.error(JSON.stringify({

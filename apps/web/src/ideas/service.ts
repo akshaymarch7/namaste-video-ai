@@ -1,3 +1,4 @@
+import { liveProject } from '../generation/live-project';
 import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
 import { Long, type Db, type MongoClient, type ClientSession, type Document } from 'mongodb';
@@ -15,19 +16,7 @@ function view(doc: Doc): IdeaResult {
 }
 export function ideaService(db: Db, client: MongoClient, provider: () => IdeaProvider, now = () => new Date()) {
   const requests = db.collection<Doc>('ideaRequests'), projects = db.collection<Doc>('projects');
-  async function live(ownerId: string, projectId: string, session: ClientSession) {
-    const p = await projects.findOne({ _id: projectId, ownerId, deletedAt: null }, { session });
-    if (!p) throw new ProjectError(404, 'NOT_FOUND', 'Project not found.');
-    if (p.activeJobId) {
-      const expired = await requests.findOne({ _id: p.activeJobId, ownerId, projectId, state: 'running', deadline: { $lte: now() } }, { session });
-      if (expired) {
-        await requests.updateOne({ _id: expired._id, state: 'running' }, { $set: { state: 'unknown', errorCode: 'PROVIDER_OUTCOME_UNKNOWN', updatedAt: now() } }, { session });
-        await projects.updateOne({ _id: projectId, activeJobId: expired._id }, { $unset: { activeJobId: '' }, $inc: { contentRevision: Long.ONE } }, { session });
-        delete p.activeJobId;
-      }
-    }
-    return p;
-  }
+  const live = (ownerId: string, projectId: string, session: ClientSession) => liveProject(db, ownerId, projectId, session, now());
   return {
     latest: (ownerId: string, projectId: string) => inTransaction(client, async session => {
       await live(ownerId, projectId, session);
