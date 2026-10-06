@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F11a — storyboard revision engine implemented; ready for code review.** User approved F10b2 and its P2 comparison fix. The new server-only engine supports whole-story and scene-scoped revision candidates with trusted differences and bounded repair. Deterministic tests pass; live revision quality has not been measured. Persistence/dashboard integration is F11b, immutable approval is F11c. No new browser controls are present in this checkpoint.
+**F11a — independent engine QA passed; awaiting user/code-review acceptance.** User approved F10b2 and its P2 comparison fix. The server-only engine supports whole-story and scene-scoped revision candidates with trusted differences and bounded repair. All 45 storyboard tests and two live Gemini revision checks passed; sample size and limits are recorded below. Persistence/dashboard integration is F11b, immutable approval is F11c. No new browser controls are present in this checkpoint.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -46,7 +46,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F10a | Storyboard generation and review UI | Done; user approved including reliability fixes | Desktop/mobile review, successful and failed reload recovery, two-tab conflict/history checks, 11 client tests; prior types/build below |
 | F10b1 | Editable storyboard persistence/API | Done; user approved | 69 targeted tests and six actual-HTTP check groups covering apply/edit/replay/conflicts/isolation/preservation; evidence below |
 | F10b2 | Cinema storyboard text editor | Done; user approved | Prior desktop/mobile editing and save recovery passed; P2 cue comparison fix browser-verified on bc129c3; 23 UI/controller tests rerun |
-| F11a | Storyboard revision engine | Implemented; awaiting review | 45 storyboard tests (10 new revision tests), 23 prototype tests, types/build; no live revision or persistence claim |
+| F11a | Storyboard revision engine | Independent QA passed; awaiting acceptance | 45 storyboard tests rerun; live single-scene and whole-story revisions passed, preserving unaffected scenes; prior prototype/types/build evidence below |
 | F11b | Revision persistence and dashboard workflow | Planned | Snapshot admission, saved candidates, reload/stale recovery, review/apply and restore |
 | F11c | Immutable storyboard approval | Planned | Exact-version approval and integration boundary for later rendering |
 | F12 | Private R2 asset adapter and media access | Planned | Private upload/read, owner-authorized access, expiry and missing-asset behavior |
@@ -1051,3 +1051,23 @@ The engine reuses the established bounded Gemini executor: four total calls, com
 **Verification:** `npm run test:storyboards` **45/45**, including ten new tests for scoped/global revisions, source immutability, stable IDs, trusted diff, scope repair/exhaustion, no-op/invalid result rejection, pre-dispatch failures, timeout/auth/deadline behavior and transient retries/sanitized diagnostics. Existing real disposable Mongo storage/queue/apply tests passed. `npm run check` passed both TypeScript checks and **23/23** prototype tests. `npm run build` and `git diff --check` passed. All provider responses were labelled deterministic fixtures; no provider quota or live browser check was needed for this server-module slice.
 
 **Remaining:** F11b must authorize and snapshot owner/project/version/hash/revision in durable admission, persist revision candidates/lineage/conversation, and add review/apply/restoration plus stale-result/reload handling. The caller freshness flag is not an HTTP security boundary. F11c owns immutable explicit approval; no generated revision inherits approval. Scene insertion/deletion/reordering, voice/language/audience changes and video-side revisions are unsupported here. Structural validation cannot establish factual accuracy or instruction fulfillment; live Gemini revision evaluation is pending. There is no new dashboard checkpoint to test yet. Stop at this engine checkpoint for code review before the next slice.
+
+
+## F11a — independent engine QA — October 6, 2026
+
+**PASS for engine checkpoint `15830ee`; no blocker found within this scope.** Reviewed `revisions.ts`, the shared executor extraction, validators and regression tests. Source validation/cloning precedes provider work; scoped results enforce unchanged root metadata and other scenes; scene IDs/order/count and fixed fields remain protected. Differences are computed server-side and every successful result requires fresh approval. These module guarantees do not substitute for F11b owner/version admission or persistence.
+
+`npm run test:storyboards` under Node 24 passed **45/45**, including real disposable Mongo tests and revision cases for scope repair/exhaustion, unchanged output, invalid inputs, source mutation, fixed identities, no-retry ambiguous/auth failures, deadline admission, transient backoff and sanitized diagnostics. No test/source changes were required.
+
+Two sequential live checks used the configured **gemini-3.5-flash-lite** adapter and the existing local six-scene water-cycle PlanV2 artifact, with separate requests against the same original source:
+
+| Check | Observed result |
+| --- | --- |
+| Single scene: revise evaporation using a drying puddle example | HTTP 200, first attempt, **4.728 s** overall; validated **72-second** estimate. Only `scene-2` changed; all five other scenes and all root metadata deep-equaled the source. Narration explained liquid changing to invisible vapor; labels and exact cues matched the revised scene. |
+| Whole story: add puddle and cold-glass condensation examples | HTTP 200, first attempt, **4.902 s** overall; validated **81.6-second** estimate. Only `scene-2` and `scene-3` changed; the other four scenes remained identical. The condensation narration explicitly attributed droplets outside the glass to water vapor in the air. |
+
+Both results retained scene IDs/order/count, left the input source unchanged and returned `requiresApproval:true`. Server change lists matched the observed edits; no root-field changes were reported. Narration was manually inspected for the requested examples and consistency with the original explanation. This is two successful samples, not a broad factual-quality or provider-reliability guarantee. Retry/repair failure paths were exercised by deterministic tests, not by these two first-attempt live successes.
+
+Local inspection outputs (ignored, not committed or stored dashboard versions): `apps/web/runs/storyboards/f11a-qa-scene.json` and `apps/web/runs/storyboards/f11a-qa-whole.json`. The temporary QA runner was removed. No credentials, raw provider responses, candidate JSON or generated media are included in Git; no dashboard data was edited and the existing review server was left alone.
+
+Typechecks/build/prototype tests were not repeated for this documentation-only QA checkpoint; prior implementation verification remains separate. No browser test is applicable to the new backend-only module. F11b persistence/review/apply controls and F11c immutable approval remain unimplemented; neither was started during QA. Await user/code-review acceptance before progression.
