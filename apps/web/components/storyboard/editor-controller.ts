@@ -1,14 +1,16 @@
 import {z} from 'zod';
+import {snapshotRequest,snapshotResponse} from '../../src/storyboards/api-contracts';
 import {applyStoryboard,editableStoryboardSchema,type EditableStoryboard} from '../../src/storyboards/editable-contract';
 import type {DraftView} from '../../src/drafts/contracts';
 const pendingSchema=z.discriminatedUnion('kind',[
+ z.object({kind:z.literal('snapshot'),key:z.string().uuid(),body:snapshotRequest}).strict(),
  z.object({kind:z.literal('apply'),key:z.string().uuid(),body:applyStoryboard}).strict(),
  z.object({kind:z.literal('save'),expectedRevision:z.number().int().min(1),plan:editableStoryboardSchema,sourceStoryboardId:z.string()}).strict(),
 ]);
 export type EditPending=z.infer<typeof pendingSchema>;
 export type EditStore={read():EditPending|null;write(v:EditPending):void;clear():void};
-export type EditTransport={read():Promise<DraftView>;apply(p:Extract<EditPending,{kind:'apply'}>):Promise<unknown>;save(p:Extract<EditPending,{kind:'save'}>):Promise<DraftView>};
-export type EditorState={saved:DraftView|null;local:EditableStoryboard|null;remote:DraftView|null;pending:EditPending|null;busy:boolean;error:string};
+export type EditTransport={snapshot?(p:Extract<EditPending,{kind:'snapshot'}>):Promise<{storyboardId:string}>;read():Promise<DraftView>;apply(p:Extract<EditPending,{kind:'apply'}>):Promise<unknown>;save(p:Extract<EditPending,{kind:'save'}>):Promise<DraftView>};
+export type EditorState={snapshotId?:string;saved:DraftView|null;local:EditableStoryboard|null;remote:DraftView|null;pending:EditPending|null;busy:boolean;error:string};
 const equal=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 export const editorDirty=(s:EditorState)=>!!s.pending||!equal(s.local,s.saved?.editablePlan??null);
 export function editStore(storage:Storage,userId:string,projectId:string):EditStore{
@@ -24,7 +26,8 @@ export function createEditor(transport:EditTransport,store:EditStore,publish:(s:
  async function recover(){
   const pending=state.pending;if(!pending)return;
   try{
-   if(pending.kind==='apply'){await transport.apply(pending);if(disposed)return;accept(await transport.read());}
+   if(pending.kind==='snapshot'){if(!transport.snapshot)throw {code:'SERVICE_UNAVAILABLE'};const result=await transport.snapshot(pending);if(disposed)return;const draft=await transport.read();if(disposed)return;accept(draft);emit({snapshotId:result.storyboardId});}
+   else if(pending.kind==='apply'){await transport.apply(pending);if(disposed)return;accept(await transport.read());}
    else accept(await transport.save(pending));
   }catch(e){
    if(disposed)return;
@@ -35,7 +38,7 @@ export function createEditor(transport:EditTransport,store:EditStore,publish:(s:
     if(pending.kind==='save'&&remote.revision>pending.expectedRevision&&remote.sourceStoryboardId===pending.sourceStoryboardId&&equal(remote.editablePlan,pending.plan)){accept(remote);return;}
     clear();emit({remote,error:'REVISION_CONFLICT'});return;
    }
-   if(['VALIDATION_FAILED','STORYBOARD_REQUIRED','HASH_MISMATCH','IDEMPOTENCY_KEY_REUSED','VOICE_UNAVAILABLE','NOT_FOUND'].includes(code??''))clear();
+   if(['VALIDATION_FAILED','STORYBOARD_REQUIRED','HASH_MISMATCH','IDEMPOTENCY_KEY_REUSED','VOICE_UNAVAILABLE','NOT_FOUND','INVALID_DRAFT','PLAN_STALE','PROJECT_BUSY'].includes(code??''))clear();
    throw e;
   }
  }
@@ -46,6 +49,7 @@ export function createEditor(transport:EditTransport,store:EditStore,publish:(s:
   edit:(plan:EditableStoryboard)=>{if(!state.busy&&!state.pending&&!state.remote&&state.saved)emit({local:plan,error:''});},
   apply:(id:string,hash:string)=>run(async()=>{if(!state.saved||state.pending||editorDirty(state)||state.remote)throw {code:'UNSAVED'};persist({kind:'apply',key:crypto.randomUUID(),body:{expectedDraftRevision:state.saved.revision,storyboardId:id,expectedContentHash:hash}});await recover();}),
   save:()=>run(async()=>{if(!state.saved?.sourceStoryboardId||!state.local||state.pending||state.remote)return;if(!editableStoryboardSchema.safeParse(state.local).success)throw {code:'VALIDATION_FAILED'};persist({kind:'save',expectedRevision:state.saved.revision,plan:structuredClone(state.local),sourceStoryboardId:state.saved.sourceStoryboardId});await recover();}),
+  saveVersion:()=>run(async()=>{if(!state.saved||state.pending||editorDirty(state)||state.remote)throw {code:'UNSAVED'};persist({kind:'snapshot',key:crypto.randomUUID(),body:{expectedDraftRevision:state.saved.revision,expectedContentHash:state.saved.contentHash}});await recover();}),
   recover:()=>run(recover),
   refresh:()=>run(async()=>{if(state.pending){await recover();return;}const remote=await transport.read();if(disposed)return;if(editorDirty(state)){emit({remote,error:'REVISION_CONFLICT'});}else accept(remote);}),
   useRemote:()=>{if(state.remote&&!state.busy&&!state.pending)accept(state.remote);},
@@ -59,5 +63,5 @@ export function editorTransport(projectId:string,request=fetch):EditTransport{
   const response=await request(url,{method,credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{...(body?{'Content-Type':'application/json'}:{}),...(key?{'Idempotency-Key':key}:{})},...(body?{body:JSON.stringify(body)}:{})});
   const json=await response.json();if(!response.ok)throw {code:json.error?.code??'SERVICE_UNAVAILABLE'};return json.data;
  }
- return {read:()=>call(path),apply:p=>call(`${path}/apply`,'POST',p.body,p.key),save:p=>call(path,'PATCH',{expectedRevision:p.expectedRevision,changes:{editablePlan:p.plan}})};
+ return {snapshot:async p=>snapshotResponse.parse(await call(`/api/projects/${projectId}/storyboard-snapshots`,'POST',p.body,p.key)),read:()=>call(path),apply:p=>call(`${path}/apply`,'POST',p.body,p.key),save:p=>call(path,'PATCH',{expectedRevision:p.expectedRevision,changes:{editablePlan:p.plan}})};
 }

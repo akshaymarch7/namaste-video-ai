@@ -1,3 +1,4 @@
+import {setupStoryboardSnapshots} from '../src/storyboards/snapshot-setup';
 import {setupStoryboardRevisions,assertStoryboardRevisionsReady} from '../src/storyboards/revision-setup';
 import {revisionRequest} from '../src/storyboards/api-contracts';
 import {setupEditableDrafts} from '../src/drafts/edit-setup';
@@ -34,7 +35,7 @@ const config = { origin: 'http://127.0.0.1:3002', secure: false, secret: randomB
 before(async () => {
   replica = await MongoMemoryReplSet.create({ binary: { version: '8.0.17' }, replSet: { count: 1, ip: '127.0.0.1', storageEngine: 'wiredTiger' } });
   client = await new MongoClient(replica.getUri(), { promoteLongs: false }).connect(); db = client.db('drafts_test');
-  await setupDatabase(db); await setupProjects(db); await setupDrafts(db); await setupIdeas(db); await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db); await setupStoryboardRevisions(db); await setupAuth(db, client, config);
+  await setupDatabase(db); await setupProjects(db); await setupDrafts(db); await setupIdeas(db); await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db); await setupStoryboardRevisions(db);await setupStoryboardSnapshots(db); await setupAuth(db, client, config);
   const auth = createAuth(db, client, config); deps = { db, client, config, auth };
   drafts = draftService(db, client); projects = projectService(db, client, config.secret);
   const identities = [];
@@ -370,4 +371,61 @@ test('missing revision metadata cannot turn accepted revision into fresh generat
  await db.collection('storyboardRevisions').deleteOne({_id:receipt.id as never});let count=0;
  await runStoryboardJob(db,client,()=>revisionProvider(()=>{count++;}));
  assert.equal(count,0);assert.equal((await service().latest(owner,item.id))?.errorCode,'SOURCE_CHANGED');
+});
+
+const snapshotReq=(id:string,body:unknown,key=randomUUID(),headers:Record<string,string>={})=>handleStoryboards(new Request(`${config.origin}/api/projects/${id}/storyboard-snapshots`,{method:'POST',headers:{Cookie:cookie,Origin:config.origin,'Content-Type':'application/json','Idempotency-Key':key,...headers},body:JSON.stringify(body)}),'snapshot',id,async()=>deps,()=>{throw Error('Snapshot must not resolve provider');});
+async function editedSource(){
+ const value=await editableFixture();await drafts.apply(owner,value.project.id,randomUUID(),value.body);
+ const plan=structuredClone(value.candidate.content);plan.scenes[1].title='My manual explanation';
+ const draft=await drafts.save(owner,value.project.id,{expectedRevision:3,changes:{editablePlan:plan}});
+ return {...value,draft,command:{expectedDraftRevision:draft.revision,expectedContentHash:draft.contentHash}};
+}
+test('snapshot migration replays without downgrading candidate validators',async()=>{
+ await setupStoryboardSnapshots(db);await setupStoryboards(db);await setupStoryboardQueue(db);await setupStoryboardRevisions(db);await setupStoryboardSnapshots(db);
+ await assert.rejects(db.collection('storyboardSnapshots').insertOne({unexpected:true}));
+});
+test('manual snapshot preserves edits and ancestry; same-key replay is stable after later saves',async()=>{
+ const {project,candidate,draft,command}=await editedSource(),key=randomUUID();
+ const responses=await Promise.all([snapshotReq(project.id,command,key),snapshotReq(project.id,command,key)]);assert.deepEqual(responses.map(r=>r.status),[200,200]);
+ const values=await Promise.all(responses.map(r=>r.json()));assert.equal(values[0].data.storyboardId,values[1].data.storyboardId);
+ const saved=storyboardView.parse(await service().get(owner,values[0].data.storyboardId));assert.equal(saved.origin,'manual');assert.equal(saved.parentId,candidate.id);assert.deepEqual(saved.content,draft.editablePlan);assert.deepEqual(saved.changedSceneIds,[candidate.content.scenes[1].id]);
+ assert.deepEqual(await drafts.get(owner,project.id),draft);assert.equal((await projects.get(owner,project.id)).currentStoryboardId,candidate.id);
+ await drafts.save(owner,project.id,{expectedRevision:draft.revision,changes:{notes:'Later notes'}});
+ const replay=await snapshotReq(project.id,command,key);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');assert.equal((await replay.json()).data.storyboardId,saved.id);
+ assert.equal((await snapshotReq(project.id,{...command,expectedDraftRevision:5},key)).status,409);
+ assert.deepEqual((await service().get(owner,saved.id)).content,saved.content);assert.equal((await service().get(owner,saved.id)).stale,true);
+ assert.equal(await db.collection('storyboardSnapshots').countDocuments({projectId:project.id}),1);
+});
+test('snapshot rejects foreign access, wrong origin/revision/hash and incomplete or stale plans',async()=>{
+ const {project,draft,command}=await editedSource();
+ for(const [headers,status] of [[{Cookie:''},401],[{Cookie:otherCookie},404],[{Origin:'https://bad.test'},403]] as const)assert.equal((await snapshotReq(project.id,command,randomUUID(),headers)).status,status);
+ assert.equal((await snapshotReq(project.id,{...command,expectedDraftRevision:1})).status,409);
+ assert.equal((await snapshotReq(project.id,{...command,expectedContentHash:'0'.repeat(64)})).status,409);
+ assert.equal((await snapshotReq(project.id,{...command,extra:true})).status,422);
+ const broken=structuredClone(draft.editablePlan!);broken.scenes[0].narration='';const invalid=await drafts.save(owner,project.id,{expectedRevision:draft.revision,changes:{editablePlan:broken}});
+ assert.equal((await snapshotReq(project.id,{expectedDraftRevision:invalid.revision,expectedContentHash:invalid.contentHash})).status,422);
+ const stale=await drafts.save(owner,project.id,{expectedRevision:invalid.revision,changes:{editablePlan:draft.editablePlan,topic:'Changed topic'}});
+ assert.equal((await snapshotReq(project.id,{expectedDraftRevision:stale.revision,expectedContentHash:stale.contentHash})).status,422);
+ assert.equal(await db.collection('storyboardSnapshots').countDocuments({projectId:project.id}),0);
+});
+test('snapshot receipt failure rolls back candidate insert',async()=>{
+ const {project,command}=await editedSource();const definition=(await db.listCollections({name:'storyboardSnapshots'},{nameOnly:false}).toArray())[0];
+ await db.command({collMod:'storyboardSnapshots',validator:{$and:[definition.options!.validator,{projectId:{$ne:project.id}}]}});
+ try{assert.equal((await snapshotReq(project.id,command)).status,503);}finally{await db.command({collMod:'storyboardSnapshots',validator:definition.options!.validator});}
+ assert.equal(await db.collection('storyboards').countDocuments({projectId:project.id}),1);
+ assert.equal((await projects.get(owner,project.id)).draftRevision,command.expectedDraftRevision);
+});
+test('AI revision receives manually edited snapshot and preserves untouched manual scene',async()=>{
+ const {project,draft,command}=await editedSource();const response=await snapshotReq(project.id,command);const source=await service().get(owner,(await response.json()).data.storyboardId);
+ const body={expectedDraftRevision:draft.revision,source:{kind:'storyboard',id:source.id,hash:source.contentHash},instruction:'Clarify opening',sceneId:source.content.scenes[0].id};
+ assert.equal((await revise(project.id,body)).status,202);await runStoryboardJob(db,client,()=>revisionProvider());
+ const result=await service().get(owner,(await service().latest(owner,project.id))!.storyboardId!);
+ assert.equal(result.parentId,source.id);assert.equal(result.content.scenes[1].title,'My manual explanation');assert.deepEqual(await drafts.get(owner,project.id),draft);
+});
+test('snapshot racing autosave either freezes the reviewed text or reports a revision conflict',async()=>{
+ const {project,draft,command}=await editedSource();const next=structuredClone(draft.editablePlan!);next.scenes[0].title='Concurrent edit';
+ const [response]=await Promise.all([snapshotReq(project.id,command),drafts.save(owner,project.id,{expectedRevision:draft.revision,changes:{editablePlan:next}})]);
+ assert.ok([200,409].includes(response.status));
+ if(response.status===200){const snapshot=await service().get(owner,(await response.json()).data.storyboardId);assert.deepEqual(snapshot.content,draft.editablePlan);assert.equal(snapshot.stale,true);}else assert.equal(await db.collection('storyboardSnapshots').countDocuments({projectId:project.id}),0);
+ assert.equal((await drafts.get(owner,project.id)).editablePlan?.scenes[0].title,'Concurrent edit');
 });

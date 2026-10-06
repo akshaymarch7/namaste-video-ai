@@ -47,3 +47,17 @@ test('each editable pronunciation or cue setting changes the comparison independ
  assert.match(planText(empty),/Pronunciation:\n  None/);
  assert.equal(planText(null),'No working copy');
 });
+
+test('snapshot recovery replays original revision/hash/key after reload without discarding newer draft',async()=>{
+ const h=harness();const id='stb_'+'f'.repeat(32);let calls:unknown[]=[];
+ h.transport.snapshot=async p=>{calls.push(p);throw {code:'CONNECTION'};};
+ const first=createEditor(h.transport,h.store,()=>{});await first.load();await first.saveVersion();const pending=structuredClone(h.store.read());assert.equal(pending?.kind,'snapshot');first.dispose();
+ h.setRemote({...h.remote(),revision:5,editablePlan:{...h.remote().editablePlan!,title:'Newer text'}});
+ h.transport.snapshot=async p=>{calls.push(p);return {storyboardId:id};};
+ const second=createEditor(h.transport,h.store,()=>{});await second.load();assert.deepEqual(calls,[pending,pending]);assert.equal(second.snapshot().snapshotId,id);assert.equal(second.snapshot().local?.title,'Newer text');assert.equal(h.store.read(),null);
+});
+test('unsaved edits cannot be snapshotted; definitive validation rejection permits correction',async()=>{
+ const h=harness();let calls=0;h.transport.snapshot=async()=>{calls++;throw {code:'INVALID_DRAFT'};};
+ const e=createEditor(h.transport,h.store,()=>{});await e.load();e.edit({...e.snapshot().local!,title:'Local'});await e.saveVersion();assert.equal(calls,0);assert.equal(e.snapshot().error,'UNSAVED');
+ await e.save();await e.saveVersion();assert.equal(calls,1);assert.equal(e.snapshot().error,'INVALID_DRAFT');assert.equal(h.store.read(),null);assert.equal(e.snapshot().local?.title,'Local');
+});

@@ -27,7 +27,7 @@ function receipt(doc: Doc): StoryboardReceipt {
 }
 function summary(doc: Doc, revision: number, lineage?:{source:Doc;command:Doc}) {
   const diff=lineage?revisionDiff(lineage.source.content,doc.content):null;
-  return { id: doc._id, projectId: doc.projectId, parentId: lineage?.source._id??null, sourceDraftRevision: doc.sourceDraftRevision, state: 'review_ready' as const,
+  return { origin:doc.plannerConfig.provider==='manual'?'manual' as const:'generated' as const, id: doc._id, projectId: doc.projectId, parentId: lineage?.source._id??null, sourceDraftRevision: doc.sourceDraftRevision, state: 'review_ready' as const,
     title: doc.content.title as string, contentHash: doc.contentHash as string, storyHash: doc.storyHash as string,
     estimatedDurationSeconds: doc.estimatedDurationSeconds as number, wordCount: doc.wordCount as number,
     stale: doc.sourceDraftRevision !== revision, warnings: [], changeSummary: diff?`Updated ${diff.changedSceneIds.length} scene(s)${diff.changedFields.length?` and ${diff.changedFields.join(", ")}`:""}. Review before applying.`:null, changedSceneIds: diff?.changedSceneIds??[], approvalId: null, createdAt: doc.createdAt.toISOString() };
@@ -37,7 +37,7 @@ export function storyboardService(db: Db, client: MongoClient, secret: string, p
   const live = (ownerId: string, projectId: string, session: Parameters<typeof liveProject>[3]) => liveProject(db, ownerId, projectId, session, now());
   const sign = (payload: string) => createHmac('sha256', secret).update(`storyboards-cursor-v1:${payload}`).digest('base64url');
   async function lineage(ownerId:string,projectId:string,jobId:string,session?:Parameters<typeof liveProject>[3]) {
-    const command=await db.collection<Doc>('storyboardRevisions').findOne({_id:jobId,ownerId,projectId},{session});
+    const command=await db.collection<Doc>('storyboardRevisions').findOne({_id:jobId,ownerId,projectId},{session})??await db.collection<Doc>('storyboardSnapshots').findOne({_id:jobId,ownerId,projectId},{session});
     if(!command)return undefined;
     const source=await candidates.findOne({_id:command.sourceStoryboardId,ownerId,projectId},{session});
     if(!source||storyboardHashes(source.content).contentHash!==command.sourceContentHash)throw new ProjectError(409,'SOURCE_CHANGED','The source storyboard could not be verified.');

@@ -70,6 +70,7 @@ export function createReview(transport:ReviewTransport, store:AttemptStore, publ
     load:()=>run(async()=>{try{emit({pending:store.read()});}catch{throw {code:'RECOVERY_STORAGE'};}await refresh();}),
     refresh:()=>run(refresh),
     select:(id:string)=>run(()=>select(id)),
+    openVersion:(id:string)=>run(async()=>{await context();await history();await select(id);}),
     more:()=>run(async()=>{if(!state.cursor)return;const next=await transport.history(state.cursor);const map=new Map(state.history.map(x=>[x.id,x]));for(const item of next.data)map.set(item.id,item);emit({history:[...map.values()],cursor:next.cursor});}),
     generate:()=>run(async()=>{
       if(!state.ready||state.pending||state.receipt?.state==='running'||!state.draft?.topic.trim())throw {code:'INVALID_DRAFT'};

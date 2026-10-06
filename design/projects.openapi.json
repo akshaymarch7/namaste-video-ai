@@ -213,6 +213,159 @@
     }
   },
   "paths": {
+    "/api/projects/{id}/storyboard-snapshots": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "saveEditedStoryboardVersion",
+        "description": "Freeze the exact saved valid non-stale working plan into an immutable manual candidate, without provider calls, approval, draft mutation or selection changes. Requires expected draft revision and draft contentHash. Same-key replay returns the original storyboardId even after later edits. Concurrent saves conflict. Migration 009 required.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "string",
+              "pattern": "^[\\x21-\\x7e]{16,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "expectedDraftRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647
+                  },
+                  "expectedContentHash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "expectedDraftRevision",
+                  "expectedContentHash"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Owner-scoped result. Running receipts return 202; terminal receipts return 200.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "const": "true"
+                },
+                "description": "Present only on a same-key POST replay."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "type": "object",
+                      "properties": {
+                        "storyboardId": {
+                          "type": "string",
+                          "pattern": "^stb_[a-f0-9]{32}$"
+                        }
+                      },
+                      "required": [
+                        "storyboardId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/projects/{id}/revisions": {
       "parameters": [
         {
@@ -228,7 +381,7 @@
       ],
       "post": {
         "operationId": "reviseStoryboardCandidate",
-        "description": "Queues an immutable storyboard-source revision. Requires current draft revision, exact source hash and either a source at that revision or its unchanged fresh applied working copy. Manual edited plans must first become immutable sources in a future slice. Video sources are unsupported. Same-key replay recovers the shared storyboard receipt; provider work never happens inside the HTTP request. Results preserve the source, draft and selection, and expose parentId/changedSceneIds/changeSummary in existing storyboard reads. Every result needs review; no approval is inherited.",
+        "description": "Queues an immutable storyboard-source revision. Requires current draft revision, exact source hash and either a source at that revision or its unchanged fresh applied working copy. Manual edited plans first become immutable sources through storyboard-snapshots. Video sources are unsupported. Same-key replay recovers the shared storyboard receipt; provider work never happens inside the HTTP request. Results preserve the source, draft and selection, and expose parentId/changedSceneIds/changeSummary in existing storyboard reads. Every result needs review; no approval is inherited.",
         "parameters": [
           {
             "in": "header",
@@ -1056,6 +1209,13 @@
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
                         "type": "object",
                         "properties": {
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "generated",
+                              "manual"
+                            ]
+                          },
                           "id": {
                             "type": "string",
                             "pattern": "^stb_[a-f0-9]{32}$"
@@ -1616,6 +1776,13 @@
                       "$schema": "https://json-schema.org/draft/2020-12/schema",
                       "type": "object",
                       "properties": {
+                        "origin": {
+                          "type": "string",
+                          "enum": [
+                            "generated",
+                            "manual"
+                          ]
+                        },
                         "id": {
                           "type": "string",
                           "pattern": "^stb_[a-f0-9]{32}$"
