@@ -15,9 +15,11 @@ function issueText(issue:{path:string;code:string}){
  return `${where}Check the ${field} for missing content or values outside the allowed limits.`;
 }
 const errors:Record<string,string>={REVISION_CONFLICT:'The saved draft changed. Compare both versions before choosing what to keep.',SOURCE_CHANGED:'A different candidate is now the working copy. Keep a copy of your text before loading the saved version.',VALIDATION_FAILED:'Some fields exceed their limits or have invalid values. Your input is still here.',RECOVERY_STORAGE:'Browser recovery storage is unavailable. Enable session storage before saving.',NOT_FOUND:'This project is no longer available.',HASH_MISMATCH:'The candidate could not be verified. Refresh before applying it.',UNSAVED:'Save or resolve your working copy before replacing it.'};
-export function TextEditor({projectId,userId,candidate,onSaved}:{projectId:string;userId:string;candidate:Candidate|null;onSaved:()=>void}){
+export function TextEditor({projectId,userId,candidate,onSaved,onEditingChange}:{projectId:string;userId:string;candidate:Candidate|null;onSaved:()=>void;onEditingChange?:(blocked:boolean)=>void}){
  const [state,setState]=useState<EditorState|null>(null),[index,setIndex]=useState(0),[confirm,setConfirm]=useState<{id:string;hash:string;title:string}|null>(null);
  const notify=useRef(onSaved);notify.current=onSaved;
+ const editingNotify=useRef(onEditingChange);editingNotify.current=onEditingChange;
+ useEffect(()=>{editingNotify.current?.(!state?.saved||state.busy||editorDirty(state)||!!state.remote);},[state]);
  const ref=useRef<ReturnType<typeof createEditor>|null>(null);
  useEffect(()=>{
   const controller=createEditor(editorTransport(projectId),editStore({getItem:k=>window.sessionStorage.getItem(k),setItem:(k,v)=>window.sessionStorage.setItem(k,v),removeItem:k=>window.sessionStorage.removeItem(k)} as Storage,userId,projectId),s=>{setState(s);if(s.error==='UNAUTHENTICATED')window.location.replace(signInLocation('expired'));if(s.error==='ACCESS_DISABLED')window.location.replace('/access-help?state=disabled');});ref.current=controller;void controller.load();

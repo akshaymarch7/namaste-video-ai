@@ -70,3 +70,49 @@ test('polling an active background request automatically opens its completed can
  h.transport.create=async()=>({...running,state:'completed',stage:'ready',storyboardId:newer.id});
  await review.refresh();assert.equal(review.snapshot().candidate?.id,newer.id);assert.equal(h.stored(),null);
 });
+
+function revisionHarness(){
+ const h=harness();const source={...candidate,contentHash:'d'.repeat(64),content:{scenes:[{id:'scene-1',title:'Opening'}]}} as Candidate;
+ h.transport.get=async()=>source;h.setLatest(receipt);return {...h,source};
+}
+test('revision pins source, instruction, scope and reviewed draft before dispatch',async()=>{
+ const h=revisionHarness(),r=createReview(h.transport,h.store,()=>{});await r.load();
+ const send=h.transport.create;h.transport.create=async a=>{assert.deepEqual(h.stored(),a);return send(a);};
+ await r.revise('  Clarify the opening  ','scene-1');assert.equal(h.calls.length,1);
+ assert.deepEqual(h.calls[0].revision,{source:{kind:'storyboard',id:candidateId,hash:'d'.repeat(64)},instruction:'Clarify the opening',sceneId:'scene-1'});
+ assert.equal(h.calls[0].expectedDraftRevision,2);assert.equal(h.stored(),null);
+});
+test('lost revision response replays exact payload after reload even after the draft changes',async()=>{
+ const h=revisionHarness();h.transport.create=async a=>{h.calls.push(a);throw {code:'CONNECTION'};};
+ const first=createReview(h.transport,h.store,()=>{});await first.load();await first.revise('Make it clearer','scene-1');const pending=structuredClone(h.stored());first.dispose();h.rev(3);
+ h.transport.create=async a=>{h.calls.push(a);return receipt;};const second=createReview(h.transport,h.store,()=>{});await second.load();
+ assert.deepEqual(h.calls,[pending,pending]);assert.equal(second.snapshot().draft?.revision,3);assert.equal(h.stored(),null);
+});
+test('revision validation and storage failure cannot dispatch requests',async()=>{
+ const h=revisionHarness(),r=createReview(h.transport,h.store,()=>{});await r.load();
+ for(const text of ['',' ','x'.repeat(4001)])await r.revise(text);
+ await r.revise('Change it','absent');assert.equal(r.snapshot().error,'INVALID_SCENE');assert.equal(h.calls.length,0);
+ h.store.write=()=>{throw Error('unavailable');};await r.revise('Change it');assert.equal(r.snapshot().error,'RECOVERY_STORAGE');assert.equal(h.calls.length,0);
+});
+test('definitive revision source/scope rejection clears pending and retains candidate',async()=>{
+ for(const code of ['SOURCE_CHANGED','INVALID_SCENE']){
+ const h=revisionHarness(),r=createReview(h.transport,h.store,()=>{});await r.load();h.transport.create=async()=>{throw {code};};await r.revise('Change it');
+ assert.equal(r.snapshot().error,code);assert.equal(h.stored(),null);assert.equal(r.snapshot().candidate?.id,candidateId);
+ }
+});
+test('revision and generation share duplicate-dispatch protection',async()=>{
+ const h=revisionHarness();let release!:(v:Receipt)=>void;h.transport.create=async a=>{h.calls.push(a);return new Promise(resolve=>{release=resolve;});};
+ const r=createReview(h.transport,h.store,()=>{});await r.load();const pending=r.revise('Clarify');await r.revise('Again');await r.generate();assert.equal(h.calls.length,1);
+ release({...receipt,state:'running',storyboardId:null});await pending;await r.revise('Again');assert.equal(h.calls.length,1);
+});
+test('transport routes saved revision attempts to the revision endpoint with exact body and key',async()=>{
+ const attempt:Attempt={key:crypto.randomUUID(),expectedDraftRevision:2,revision:{source:{kind:'storyboard',id:candidateId,hash:'d'.repeat(64)},instruction:'Clarify',sceneId:'scene-1'}};
+ const transport=reviewTransport(projectId,(async(url,options)=>{assert.equal(url,`/api/projects/${projectId}/revisions`);assert.equal(new Headers(options!.headers).get('Idempotency-Key'),attempt.key);assert.deepEqual(JSON.parse(options!.body as string),{...attempt.revision,expectedDraftRevision:2});return Response.json({data:receipt});}) as typeof fetch);
+ await transport.create(attempt);
+});
+import {canReviseCandidate} from '../components/storyboard/controller';
+test('eligibility distinguishes unchanged applied source from manual edits and stale copies',()=>{
+ const h=revisionHarness();const draft={revision:3,sourceStoryboardId:candidateId,planStale:false,editablePlan:structuredClone(h.source.content)} as any;
+ assert.equal(canReviseCandidate(h.source,draft),true);draft.editablePlan.scenes[0].title='Manual edit';assert.equal(canReviseCandidate(h.source,draft),false);
+ draft.editablePlan=h.source.content;draft.planStale=true;assert.equal(canReviseCandidate(h.source,draft),false);
+});
