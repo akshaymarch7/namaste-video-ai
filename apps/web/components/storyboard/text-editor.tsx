@@ -2,11 +2,11 @@
 import {useEffect,useRef,useState} from 'react';
 import {Button} from '../ui';
 import {SceneVisual} from './scene-visual';
+import {planText} from './plan-comparison';
 import {createEditor,editorTransport,editStore,editorDirty,type EditorState} from './editor-controller';
 import {inspectEditablePlan} from '../../src/storyboards/editable-contract';
 import {signInLocation} from '../../src/auth/navigation';
 import type {Candidate} from './controller';
-function planText(plan:EditorState['local']){return plan?`${plan.title}\n${plan.learningObjective}\n\n`+plan.scenes.map((s,i)=>`${i+1}. ${s.title}\n${s.kicker}\n${s.narration}\nOn-screen text: ${s.visual.component==='flow'?s.visual.data.steps.map(v=>v.label).join(' → '):s.visual.component==='comparison'?[s.visual.data.left,s.visual.data.right].map(v=>[v.heading,...v.points].join(' · ')).join(' / '):s.visual.data.labels.join(' · ')}`).join('\n\n'):'No working copy';}
 function issueText(issue:{path:string;code:string}){
  const match=/^scenes\.(\d+)/.exec(issue.path),where=match?`Scene ${Number(match[1])+1}: `:'';
  const messages:Record<string,string>={MISSING_CUE:'a motion cue no longer matches the narration. Update its phrase or occurrence.',DURATION_ESTIMATE_OUT_OF_RANGE:'aim for 150–225 spoken words across the storyboard (about 60–90 seconds).',PLAN_STALE:'the idea changed; generate and apply a current storyboard before approval.',MISSING_PHRASE:'a pronunciation phrase no longer matches the narration.',UNSUPPORTED_SOURCE:'a source excerpt no longer matches the saved notes.'};

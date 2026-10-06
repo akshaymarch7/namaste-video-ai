@@ -14,3 +14,36 @@ test('disposed responses cannot clear another mounted controller pending request
 test('recovery storage isolates user and project',()=>{const map=new Map<string,string>(),storage={getItem:(k:string)=>map.get(k)??null,setItem:(k:string,v:string)=>map.set(k,v),removeItem:(k:string)=>map.delete(k)} as unknown as Storage;const a=editStore(storage,'a','p'),b=editStore(storage,'b','p');a.write({kind:'save',expectedRevision:3,plan:fixture().editablePlan!,sourceStoryboardId:fixture().sourceStoryboardId!});assert.equal(b.read(),null);assert.ok(a.read());a.clear();assert.equal(a.read(),null);});
 
 test('concurrent saves dispatch only once and remain dirty until acknowledged',async()=>{const h=harness();let finish!:(d:DraftView)=>void,calls=0;h.transport.save=async()=>{calls++;return new Promise(r=>{finish=r;});};const e=createEditor(h.transport,h.store,()=>{});await e.load();const p=structuredClone(e.snapshot().local!);p.title='Pending';e.edit(p);const first=e.save();await e.save();assert.equal(calls,1);assert.ok(editorDirty(e.snapshot()));finish({...h.remote(),revision:4,editablePlan:p});await first;assert.equal(editorDirty(e.snapshot()),false);});
+
+// Exercise the formatter used by both conflict columns with differences confined
+// to settings: the rest of the visible script must be identical in this case.
+import {planText} from '../components/storyboard/plan-comparison';
+test('cue-only conflicts expose both phrases and occurrence numbers',async()=>{
+ const h=harness(),e=createEditor(h.transport,h.store,()=>{});await e.load();
+ const local=structuredClone(e.snapshot().local!),remote=structuredClone(local);
+ local.scenes[0].events[0].cue.phrase='rivers';
+ remote.scenes[0].events[0].cue.phrase='lakes';remote.scenes[0].events[0].cue.occurrence=2;
+ e.edit(local);h.setRemote({...h.remote(),revision:4,editablePlan:remote});await e.save();
+ assert.ok(e.snapshot().remote);
+ const mine=planText(e.snapshot().local),saved=planText(e.snapshot().remote!.editablePlan);
+ assert.match(mine,/Cue 1.*phrase "rivers"; occurrence 1/);
+ assert.match(saved,/Cue 1.*phrase "lakes"; occurrence 2/);
+ assert.notEqual(mine,saved);
+});
+test('each editable pronunciation or cue setting changes the comparison independently',()=>{
+ const base=fixture().editablePlan!;
+ base.scenes[0].pronunciation=[{phrase:'Water',spokenAs:'water',occurrence:1}];
+ const original=planText(base);
+ for(const [field,value] of [['phrase','rivers'],['occurrence',2]] as const){
+  const changed=structuredClone(base);Object.assign(changed.scenes[0].events[0].cue,{[field]:value});
+  assert.notEqual(planText(changed),original,`cue ${field} must be visible`);
+ }
+ for(const [field,value] of [['phrase','rivers'],['spokenAs','riv ers'],['occurrence',2]] as const){
+  const changed=structuredClone(base);Object.assign(changed.scenes[0].pronunciation[0],{[field]:value});
+  assert.notEqual(planText(changed),original,`pronunciation ${field} must be visible`);
+ }
+ assert.match(original,/Pronunciation 1: phrase "Water"; spoken as "water"; occurrence 1/);
+ const empty=structuredClone(base);empty.scenes[0].pronunciation=[];
+ assert.match(planText(empty),/Pronunciation:\n  None/);
+ assert.equal(planText(null),'No working copy');
+});

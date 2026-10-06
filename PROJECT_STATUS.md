@@ -1014,3 +1014,12 @@ Reviewed implementation `734942a` on `dev`, using the supplied authenticated **Q
 Evidence: [title conflict](design/verification/f10b2-qa-conflict.jpg), [cue-only conflict with identical comparison columns](design/verification/f10b2-qa-cue-conflict.jpg), [mobile editor](design/verification/f10b2-qa-mobile.jpg). Screenshots contain labelled synthetic fixture content only.
 
 **Result:** core editing, persistence, validation and save recovery passed; full QA approval is withheld for the P2 comparison omission. Flow/comparison-specific visual fields, pronunciation editing, session expiry/focus preservation and a full accessibility/device matrix were not manually revalidated. Typechecks/build/prototype/backend suites were not repeated for this documentation-only checkpoint; previous implementation verification remains separate. The supplied server and authenticated review session remain available; no provider configuration or credentials changed. F11 has not begun.
+
+
+## F10b2 — Complete conflict comparison fix — October 6, 2026
+
+Fixed the independent QA P2: both local and saved conflict columns now include each scene's motion cue phrase/occurrence, event identity/action/target, offset and duration, plus pronunciation phrase, spoken-as text and occurrence. Empty pronunciation lists explicitly show None. A cue-only or pronunciation-only change is now visible before choosing which full working plan to keep. Existing save/conflict semantics are unchanged.
+
+Files: extracted the shared human-readable formatter into `apps/web/components/storyboard/plan-comparison.ts`, wired both columns in `text-editor.tsx` to it, and added two regression tests in `tests/storyboard-editor.test.ts`. One reproduces a real controller revision conflict with differences confined to cues and checks both compared values; the other independently varies all editable cue/pronunciation fields and verifies each affects the comparison.
+
+Verification: `npm run test:storyboard-ui` **23/23** passed; `npm run typecheck:web` passed; `git diff --check` passed. No provider calls, API/DB changes or fixture edits. Browser QA was not repeated in this fix; the earlier independent core editing/mobile/save-recovery pass remains separate evidence. The comparison fix is ready for targeted QA/code review; F11 has not begun.
