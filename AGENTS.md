@@ -1,7 +1,7 @@
 # Development workflow
 
 - Read PROJECT_STATUS.md before starting implementation. It is the source of truth for implemented features and verification; PRD/API/DB/system design describe intended behavior.
-- Work in small feature slices. Update PROJECT_STATUS.md in the same change whenever code or configuration changes: scope, status, files, verification results and remaining limitations. Never mark planned UI or mocked behavior as implemented.
+- Deliver complete features by default, including their backend, UI and relevant verification in one milestone. Split a feature only when a concrete dependency, material risk or necessary user decision requires a separate checkpoint; explain the reason before adding a subdivision. Use internal implementation tasks rather than automatic a/b/c or nested numbered milestones. Keep commits coherent and manageable without turning every commit into a user review gate. Preserve existing evidence and explicit user-requested checkpoints. Update PROJECT_STATUS.md in the same change whenever code or configuration changes: scope, status, files, verification results and remaining limitations. Never mark planned UI or mocked behavior as implemented.
 - Preserve the working prototype CLI and rendering tests. The Next.js application lives in apps/web; never expose root public/runs or runs through the web application.
 - Keep credentials out of source, logs, client bundles and status documents. Root .env.local belongs to the prototype; web environment configuration is separate.
 - Use the approved Cinema tokens for app chrome. Preserve the separately approved video visual style.

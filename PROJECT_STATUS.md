@@ -13,7 +13,7 @@ Internal authentication APIs and initial database collections are implemented an
 ## How this document is maintained
 
 1. Before coding, select one feature below and mark it In progress; identify its acceptance criteria.
-2. Implement that feature without silently starting unrelated features.
+2. Deliver the complete feature, including backend, UI and relevant verification, without silently starting unrelated features. Split only for a concrete dependency, material risk or necessary user decision, and explain why a separate checkpoint is needed. Internal tasks and coherent commits do not require additional a/b/c or nested numbered milestones or automatic user review gates. Preserve explicit user-requested checkpoints.
 3. Run relevant checks and record commands, results, date, and practical limits. Link files/artifacts rather than treating this document alone as proof.
 4. Mark Done only when its acceptance criteria pass. Use Partial or Blocked when appropriate and explain what remains. Append the feature entry before reporting completion.
 5. Update this document in the same change as every code/configuration addition or modification, including fixes to completed features. Keep the feature table and checkpoint consistent.
@@ -29,7 +29,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 
 ## Feature backlog — build in order
 
-| ID | Small feature | Status | Completion evidence required |
+| ID | Feature | Status | Completion evidence required |
 | --- | --- | --- | --- |
 | F00 | Local idea-to-video proof of concept | Done (local prototype) | Existing three narrated exports and recovery reports; see PROTOTYPE_STATUS.md |
 | F01 | Next.js workspace, Cinema tokens, primitives and app boundary | Done | Production build; both TypeScript checks; 23 existing tests; desktop/mobile route smoke checks; root media inaccessible — evidence below |
@@ -65,6 +65,8 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F22 | Internal end-to-end acceptance and deployment | Planned | Two-user isolation, outage/recovery checks, generation benchmarks, Meta test posts; deployment separately reviewed |
 
 Infrastructure blockers are recorded against the affected feature. Do not move billing, public signup, teams or brand kits into V1 implicitly.
+
+Feature sizing preference updated October 7, 2026: keep future features whole by default and subdivide only when necessary. Existing subdivided IDs remain for evidence traceability; they are not a template for future planning.
 
 ## F01 — implementation record
 
@@ -1189,3 +1191,9 @@ Reset the viewport, closed the QA tab, stopped the temporary worker/web server/r
 **Verification:** `npm run test:storyboards` **70/70** using real disposable MongoDB replica sets and real authenticated HTTP-handler Request/Response sessions, with labelled provider fixtures. New coverage includes strict migration/index readiness, exact hashes/read projection, same/different-key races, replay after edits, owner/project/origin/consent/body/precondition/busy rejection, applied/manual/stale eligibility, cue-only non-inheritance, transactional rollback, autosave race and semantic/hash revalidation. Approval tests fail if the approval handler resolves a provider. `npm run test:storyboard-ui` **32/32**; `npm run test:projects` **14/14**, including generated OpenAPI consistency; `npm run check` passed both TypeScript checks and **23/23** unchanged prototype tests. Production build passed and includes the approval route; `git diff --check` passed.
 
 **Limits/checkpoint:** no browser submission or actual-network HTTP QA was performed; handler/transaction tests are not a browser end-to-end claim. The full auth suite was not rerun because it starts a second Next process in the same build directory as the existing review server; access boundaries above used actual auth sessions in the handler suite. Existing local database/server were not migrated or restarted. Install migration 010 on the intended QA environment or launch a fresh disposable environment before API QA. No live provider call, provider voice/model freeze, generation/video/publishing authorization or deployment occurred. Planned G01 combined approval/generation is still unimplemented and must consume/revalidate this exact-version boundary when rendering is added. Historical approved versions can also be stale relative to today's draft. Approval confirmation, browser pending-command recovery and interaction QA remain F11c2. Stop at this API checkpoint for review before that next slice.
+
+## Feature sizing workflow update — October 7, 2026
+
+User requested fewer feature subdivisions, used only when necessary. Updated `AGENTS.md` and this document's maintenance rules to default to complete features with backend, UI and verification together. A separate milestone now needs an explained dependency, material risk or necessary user decision; routine implementation tasks and commits do not create automatic review gates. Historical feature IDs and verification records are retained. This documentation change does not mark pending work implemented or QA accepted.
+
+Verification: reviewed the documentation diff for consistency and ran `git diff --check` successfully. No application code or configuration changed; runtime tests were not rerun. The current implementation checkpoint and its recorded limitations remain unchanged.
