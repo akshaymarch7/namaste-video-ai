@@ -1,12 +1,12 @@
 # Project Status — NamasteVideo.ai
 
-Last updated: October 2, 2026 (Asia/Kolkata).
+Last updated: October 6, 2026 (Asia/Kolkata).
 
 This is the source of truth for development progress. Specifications describe intent; a feature is complete here only when its implementation and verification are recorded. Design approval is not evidence of working functionality.
 
 ## Current checkpoint
 
-**Storyboard reliability fix — Implemented; ready for user QA/code review.** Generation now runs through a persisted local Mongo queue with a separate worker, up to four provider calls and a three-minute deadline. Targeted validation repairs, sanitized diagnostics and automatic browser progress/recovery are implemented. Two live single-click requests completed: the first survived reload and passed on attempt 1 (152 words, 60.8 seconds estimated); the second failed narration-length validation twice and succeeded automatically on attempt 3 (157 words, 62.8 seconds estimated). Earlier candidates remained available. 30 planner/storage tests, 12 UI-controller tests, 20 brainstorming regression tests, both TypeScript checks, 23 prototype tests and production build passed. Hosted execution remains unimplemented. F10b and F11 are still planned; wait for review of this fix before proceeding.
+**Storyboard reliability fix — Independent QA passed with a minor error-wording follow-up; awaiting user/code review.** Fresh-launcher QA passed 30 planner/storage, 12 UI-controller and 20 brainstorming tests. Two live single-click requests completed automatically on attempt 1 (68 and 62.8 seconds estimated), including full reload recovery without manual status checking. A controlled worker pause verified actual expiry after 180.085 seconds, no provider dispatch and unchanged draft/candidates. Queued expiry currently reports a generic unknown outcome even when attempt count is zero; a clearer pre-dispatch expiry message is recommended. Four-attempt repair/exhaustion passed automated tests; this independent live sample did not require repairs. Hosted execution, F10b and F11 remain unimplemented; wait for user review before proceeding.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -900,3 +900,25 @@ Signed out, closed all three QA tabs, reset the viewport override and stopped th
 - Local screenshot (ignored/private): `apps/web/runs/storyboard-reliability.jpg`. User's earlier project was preserved. No generated media or credentials included in Git.
 
 **Limits:** two live requests demonstrate recovery, not a universal success rate. Structural checks do not establish factual accuracy; narration needs review. The worker processes one job at a time per process; queue wait counts against three minutes. Durable recovery depends on Mongo surviving; the disposable launcher intentionally removes its DB on shutdown. No hosted worker, cancellation, autoscaling or daemon supervisor yet. Full auth-route suite was not rerun because it launches a second Next dev process in the same build directory; actual authenticated storyboard/browser routes were exercised live and auth-test migration setup was typechecked. New launcher lifecycle has been code-reviewed but the existing session was not restarted, to preserve user test data.
+
+
+### Storyboard reliability independent QA — October 6, 2026
+
+Tested clean `dev` commit `0a86a82` using Node 24 and the updated `npm run auth:local -- --providers` launcher from a stopped state. It successfully started a fresh disposable Mongo database, Next.js and its separate worker. Reused the exact synthetic water-cycle topic, audience and notes from the prior failing QA scenario. No implementation/configuration changes or provider fixtures were used for live generations.
+
+| Check | Result |
+| --- | --- |
+| Targeted suites | `test:storyboards` **30/30**, `test:storyboard-ui` **12/12**, `test:ideas` **20/20** passed. Covers fourth-call repair success/exhaustion, transient retries, authorization/unknown-outcome stop, deadlines, competing workers, queue snapshots, admission, automatic selection and shared project slots. |
+| First single-click request | Immediate 202 (32 ms route time), then full reload during generation. The page automatically recovered and opened a saved candidate without Check request/Refresh/retry: six scenes, 170 words, **68-second estimate**; one provider call, HTTP 200/OK in **5,199 ms**. |
+| Second single-click request | Existing candidate remained visible while queued/planning. Completion automatically selected the new candidate: six scenes, 157 words, **62.8-second estimate**; one provider call, HTTP 200/OK in **6,146 ms**. Both candidates remained in history. |
+| Real three-minute expiry | Paused only this disposable worker after both requests completed, then queued another request. Automatic browser polling ended the waiting state and re-enabled Generate another after **180.085 seconds**. The receipt had attempt 0; no provider call occurred. |
+| Preservation and cleanup | Read-only database digests before/after expiry matched for the complete draft and both candidate documents. Exactly two candidates remained. After resuming the worker, the expired queue entry was done with its input cleared and the project slot released. |
+| Responsive progress | At 390×844, queued status and controls remained readable; document client/scroll widths both measured 375px excluding scrollbar. Captured browser warning/error list was empty. |
+
+One minor finding: a queued request that never reached the provider expires as `PROVIDER_OUTCOME_UNKNOWN` and the UI says a new generation may use credits again. This is conservative and does not cause duplicate generation or data loss, but it does not clearly explain that the three-minute queue deadline elapsed before generation started. `apps/web/src/generation/live-project.ts` currently uses the same unknown classification for all expired running receipts. Recommend distinguishing proven queued/attempt-zero expiry from an interrupted dispatched call; keep conservative unknown handling for genuinely uncertain calls. This QA records the finding without changing behavior.
+
+Evidence: [queued state with earlier candidate](design/verification/storyboard-reliability-qa-queued.jpg), [mobile progress](design/verification/storyboard-reliability-qa-mobile.jpg), [automatic expiry and retained candidate](design/verification/storyboard-reliability-qa-expired.jpg). Synthetic test content only. Two live generations used exactly two provider attempts; neither required repair. The engineer's previous attempt-three live result remains separate evidence. This QA independently verifies the four-attempt ceiling and repair/exhaustion through deterministic tests, not a fresh live repair sequence.
+
+Result: **PASS for background execution, automatic reload recovery, bounded expiry and saved-work preservation; minor error-wording follow-up remains.** No unexpected unknown/provider-unavailable failure occurred; the third request was intentionally prevented from starting. No production reliability, factual approval, measured audio duration or hosted crash recovery claim is made. Full typechecks/build and unrelated suites were not rerun for this evidence-only change; prior implementation checks are recorded above.
+
+Signed out, closed the QA tab, reset the viewport, resumed the paused worker, then stopped the launcher and its children. Ports 3001 and 53328 had no listeners afterward. Restored only the known Next-generated type path changes. No credentials, queue input or candidate JSON are included in Git. F10b remains pending user review.
