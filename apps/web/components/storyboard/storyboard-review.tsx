@@ -20,6 +20,7 @@ const messages:Record<string,string>={
   STORYBOARD_INVALID:'The AI couldn’t produce a valid storyboard this time. You can try a new generation.',
   PROVIDER_RESPONSE_INVALID:'The AI returned an incomplete response. You can try a new generation.',
   PLANNING_DEADLINE:'Planning reached its three-minute limit. Your idea and earlier candidates are saved.',
+  QUEUE_EXPIRED:'Your request expired in the queue before generation started. Your idea and earlier candidates are saved. Please try again.',
   PROVIDER_OUTCOME_UNKNOWN:'The previous outcome is unknown. A new generation may use provider credits again.',
   NOT_FOUND:'This project or storyboard is no longer available in your workspace.',
   INVALID_CURSOR:'This history page has expired. Refresh the list to continue.',

@@ -228,7 +228,7 @@
       ],
       "post": {
         "operationId": "generateStoryboardCandidate",
-        "description": "Enqueues a persisted MongoDB job and returns 202 before provider work. A separate worker makes up to four 30-second calls total, including targeted validation repairs and bounded transient HTTP retries. Receipt deadline is 180 seconds from enqueue; expiry becomes unknown and fences late results. Optional stage, attempt and sanitized issueCodes support polling. Same-key replay never enqueues again. Running work is never reclaimed after a worker crash. No Inngest job, automatic apply or approval.",
+        "description": "Enqueues a persisted MongoDB job and returns 202 before provider work. A separate worker makes up to four 30-second calls total, including targeted validation repairs and bounded transient HTTP retries. Receipt deadline is 180 seconds from enqueue; unclaimed queue expiry becomes failed/QUEUE_EXPIRED, while claimed expiry becomes unknown and fences late results. Optional stage, attempt and sanitized issueCodes support polling. Same-key replay never enqueues again. Running work is never reclaimed after a worker crash. No Inngest job, automatic apply or approval.",
         "parameters": [
           {
             "in": "header",

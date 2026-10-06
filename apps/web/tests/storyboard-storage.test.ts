@@ -185,13 +185,19 @@ test('queued work survives the response, uses its saved snapshot, and two worker
  assert.equal(await runStoryboardJob(db,client,factory),false);
 });
 test('expired queued work and abandoned running work never dispatch or replay provider calls',async()=>{
- for(const queueState of ['queued','running']){
+ for(const queueState of ['queued','running'])for(const expiryVia of ['worker','read']){
  const item=await make();let date=new Date();const svc=storyboardService(db,client,config.secret,provider,()=>date,true);
- const result=await svc.create(owner,item.id,randomUUID(),input);
+ const key=randomUUID(),result=await svc.create(owner,item.id,key,input);
  await db.collection('storyboardQueue').updateOne({_id:result.data.id as never},{$set:{state:queueState}});
  date=new Date(date.getTime()+181000);let invoked=0;
+ if(expiryVia==='read')await svc.latest(owner,item.id);
  assert.equal(await runStoryboardJob(db,client,()=>({model:'fixture',run:async()=>{invoked++;return {content:fixture()};}}),()=>date),false);
- assert.equal(invoked,0);assert.equal((await svc.latest(owner,item.id))?.state,'unknown');assert.equal((await projects.get(owner,item.id)).activeJobId,null);
+ assert.equal(invoked,0);const receipt=(await svc.latest(owner,item.id))!;
+ assert.equal(receipt.state,queueState==='queued'?'failed':'unknown');
+ assert.equal(receipt.errorCode,queueState==='queued'?'QUEUE_EXPIRED':'PROVIDER_OUTCOME_UNKNOWN');
+ assert.equal(receipt.stage,'stopped');assert.equal(receipt.attempt,0);
+ assert.deepEqual((await svc.create(owner,item.id,key,input)).data,receipt);
+ assert.equal((await projects.get(owner,item.id)).activeJobId,null);
  assert.equal((await db.collection('storyboardQueue').findOne({_id:result.data.id as never}))?.draft,null);
  }
 });

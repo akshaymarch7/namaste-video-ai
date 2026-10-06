@@ -12,7 +12,17 @@ export async function liveProject(db: Db, ownerId: string, projectId: string, se
       const receipts = db.collection<Doc>(name);
       const expired = await receipts.findOne({ _id: project.activeJobId, ownerId, projectId, state: 'running', deadline: { $lte: now } }, { session });
       if (!expired) continue;
-      await receipts.updateOne({ _id: expired._id, state: 'running' }, { $set: { state: 'unknown', errorCode: 'PROVIDER_OUTCOME_UNKNOWN', ...(expired.stage?{stage:'stopped'}:{}), updatedAt: now } }, { session });
+      // Claim the queued expiration in this transaction: a concurrent worker claim
+      // conflicts and retries, so we never call dispatched work a queue-only expiry.
+      // Attempt zero alone is insufficient: a worker may have claimed before crashing.
+      const queuedExpiry = name === 'storyboardRequests' && (await db.collection<Doc>('storyboardQueue').updateOne(
+        { _id: expired._id, ownerId, projectId, state: 'queued', deadline: { $lte: now } },
+        { $set: { state: 'done', draft: null } }, { session },
+      )).matchedCount === 1;
+      await receipts.updateOne({ _id: expired._id, state: 'running' }, { $set: {
+        state: queuedExpiry ? 'failed' : 'unknown', errorCode: queuedExpiry ? 'QUEUE_EXPIRED' : 'PROVIDER_OUTCOME_UNKNOWN',
+        ...(expired.stage?{stage:'stopped'}:{}), updatedAt: now,
+      } }, { session });
       await projects.updateOne({ _id: projectId, ownerId, activeJobId: expired._id }, { $unset: { activeJobId: '' }, $inc: { contentRevision: Long.ONE } }, { session });
       delete project.activeJobId;
       break;
