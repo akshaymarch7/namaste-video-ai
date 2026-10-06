@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F10b2 — independent browser QA completed; one P2 conflict-comparison finding remains open.** User accepted F10b1 API QA/code review. Editable working copies, narration/on-screen text controls, validation feedback, explicit save/reload, replacement confirmation and conflict/unknown-save recovery are implemented. Verification and limits are recorded below. Generated candidates remain immutable; approval remains F11.
+**F10b2 — independent QA passed; P2 conflict-comparison finding verified fixed.** User accepted F10b1 API QA/code review. Editable working copies, narration/on-screen text controls, validation feedback, explicit save/reload, replacement confirmation and conflict/unknown-save recovery are implemented. Verification and limits are recorded below. Generated candidates remain immutable; approval remains F11.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -45,7 +45,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F09b | Storyboard candidate storage and APIs | Done; user approved | 24 targeted tests rerun, two live candidates and extended HTTP isolation/recovery/pagination checks; prior 109 web tests/types/build recorded below |
 | F10a | Storyboard generation and review UI | Done; user approved including reliability fixes | Desktop/mobile review, successful and failed reload recovery, two-tab conflict/history checks, 11 client tests; prior types/build below |
 | F10b1 | Editable storyboard persistence/API | Done; user approved | 69 targeted tests and six actual-HTTP check groups covering apply/edit/replay/conflicts/isolation/preservation; evidence below |
-| F10b2 | Cinema storyboard text editor | Implemented; QA found P2 comparison omission | Independent desktop/mobile save/reload, validation, both conflict choices and real timeout recovery passed; cue-only conflicts hide the changed settings; 21 UI/controller tests rerun |
+| F10b2 | Cinema storyboard text editor | QA passed; awaiting user acceptance | Prior desktop/mobile editing and save recovery passed; P2 cue comparison fix browser-verified on bc129c3; 23 UI/controller tests rerun |
 | F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
 | F12 | Private R2 asset adapter and media access | Planned | Private upload/read, owner-authorized access, expiry and missing-asset behavior |
 | F13 | Durable generation job orchestration | Partial: local storyboard queue brought forward; hosted jobs planned | Inngest integration, one active job, deduplication, progress and cancellation |
@@ -1023,3 +1023,14 @@ Fixed the independent QA P2: both local and saved conflict columns now include e
 Files: extracted the shared human-readable formatter into `apps/web/components/storyboard/plan-comparison.ts`, wired both columns in `text-editor.tsx` to it, and added two regression tests in `tests/storyboard-editor.test.ts`. One reproduces a real controller revision conflict with differences confined to cues and checks both compared values; the other independently varies all editable cue/pronunciation fields and verifies each affects the comparison.
 
 Verification: `npm run test:storyboard-ui` **23/23** passed; `npm run typecheck:web` passed; `git diff --check` passed. No provider calls, API/DB changes or fixture edits. Browser QA was not repeated in this fix; the earlier independent core editing/mobile/save-recovery pass remains separate evidence. The comparison fix is ready for targeted QA/code review; F11 has not begun.
+
+
+## F10b2 — targeted QA of conflict comparison fix — October 6, 2026
+
+**PASS: the P2 comparison omission is closed for implementation `bc129c3`.** Repeated the original cue-only two-tab browser reproduction in the existing labelled storyboard fixture, with an additional occurrence difference. Tab A saved `The sun`, occurrence 1; tab B attempted `As this vapor`, occurrence 2. The resulting conflict correctly displayed the distinct phrase and occurrence in each column, along with event identity/action/target, offset **0 ms** and duration **400 ms**. Empty pronunciation sections explicitly showed **None**. Both columns use the same extracted formatter.
+
+**Keep my text & save** then saved tab B's chosen settings; full reload preserved its phrase and occurrence, with the expected unmatched-cue validation warning for the deliberately nonexistent second occurrence. Restored the original fixture cue `Water`, occurrence 1, and explicitly saved; **All changes saved** and **Draft checks passed** returned. Other fixture fields were unchanged. QA-created tabs were closed; the supplied server and review session remain running.
+
+`npm run test:storyboard-ui` under Node 24 passed **23/23**, including both new regressions. The tests independently exercise pronunciation phrase/spoken-as/occurrence differences; this fixture has no pronunciation entries, so a pronunciation-only browser conflict was not claimed. Timing values were visually confirmed, not edited through the UI. The preceding independent desktop/mobile, validation and actual timeout-recovery checks remain valid separate evidence; no providers were called. Typechecks/build and unrelated suites were not repeated for this targeted documentation-only QA checkpoint.
+
+Evidence: [corrected cue conflict comparison](design/verification/f10b2-qa-cue-conflict-fixed.jpg). No new blocker found. F10b2 QA is passed within the recorded scope; user acceptance remains separate, and F11 has not begun.
