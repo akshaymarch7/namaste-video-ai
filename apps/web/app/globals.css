@@ -55,3 +55,11 @@
 
 /* Revision requests reuse Cinema chrome. */
 .story-revision{padding:28px;margin:28px 0;border:1px solid var(--border);border-radius:16px;background:var(--panel)}.story-revision .eyebrow{color:var(--accent);font-size:10px}.story-revision p{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.story-revision .idea-field{margin:18px 0}.story-revision select{display:block;width:100%;padding:12px;background:var(--canvas);color:var(--text);border:1px solid var(--border);border-radius:8px}.story-change-summary{padding:20px 28px;border-bottom:1px solid var(--border);font-size:13px}.story-change-summary p{color:var(--muted);overflow-wrap:anywhere}@media(max-width:760px){.story-revision{padding:20px 16px}.story-change-summary{padding:20px 18px}}
+
+.story-editor-lock { border: 0; margin: 0; padding: 0; min-width: 0; }
+.story-approval { margin-top: 2rem; padding: clamp(1.25rem, 3vw, 2rem); border: 1px solid var(--border); border-radius: 16px; background: var(--panel); }
+.story-approval h2 { margin: .5rem 0 1rem; }
+.story-approval > p { max-width: 75ch; line-height: 1.6; }
+.story-approval-confirm .button { margin: .5rem .75rem .25rem 0; }
+.story-approval-confirm h3:focus { outline: 2px solid var(--accent); outline-offset: 6px; }
+@media (max-width: 600px) { .story-approval .button { width: 100%; margin-inline: 0; white-space: normal; } }
