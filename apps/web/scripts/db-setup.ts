@@ -1,3 +1,4 @@
+import {setupJobs} from '../src/jobs/setup';
 import {setupStorage} from '../src/storage/setup';
 import {setupStoryboardApprovals} from '../src/storyboards/approval-setup';
 import {setupStoryboardSnapshots} from '../src/storyboards/snapshot-setup';
@@ -20,8 +21,8 @@ try {
   const projects = await setupProjects(db);
   const drafts = await setupDrafts(db);
   const ideas = await setupIdeas(db);
-  const storyboards = await setupStoryboards(db); const queue = await setupStoryboardQueue(db); const editable = await setupEditableDrafts(db); const revisions = await setupStoryboardRevisions(db); const snapshots = await setupStoryboardSnapshots(db); const approvals = await setupStoryboardApprovals(db);const storage = await setupStorage(db);
-  console.log(JSON.stringify({ status: 'ok', migrations: [result, projects, drafts, ideas, storyboards, queue, editable, revisions, snapshots, approvals, storage] }));
+  const storyboards = await setupStoryboards(db); const queue = await setupStoryboardQueue(db); const editable = await setupEditableDrafts(db); const revisions = await setupStoryboardRevisions(db); const snapshots = await setupStoryboardSnapshots(db); const approvals = await setupStoryboardApprovals(db);const storage = await setupStorage(db); const jobs = await setupJobs(db);
+  console.log(JSON.stringify({ status: 'ok', migrations: [result, projects, drafts, ideas, storyboards, queue, editable, revisions, snapshots, approvals, storage, jobs] }));
 } catch (error) {
   // Driver diagnostics can include connection strings or document data. Do not print them.
   console.error(JSON.stringify({

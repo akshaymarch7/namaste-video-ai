@@ -67,3 +67,5 @@
 .media-list h2 { text-transform:capitalize; }
 .media-preview { margin-top:1.5rem; }
 .media-preview video,.media-preview audio,.media-preview img { display:block; max-width:100%; width:100%; max-height:65vh; }
+
+.generation-panel .button { margin-inline-end: .5rem; margin-block-start: .75rem; }

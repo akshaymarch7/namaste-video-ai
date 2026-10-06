@@ -3,6 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {Button} from '../ui';
 import {signInLocation} from '@/src/auth/navigation';
 import {attemptStore,createReview,reviewTransport,type ReviewState} from './controller';
+import {GenerationPanel} from './generation-panel';
 import {ApprovalPanel} from './approval-panel';
 import {RevisionPanel} from './revision-panel';
 import {TextEditor} from './text-editor';
@@ -69,6 +70,7 @@ export function StoryboardReview({projectId,userId,name}:{projectId:string;userI
       <div aria-live="polite" className="story-status">{pending?<p>{progressText} We’ll check progress automatically. Up to four attempts, within three minutes.</p>:state?.busy?<p>Loading your saved storyboard…</p>:null}</div>
       {state?.error&&<div role="alert" className="notice notice--error"><p>{messages[state.error]??'Couldn’t complete this action. Refresh to check your saved work.'}</p>{state.error==='RECOVERY_STORAGE'&&<a href={`/projects/${projectId}/storyboard`}>Reload page</a>}</div>}
       {state?.receipt&&['failed','unknown'].includes(state.receipt.state)&&<div className="notice notice--error" role="status"><p>{state.receipt.errorCode==='STORYBOARD_INVALID'?(state.receipt.issueCodes?.includes('DURATION_ESTIMATE_OUT_OF_RANGE')?'We couldn’t get the narration within the target length after four attempts. Your idea and earlier candidates are saved. Try again or edit the topic.':'We couldn’t validate the scene structure or motion cues after four attempts. Your idea and earlier candidates are saved. Try again or edit the topic.'):messages[state.receipt.errorCode??'']??'Generation did not complete. Your saved candidates have not changed.'}</p></div>}
+      <GenerationPanel projectId={projectId} userId={userId} blocked={editingBlocked||approvalLocked||!!state?.busy||pending} input={candidate?.approvalId&&state?.draft?{storyboardId:candidate.id,approvalId:candidate.approvalId,expectedDraftRevision:state.draft.revision,expectedDraftHash:state.draft.contentHash,expectedContentHash:candidate.contentHash,confirm:true}:null}/>
       <TextEditor externalBlocked={approvalLocked} projectId={projectId} userId={userId} candidate={candidate??null} onEditingChange={setEditingBlocked} onSnapshot={setSnapshotToOpen} snapshotBlocked={!!state?.busy||pending} onSaved={()=>void controller.current?.refresh()}/>
       {state&&candidate&&<RevisionPanel key={candidate.id} state={state} editingBlocked={editingBlocked||approvalLocked} revise={(instruction,scope)=>void controller.current?.revise(instruction,scope)}/>}
       {stale&&<div className="story-stale" role="status">Earlier draft version · Your working draft has changed since this candidate was created. Review it as an earlier candidate, or generate from your current topic.</div>}

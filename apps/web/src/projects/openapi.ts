@@ -1,3 +1,4 @@
+import {jobPaths} from '../jobs/openapi';
 import {storagePaths} from '../storage/openapi';
 import {editableStoryboardSchema,applyStoryboard} from '../storyboards/editable-contract';
 import { storyboardPaths } from '../storyboards/openapi';
@@ -51,6 +52,7 @@ export function projectsOpenApi() {
     paths: {
       ...storyboardPaths(),
       ...storagePaths(),
+      ...jobPaths(),
       '/api/projects/{id}/draft/apply':{parameters:[{in:'path',name:'id',required:true,schema:schema(projectId)}],post:{operationId:'applyStoryboardToDraft',description:'Explicit immutable candidate copy into the working draft. Shared revision and exact content hash required. Same-key replay returns the original snapshot, even after subsequent edits; reread the draft for current state. No approval or provider call.',parameters:keyed,requestBody:body(applyStoryboard),responses:{...errors,200:draftResponse}}},
       '/api/projects/{id}/idea-suggestions': {
         parameters: [{ in: 'path', name: 'id', required: true, schema: schema(projectId) }],

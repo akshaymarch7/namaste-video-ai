@@ -126,9 +126,10 @@ export function projectService(db: Db, client: MongoClient, secret: string) {
         const ideas = await db.collection('ideaRequests').findOne({ ownerId, projectId }, { session, projection: { _id: 1 } });
         const storyboard = await db.collection('storyboards').findOne({ ownerId, projectId }, { session, projection: { _id: 1 } });
         const storyboardRequest = await db.collection('storyboardRequests').findOne({ ownerId, projectId }, { session, projection: { _id: 1 } });
+        const generation = await db.collection('generationJobs').findOne({ownerId,projectId},{session,projection:{_id:1}});
         const asset = await db.collection('assets').findOne({ownerId,projectId},{session,projection:{_id:1}});
         // Never claim successful external cleanup before the durable job/media features exist.
-        if (asset || ideas || storyboard || storyboardRequest || project.activeJobId || project.currentStoryboardId || project.latestReadyVideoId || project.selectedVideoId
+        if (generation || asset || ideas || storyboard || storyboardRequest || project.activeJobId || project.currentStoryboardId || project.latestReadyVideoId || project.selectedVideoId
           || Object.entries(project.flags).some(([flag, value]) => flag !== 'drafts' && value)
           || project.draftRevision !== 1 || !draft || draft.revision !== 1 || draft.topic || draft.notes || draft.audience || draft.editablePlan
           || !conversation || !Long.ONE.equals(conversation.nextSequence)) {
