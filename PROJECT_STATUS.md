@@ -1,12 +1,12 @@
 # Project Status — NamasteVideo.ai
 
-Last updated: October 6, 2026 (Asia/Kolkata).
+Last updated: October 7, 2026 (Asia/Kolkata).
 
 This is the source of truth for development progress. Specifications describe intent; a feature is complete here only when its implementation and verification are recorded. Design approval is not evidence of working functionality.
 
 ## Current checkpoint
 
-**F11b2 — revision dashboard controls implemented; ready for independent QA.** User accepted F11b1 API/worker QA. The Cinema panel now submits whole-story/scene-scoped requests, recovers exact pending commands, shows changes/parent history and retains explicit working-copy replacement. Manual edited-source snapshots remain F11b3, approval F11c. Full browser generation/mobile QA remains pending.
+**F11b2 — independent desktop/mobile QA passed; awaiting user/code-review acceptance.** User accepted F11b1 API/worker QA. Live whole-story and scene-scoped browser requests, queued reload recovery, changed-scene summaries, parent navigation and explicit apply/restore passed. Manual edited-source snapshots remain F11b3, approval F11c. Scope and remaining test limits are recorded below.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -48,7 +48,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F10b2 | Cinema storyboard text editor | Done; user approved | Prior desktop/mobile editing and save recovery passed; P2 cue comparison fix browser-verified on bc129c3; 23 UI/controller tests rerun |
 | F11a | Storyboard revision engine | Done; user approved | 45 storyboard tests rerun; live single-scene and whole-story revisions passed, preserving unaffected scenes; prior prototype/types/build evidence below |
 | F11b1 | Durable revision API and worker | Done; user approved | 55 storyboard + 14 project/OpenAPI tests rerun; actual HTTP admission/replay/history and two live worker revisions passed; source/draft preservation verified |
-| F11b2 | Revision dashboard controls | Implemented; awaiting QA/review | 30 UI/controller tests, types/build, 23 prototype tests; limited browser panel/guard checks below |
+| F11b2 | Revision dashboard controls | Independent QA passed; awaiting acceptance | 30 UI/controller tests rerun; two live desktop/mobile submissions, queued reload recovery, change summaries, parent navigation and explicit apply/restore passed |
 | F11b3 | Edited-source snapshots | Planned | Make manually edited working copies immutable revision sources without losing edits |
 | F11c | Immutable storyboard approval | Planned | Exact-version approval and integration boundary for later rendering |
 | F12 | Private R2 asset adapter and media access | Planned | Private upload/read, owner-authorized access, expiry and missing-asset behavior |
@@ -1124,3 +1124,22 @@ Revision results show the server's change summary, changed scene markers and Vie
 Browser inspection used the existing labelled editing fixture on port 3001: panel layout, selecting scene 2, instruction typing/count and disabled submission for its saved manual edits were verified. Existing fixture content was preserved; the temporary unsent QA instruction was cleared and whole-story scope restored. Screenshot is ignored/local at `apps/web/runs/revision-panel.jpg`. No provider calls were made. Successful submission/result/parent restore, real transport-failure recovery, session-focus behavior and mobile layout were not re-tested in the browser this slice; controller evidence is separate from browser evidence. The running disposable database was not migrated/restarted, so live API QA needs migration 008 and the updated worker (or a fresh configured launcher) as documented in F11b1. This is a review checkpoint, not full end-to-end approval.
 
 **Limits:** no edited-source snapshot, dedicated restore endpoint or persisted conversation transcript UI. Saved candidate replacement remains explicit and older candidates can remain stale relative to changed ideas. Pending revision instructions are private text stored in sessionStorage for recovery, not only IDs; unsent instructions remain in memory. Scope/order/count/voice limits remain those of F11a. Wait for user/QA review before F11b3.
+
+
+## F11b2 — independent desktop/mobile QA — October 6–7, 2026
+
+**PASS for UI checkpoint `9c82b87`; no new blocker found within the tested scope.** Reran `npm run test:storyboard-ui` with Node 24: **30/30**. Browser QA used an isolated copy of this commit, current migrations on a disposable replica set, Next on `localhost:3011`, a fresh account, and the actual worker CLI. The original `127.0.0.1:3001` server, database and browser session were preserved. The starting candidate was explicitly labelled as a QA fixture using the existing water-cycle sample; revision results used live **gemini-3.5-flash-lite**.
+
+| Browser check | Result |
+| --- | --- |
+| Request bounds and edit protection | Empty and 4,001-character input disabled submission. Unsaved working title changes showed the save/resolve message. After saving manual changes, submission remained blocked with the edited-source limitation. Restoring the exact original title and saving re-enabled revisions without discarding other input. |
+| Desktop whole-story request | Submitted a new title plus everyday evaporation/condensation examples. Held the worker, reloaded while the request was in progress and saw the saved request text recovered. Database contained exactly one queued revision command. Starting the worker completed it on attempt 1 (**6.386 s** provider time), with an **84-second** estimate. Automatic polling opened the result and showed changed scenes **2, 3** plus the title change. |
+| Review does not apply | The working title/content remained the original after result arrival. Full script displayed the requested examples and changed-scene markers. View previous version opened the parent and cleared unsent instruction/scope; selecting the new candidate through history did not change the working copy. Canceling replacement retained the original title; only Confirm replacement applied the new result. |
+| Mobile scene-only request | At **390 × 844**, selected scene 2 and requested only its title/first visual label change. Controls were usable with no document horizontal overflow (375px scroll width at 390px viewport). Live generation succeeded on attempt 1 (**5.260 s**), returned **84 seconds**, marked only scene **2** changed and showed the new title **A Puddle Disappears**. The working scene remained **Evaporation** until explicit confirmation; after applying, the editor showed the requested title and **Drying puddle** flow label. |
+| Parent chain and restoration | Navigating back through both parents left the newer working scene unchanged. Explicitly confirmed restoration of the original candidate, then reloaded. The working title returned to **The Amazing Water Cycle** and its content hash exactly matched the initial fixture. The existing conservative stale-version warning appeared after restoring an older candidate; no approval was implied. |
+
+Database snapshots confirmed **two revision commands, two completed revision jobs, three candidates including the seed**, correct parent chains, no duplicate generation after reload, and unchanged original candidate content. The two live worker diagnostics each showed one HTTP-200 attempt. No console warnings/errors were returned by the final browser log check. Screenshot evidence: [desktop change summary/history](design/verification/f11b2-qa-desktop.jpg), [mobile scene request](design/verification/f11b2-qa-mobile.jpg), containing only synthetic QA content.
+
+**Limits:** this run covered reload recovery while queued, not an injected 85-second submission timeout or provider failure; those failure branches retain controller/backend test coverage. Session-focus expiry, a full accessibility/device matrix and worker crash/restart were not stress-tested. The two live samples are not a reliability or factual-content approval. The older-candidate stale flag on restore and manual-edit revision restriction remain documented behavior pending later slices. Typechecks/build/prototype/backend suites were not repeated for this documentation-only checkpoint; implementation and earlier backend QA remain separate evidence.
+
+Reset the viewport and closed the QA tab; stopped the isolated worker, web server and disposable database; removed the temporary runner, credentials and source/build copy. The pre-existing port-3001 review environment remains available. No application code changed and no F11b3 work began. Await acceptance before progression.
