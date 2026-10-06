@@ -28,7 +28,7 @@
     "test:storyboards": "node --conditions=react-server --import tsx --test tests/storyboards.test.ts tests/storyboard-storage.test.ts",
     "storyboards:probe": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/storyboards-probe.ts",
     "storyboards:verify": "node --import tsx scripts/storyboards-verify.ts",
-    "test:storyboard-ui": "node --import tsx --test tests/storyboard-review.test.ts",
+    "test:storyboard-ui": "node --import tsx --test tests/storyboard-review.test.ts tests/storyboard-editor.test.ts",
     "storyboards:worker": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/storyboards-worker.ts"
   },
   "dependencies": {
