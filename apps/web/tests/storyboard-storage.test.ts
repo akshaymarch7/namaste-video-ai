@@ -1,3 +1,5 @@
+import {setupStoryboardApprovals,assertStoryboardApprovalsReady,approvalDefinitions} from '../src/storyboards/approval-setup';
+import {approvalView} from '../src/storyboards/api-contracts';
 import {setupStoryboardSnapshots} from '../src/storyboards/snapshot-setup';
 import {setupStoryboardRevisions,assertStoryboardRevisionsReady} from '../src/storyboards/revision-setup';
 import {revisionRequest} from '../src/storyboards/api-contracts';
@@ -35,7 +37,7 @@ const config = { origin: 'http://127.0.0.1:3002', secure: false, secret: randomB
 before(async () => {
   replica = await MongoMemoryReplSet.create({ binary: { version: '8.0.17' }, replSet: { count: 1, ip: '127.0.0.1', storageEngine: 'wiredTiger' } });
   client = await new MongoClient(replica.getUri(), { promoteLongs: false }).connect(); db = client.db('drafts_test');
-  await setupDatabase(db); await setupProjects(db); await setupDrafts(db); await setupIdeas(db); await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db); await setupStoryboardRevisions(db);await setupStoryboardSnapshots(db); await setupAuth(db, client, config);
+  await setupDatabase(db); await setupProjects(db); await setupDrafts(db); await setupIdeas(db); await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db); await setupStoryboardRevisions(db);await setupStoryboardSnapshots(db);await setupStoryboardApprovals(db); await setupAuth(db, client, config);
   const auth = createAuth(db, client, config); deps = { db, client, config, auth };
   drafts = draftService(db, client); projects = projectService(db, client, config.secret);
   const identities = [];
@@ -428,4 +430,92 @@ test('snapshot racing autosave either freezes the reviewed text or reports a rev
  assert.ok([200,409].includes(response.status));
  if(response.status===200){const snapshot=await service().get(owner,(await response.json()).data.storyboardId);assert.deepEqual(snapshot.content,draft.editablePlan);assert.equal(snapshot.stale,true);}else assert.equal(await db.collection('storyboardSnapshots').countDocuments({projectId:project.id}),0);
  assert.equal((await drafts.get(owner,project.id)).editablePlan?.scenes[0].title,'Concurrent edit');
+});
+
+const approveReq=(id:string,body:unknown,key:string=randomUUID(),headers:Record<string,string>={},query='')=>handleStoryboards(new Request(`${config.origin}/api/projects/${id}/storyboard-approvals${query}`,{method:'POST',headers:{Cookie:cookie,Origin:config.origin,'Content-Type':'application/json','Idempotency-Key':key,...headers},body:JSON.stringify(body)}),'approve',id,async()=>deps,()=>{throw Error('Approval must not resolve a provider');});
+async function approvalSeed(){
+ const {project,candidate}=await editableFixture();const draft=await drafts.get(owner,project.id);
+ return {project,candidate,draft,command:{storyboardId:candidate.id,expectedDraftRevision:draft.revision,expectedDraftHash:draft.contentHash,expectedContentHash:candidate.contentHash,approve:true}};
+}
+test('approval migration replays, enforces strict records and requires indexes',async()=>{
+ await setupStoryboardApprovals(db);await setupStoryboards(db);await setupStoryboardSnapshots(db);await setupStoryboardApprovals(db);await assertStoryboardApprovalsReady(db);
+ for(const definition of approvalDefinitions)await assert.rejects(db.collection(definition.name).insertOne({unexpected:true}));
+ await db.collection('approvals').dropIndex('story_approval_subject');
+ try{await rejects(assertStoryboardApprovalsReady(db),'APPROVAL_SETUP_REQUIRED');}finally{await setupStoryboardApprovals(db);}
+});
+test('approval pins exact immutable content, appears in reads, and never applies or renders',async()=>{
+ const {project,candidate,draft,command}=await approvalSeed();
+ const before=await db.collection('storyboards').findOne({_id:candidate.id as never});const parent=await projects.get(owner,project.id),count=calls;
+ const response=await approveReq(project.id,command);assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'private, no-store');
+ const approval=approvalView.parse((await response.json()).data);assert.equal(approval.subjectId,candidate.id);assert.equal(approval.subjectHash,candidate.storyHash);assert.equal(approval.contentHash,candidate.contentHash);assert.equal(approval.approvedBy,owner);assert.equal(approval.reviewedDraftHash,draft.contentHash);
+ const read=storyboardView.parse(await service().get(owner,candidate.id));assert.equal(read.state,'approved');assert.equal(read.approvalId,approval.id);
+ assert.equal((await service().list(owner,project.id,{limit:10})).data[0].approvalId,approval.id);
+ assert.deepEqual(await db.collection('storyboards').findOne({_id:candidate.id as never}),before);assert.deepEqual(await drafts.get(owner,project.id),draft);assert.equal((await projects.get(owner,project.id)).currentStoryboardId,parent.currentStoryboardId);
+ assert.equal(calls,count);assert.equal(await db.collection('storyboardQueue').countDocuments({projectId:project.id}),0);assert.equal(await db.collection('storyboardRequests').countDocuments({projectId:project.id}),1);
+});
+test('simultaneous same and different approval keys converge; replay survives later edits',async()=>{
+ const {project,command,draft}=await approvalSeed(),key=randomUUID();
+ const results=await Promise.all([approveReq(project.id,command,key),approveReq(project.id,command,key),approveReq(project.id,command)]);
+ assert.deepEqual(results.map(r=>r.status),[200,200,200]);const payloads=await Promise.all(results.map(r=>r.json()));assert.equal(new Set(payloads.map(p=>p.data.id)).size,1);
+ assert.equal(await db.collection('approvals').countDocuments({projectId:project.id}),1);assert.equal(await db.collection('storyboardApprovalCommands').countDocuments({projectId:project.id}),2);
+ await drafts.save(owner,project.id,{expectedRevision:draft.revision,changes:{notes:'A later idea change'}});
+ const replay=await approveReq(project.id,command,key);assert.equal(replay.status,200);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');assert.deepEqual((await replay.json()).data,payloads[0].data);
+ assert.equal((await approveReq(project.id,command)).status,409);
+ const changed=await approveReq(project.id,{...command,expectedDraftRevision:3},key);assert.equal((await changed.json()).error.code,'IDEMPOTENCY_KEY_REUSED');
+});
+test('approval rejects foreign owners/projects, origin, absent consent, hashes, stale revisions and busy projects',async()=>{
+ const {project,command,candidate}=await approvalSeed();const another=await make();
+ for(const [headers,status] of [[{Cookie:''},401],[{Cookie:otherCookie},404],[{Origin:'https://bad.test'},403]] as const)assert.equal((await approveReq(project.id,command,randomUUID(),headers)).status,status);
+ assert.equal((await approveReq(another.id,command)).status,404);
+ for(const change of [{approve:false},{approve:undefined},{extra:true},{storyboardId:'bad'},{expectedContentHash:'bad'}])assert.equal((await approveReq(project.id,{...command,...change})).status,422);
+ for(const change of [{expectedDraftRevision:1},{expectedDraftHash:'0'.repeat(64)},{expectedContentHash:'0'.repeat(64)}])assert.equal((await approveReq(project.id,{...command,...change})).status,409);
+ assert.equal((await approveReq(project.id,command,'bad')).status,422);assert.equal((await approveReq(project.id,command,randomUUID(),{},'?extra=1')).status,422);
+ await storyboardService(db,client,config.secret,provider,undefined,true).create(owner,project.id,randomUUID(),input);
+ const busy=await approveReq(project.id,command);assert.equal((await busy.json()).error.code,'PROJECT_BUSY');
+ await runStoryboardJob(db,client,provider);
+ await rejects(service().get(other,candidate.id),'NOT_FOUND');assert.equal(await db.collection('approvals').countDocuments({projectId:project.id}),0);
+});
+test('fresh applied source may be approved; saved edits and stale ideas need a new reviewed version',async()=>{
+ const {project,candidate,command}=await approvalSeed();
+ await drafts.apply(owner,project.id,randomUUID(),{expectedDraftRevision:2,storyboardId:candidate.id,expectedContentHash:candidate.contentHash});
+ const applied=await drafts.get(owner,project.id);const body={...command,expectedDraftRevision:applied.revision,expectedDraftHash:applied.contentHash};
+ assert.equal((await approveReq(project.id,body)).status,200);
+ const plan=structuredClone(candidate.content);plan.scenes[0].title='Saved later text';const edited=await drafts.save(owner,project.id,{expectedRevision:applied.revision,changes:{editablePlan:plan}});
+ const changed=await approveReq(project.id,{...body,expectedDraftRevision:edited.revision,expectedDraftHash:edited.contentHash});assert.equal((await changed.json()).error.code,'SOURCE_CHANGED');
+ const saved=await snapshotReq(project.id,{expectedDraftRevision:edited.revision,expectedContentHash:edited.contentHash});const snapshot=await service().get(owner,(await saved.json()).data.storyboardId);
+ assert.equal(snapshot.approvalId,null);assert.equal(snapshot.state,'review_ready');
+ assert.equal((await approveReq(project.id,{...body,storyboardId:snapshot.id,expectedContentHash:snapshot.contentHash,expectedDraftRevision:edited.revision,expectedDraftHash:edited.contentHash})).status,200);
+ const stale=await drafts.save(owner,project.id,{expectedRevision:edited.revision,changes:{topic:'An unrelated idea'}});
+ assert.equal((await approveReq(project.id,{...body,expectedDraftRevision:stale.revision,expectedDraftHash:stale.contentHash})).status,409);
+ assert.equal((await service().get(owner,candidate.id)).state,'approved');assert.equal((await service().get(owner,candidate.id)).stale,true);
+});
+test('cue-only versions do not inherit story approval even when semantic storyHash matches',async()=>{
+ const {project,candidate,command}=await approvalSeed();assert.equal((await approveReq(project.id,command)).status,200);
+ await drafts.apply(owner,project.id,randomUUID(),{expectedDraftRevision:2,storyboardId:candidate.id,expectedContentHash:candidate.contentHash});
+ const plan=structuredClone(candidate.content);plan.scenes[0].events[0].durationMs=500;
+ const draft=await drafts.save(owner,project.id,{expectedRevision:3,changes:{editablePlan:plan}});
+ const snapshot=await snapshotReq(project.id,{expectedDraftRevision:draft.revision,expectedContentHash:draft.contentHash});const version=await service().get(owner,(await snapshot.json()).data.storyboardId);
+ assert.equal(version.storyHash,candidate.storyHash);assert.notEqual(version.contentHash,candidate.contentHash);assert.equal(version.approvalId,null);
+});
+test('approval command failure rolls back approval and parent fence',async()=>{
+ const {project,command}=await approvalSeed();const parent=await db.collection('projects').findOne({_id:project.id as never});const definition=approvalDefinitions[1];
+ await db.command({collMod:definition.name,validator:{$and:[definition.validator,{projectId:{$ne:project.id}}]}});
+ try{assert.equal((await approveReq(project.id,command)).status,503);}finally{await db.command({collMod:definition.name,validator:definition.validator});}
+ assert.equal(await db.collection('approvals').countDocuments({projectId:project.id}),0);assert.equal(await db.collection('storyboardApprovalCommands').countDocuments({projectId:project.id}),0);assert.deepEqual(await db.collection('projects').findOne({_id:project.id as never}),parent);
+ assert.equal((await approveReq(project.id,command)).status,200);
+});
+test('approval racing autosave either records reviewed version first or rejects; edit remains saved',async()=>{
+ const {project,candidate,command,draft}=await approvalSeed();
+ const [response]=await Promise.all([approveReq(project.id,command),drafts.save(owner,project.id,{expectedRevision:draft.revision,changes:{topic:'Concurrent new idea'}})]);
+ assert.ok([200,409].includes(response.status));assert.equal((await drafts.get(owner,project.id)).topic,'Concurrent new idea');
+ const record=await service().get(owner,candidate.id);assert.equal(record.stale,true);assert.equal(record.state,response.status===200?'approved':'review_ready');
+ if(response.status===200)assert.equal((await response.json()).data.reviewedDraftHash,draft.contentHash);
+});
+test('approval revalidates semantic constraints and stored canonical hashes',async()=>{
+ const {project,candidate,command}=await approvalSeed();
+ await db.collection('storyboards').updateOne({_id:candidate.id as never},{$set:{storyHash:'0'.repeat(64)}});
+ assert.equal((await approveReq(project.id,command)).status,409);
+ const broken=structuredClone(candidate.content);broken.scenes[0].events[0].cue.phrase='not present in narration';const hashes=storyboardHashes(broken);
+ await db.collection('storyboards').updateOne({_id:candidate.id as never},{$set:{content:broken,...hashes}});
+ const invalid=await approveReq(project.id,{...command,expectedContentHash:hashes.contentHash});assert.equal((await invalid.json()).error.code,'INVALID_DRAFT');assert.equal(await db.collection('approvals').countDocuments({projectId:project.id}),0);
 });

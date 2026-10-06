@@ -6,15 +6,18 @@ export const storyboardId = z.string().regex(/^stb_[a-f0-9]{32}$/);
 export const storyboardRequest = z.object({ expectedDraftRevision: z.number().int().min(1).max(2147483647) }).strict();
 export const listStoryboards = listProjects.omit({ filter: true });
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
+export const approvalId=z.string().regex(/^apr_[a-f0-9]{32}$/);
+export const approvalRequest=z.object({storyboardId,expectedDraftRevision:storyboardRequest.shape.expectedDraftRevision,expectedDraftHash:hash,expectedContentHash:hash,approve:z.literal(true)}).strict();
+export const approvalView=z.object({id:approvalId,projectId:z.string(),kind:z.literal('story'),subjectId:storyboardId,subjectHash:hash,contentHash:hash,canonicalizationVersion:z.literal(1),approvedBy:z.string(),approvedAt:z.string().datetime(),reason:z.literal('explicit'),reviewedDraftRevision:storyboardRequest.shape.expectedDraftRevision,reviewedDraftHash:hash}).strict();
 export const snapshotRequest=z.object({expectedDraftRevision:storyboardRequest.shape.expectedDraftRevision,expectedContentHash:hash}).strict();
 export const snapshotResponse=z.object({storyboardId}).strict();
 export const revisionRequest=revisionInstruction.extend({expectedDraftRevision:storyboardRequest.shape.expectedDraftRevision,source:z.object({kind:z.literal('storyboard'),id:storyboardId,hash}).strict()}).strict();
 export type RevisionRequest=z.infer<typeof revisionRequest>;
 export const storyboardSummary = z.object({
   origin:z.enum(['generated','manual']).optional(), id: storyboardId, projectId: z.string(), parentId: storyboardId.nullable(), sourceDraftRevision: z.number().int(),
-  state: z.literal('review_ready'), title: z.string(), contentHash: hash, storyHash: hash,
+  state: z.enum(['review_ready','approved']), title: z.string(), contentHash: hash, storyHash: hash,
   estimatedDurationSeconds: z.number(), wordCount: z.number().int(), stale: z.boolean(),
-  warnings: z.array(z.never()), changeSummary: z.string().nullable(), changedSceneIds: z.array(storyboardSchema.shape.scenes.element.shape.id), approvalId: z.null(), createdAt: z.string(),
+  warnings: z.array(z.never()), changeSummary: z.string().nullable(), changedSceneIds: z.array(storyboardSchema.shape.scenes.element.shape.id), approvalId: approvalId.nullable(), createdAt: z.string(),
 }).strict();
 export const storyboardView = storyboardSummary.extend({ content: storyboardSchema });
 export const storyboardReceipt = z.object({

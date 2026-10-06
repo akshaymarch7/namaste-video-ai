@@ -571,3 +571,25 @@ The separate worker calls the revision engine and revalidates its candidate agai
 `POST /api/projects/:id/storyboard-snapshots` requires the authenticated cookie, active internal admission, same Origin, JSON and Idempotency-Key. Body is exactly `{expectedDraftRevision, expectedContentHash}`; the hash is the saved **DraftView.contentHash**, not an existing candidate hash. It atomically freezes the saved editablePlan into a review-ready manual candidate and returns `200 {data:{storyboardId},meta:{requestId}}`. It makes no provider request, creates no running job and changes neither working draft nor selection. Result reads expose `origin:"manual"` (ordinary candidates: `"generated"`), parentId and differences. The new candidate's own contentHash and sourceDraftRevision can then be used with the existing revision endpoint.
 
 Errors: 401/403 authentication/admission/origin, 404 foreign/missing project, 409 REVISION_CONFLICT/HASH_MISMATCH/PROJECT_BUSY/IDEMPOTENCY_KEY_REUSED, 422 malformed body/STORYBOARD_REQUIRED/PLAN_STALE/INVALID_DRAFT. Snapshot creation requires a valid, non-stale plan with an owner/project-scoped source. Semantic validation is not factual approval. Same-key/exact-body replay returns the original storyboardId with Idempotency-Replayed:true even after later draft edits; it never creates a replacement from the newer text. Distinct explicit keys can create separate versions. The client rereads the current draft and opens the immutable result rather than restoring an old draft snapshot. Full worker/live revision policies remain unchanged.
+
+## F11c1 implemented checkpoint — exact storyboard approval (October 7, 2026)
+
+This incremental endpoint precedes the planned G01 generation command. `POST /api/projects/:id/storyboard-approvals` accepts an authenticated admitted owner, exact same-origin header, JSON body and Idempotency-Key:
+
+```json
+{
+  "storyboardId": "stb_<32 lowercase hex>",
+  "expectedDraftRevision": 4,
+  "expectedDraftHash": "<64 lowercase hex: saved draft contentHash>",
+  "expectedContentHash": "<64 lowercase hex: selected candidate contentHash>",
+  "approve": true
+}
+```
+
+`approve` must be literally true; fields are strict. HTTP 200 returns `{data:ApprovalView,meta:{requestId}}`. ApprovalView contains `id` (apr ID), `projectId`, `kind:"story"`, `subjectId`, `subjectHash` (storyHash), `contentHash` (full PlanV2 including cues), `canonicalizationVersion:1`, `approvedBy`, ISO `approvedAt`, `reason:"explicit"`, `reviewedDraftRevision` and `reviewedDraftHash`. All responses are private/no-store. The endpoint has no query parameters or pagination; existing paginated storyboard history and candidate GET return derived `state:"approved"` and `approvalId` for the exact approved version. No separate approval-list endpoint is implemented.
+
+Admission checks current draft revision/hash, no active request, exact owner/project candidate content and canonical hashes, and semantic validation against the saved notes/voice. The candidate must have been created from the current saved draft revision, or remain its exact non-stale applied working copy. A newly generated/revised candidate at the current revision can supersede a stale older working plan without silently applying it. Saved manual differences require a new immutable snapshot and review. Freshness does not prove factual accuracy or that the human read the content; explicit approval is the owner's assertion.
+
+Same-key identical replay returns the original approval with `Idempotency-Replayed:true`, even after later draft changes. It still requires authentication/admission and a live owned project. Different input with that key returns 409 IDEMPOTENCY_KEY_REUSED. New keys recheck all preconditions and converge on the original approval for the same version, retaining its original time/review metadata. A lost response is recovered only by replaying the original key/body, not by reconstructing from a later draft. 409 also covers REVISION_CONFLICT, HASH_MISMATCH, SOURCE_CHANGED and PROJECT_BUSY; 422 covers VALIDATION_FAILED or INVALID_DRAFT; 401/403/404 retain shared access semantics. 503 is an unconfirmed service outcome: retain the command for recovery. No automatic fresh-key retries.
+
+This call does **not** select/apply the candidate, alter the draft, call AI/TTS, allocate a render job, create a video, approve a video or authorize publishing. Historical story approval remains after later edits; every new candidate, even a cue-only change with the same storyHash, needs explicit approval. G01's combined approve-and-generate flow is still planned and must be reconciled with this durable approval record when rendering is implemented. Provider voice/model resolution and rendering configuration are not frozen by this story-only API. Migration 010 is required; confirmation UI is F11c2. The checked-in `design/projects.openapi.json` is the exact implemented wire contract.

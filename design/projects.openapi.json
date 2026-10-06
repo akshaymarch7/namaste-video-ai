@@ -213,6 +213,229 @@
     }
   },
   "paths": {
+    "/api/projects/{id}/storyboard-approvals": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "approveExactStoryboard",
+        "description": "Explicit approval of one immutable storyboard, guarded by current draft revision/hash and full candidate contentHash. approve must be true. Candidate must be at the saved draft revision or exactly match its fresh applied working copy. Same-key replay returns the historical approval after later edits; changed input returns 409. New keys recheck freshness and deduplicate approval for the same candidate. No inherited approval, provider call, selection change, video creation or rendering authorization. Migration 010 required.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "string",
+              "pattern": "^[\\x21-\\x7e]{16,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "storyboardId": {
+                    "type": "string",
+                    "pattern": "^stb_[a-f0-9]{32}$"
+                  },
+                  "expectedDraftRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647
+                  },
+                  "expectedDraftHash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "expectedContentHash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "approve": {
+                    "type": "boolean",
+                    "const": true
+                  }
+                },
+                "required": [
+                  "storyboardId",
+                  "expectedDraftRevision",
+                  "expectedDraftHash",
+                  "expectedContentHash",
+                  "approve"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Owner-scoped result. Running receipts return 202; terminal receipts return 200.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "const": "true"
+                },
+                "description": "Present only on a same-key POST replay."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^apr_[a-f0-9]{32}$"
+                        },
+                        "projectId": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "story"
+                        },
+                        "subjectId": {
+                          "type": "string",
+                          "pattern": "^stb_[a-f0-9]{32}$"
+                        },
+                        "subjectHash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "contentHash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "canonicalizationVersion": {
+                          "type": "number",
+                          "const": 1
+                        },
+                        "approvedBy": {
+                          "type": "string"
+                        },
+                        "approvedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "reason": {
+                          "type": "string",
+                          "const": "explicit"
+                        },
+                        "reviewedDraftRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 2147483647
+                        },
+                        "reviewedDraftHash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "projectId",
+                        "kind",
+                        "subjectId",
+                        "subjectHash",
+                        "contentHash",
+                        "canonicalizationVersion",
+                        "approvedBy",
+                        "approvedAt",
+                        "reason",
+                        "reviewedDraftRevision",
+                        "reviewedDraftHash"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/projects/{id}/storyboard-snapshots": {
       "parameters": [
         {
@@ -1241,7 +1464,10 @@
                           },
                           "state": {
                             "type": "string",
-                            "const": "review_ready"
+                            "enum": [
+                              "review_ready",
+                              "approved"
+                            ]
                           },
                           "title": {
                             "type": "string"
@@ -1289,7 +1515,15 @@
                             }
                           },
                           "approvalId": {
-                            "type": "null"
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^apr_[a-f0-9]{32}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "createdAt": {
                             "type": "string"
@@ -1808,7 +2042,10 @@
                         },
                         "state": {
                           "type": "string",
-                          "const": "review_ready"
+                          "enum": [
+                            "review_ready",
+                            "approved"
+                          ]
                         },
                         "title": {
                           "type": "string"
@@ -1856,7 +2093,15 @@
                           }
                         },
                         "approvalId": {
-                          "type": "null"
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^apr_[a-f0-9]{32}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "createdAt": {
                           "type": "string"

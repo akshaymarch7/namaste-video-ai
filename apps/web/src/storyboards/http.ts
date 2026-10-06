@@ -1,3 +1,5 @@
+import {approvalRequest} from './api-contracts';
+import {approveStoryboard} from './approval-service';
 import {snapshotRequest} from './api-contracts';
 import {saveStoryboardSnapshot} from './snapshot-service';
 import 'server-only';
@@ -23,7 +25,7 @@ export const defaultProvider = (model?:string): StoryboardProvider => {
     return context.revision?reviseStoryboard({idea:input,source:context.revision.source,request:context.revision.request,planStale:false},config,fetch,observe,options):planStoryboard(input,config,fetch,observe,options);
   }};
 };
-export async function handleStoryboards(request: Request, action: 'create'|'revise'|'snapshot'|'list'|'read'|'latest', rawId: string, deps = dependencies, provider = defaultProvider) {
+export async function handleStoryboards(request: Request, action: 'create'|'revise'|'snapshot'|'approve'|'list'|'read'|'latest', rawId: string, deps = dependencies, provider = defaultProvider) {
   const requestId = `req_${randomUUID().replaceAll('-','')}`;
   const headers = new Headers({'Cache-Control':'private, no-store','X-Request-Id':requestId,'Referrer-Policy':'no-referrer'});
   const reply = (data: unknown, status=200, page?: unknown) => Response.json({data,...(page?{page}:{}),meta:{requestId}},{status,headers});
@@ -34,7 +36,7 @@ export async function handleStoryboards(request: Request, action: 'create'|'revi
     const session = await auth.api.getSession({headers:new Headers({cookie})});
     if (!session) throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
     if (!await isAdmitted(db,session.user.id)) throw new ProjectError(403,'ACCESS_DISABLED','Account access is disabled.');
-    if ((action==='create'||action==='revise'||action==='snapshot') && request.headers.get('origin')!==config.origin) throw new ProjectError(403,'INVALID_ORIGIN','Invalid origin.');
+    if ((action==='create'||action==='revise'||action==='snapshot'||action==='approve') && request.headers.get('origin')!==config.origin) throw new ProjectError(403,'INVALID_ORIGIN','Invalid origin.');
     const parsed = (action==='read'?storyboardId:projectId).safeParse(rawId);
     if (!parsed.success) throw new ProjectError(404,'NOT_FOUND','Resource not found.');
     const query = new URL(request.url).searchParams;
@@ -42,6 +44,10 @@ export async function handleStoryboards(request: Request, action: 'create'|'revi
     await assertStoryboardQueueReady(db);
     if(action==='revise')await assertStoryboardRevisionsReady(db);
     const service = storyboardService(db,client,config.secret,provider,undefined,true), owner = session.user.id, id = parsed.data;
+    if(action==='approve'){
+      const result=await approveStoryboard(db,client,owner,id,idempotencyKey.parse(request.headers.get('idempotency-key')),approvalRequest.parse(await readBody(request)));
+      if(result.replayed)headers.set('Idempotency-Replayed','true');return reply(result.data);
+    }
     if(action==='snapshot'){
       const result=await saveStoryboardSnapshot(db,client,owner,id,idempotencyKey.parse(request.headers.get('idempotency-key')),snapshotRequest.parse(await readBody(request)));
       if(result.replayed)headers.set('Idempotency-Replayed','true');return reply(result.data);

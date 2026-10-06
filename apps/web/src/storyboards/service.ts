@@ -25,12 +25,12 @@ function receipt(doc: Doc): StoryboardReceipt {
   return { id: doc._id, projectId: doc.projectId, state: doc.state, sourceDraftRevision: doc.sourceDraftRevision, model: doc.model,
     storyboardId: doc.storyboardId, errorCode: doc.errorCode, createdAt: doc.createdAt.toISOString(), updatedAt: doc.updatedAt.toISOString(), deadline: doc.deadline.toISOString(), ...(doc.stage ? {stage:doc.stage,attempt:doc.attempt,issueCodes:doc.issueCodes} : {}) };
 }
-function summary(doc: Doc, revision: number, lineage?:{source:Doc;command:Doc}) {
+function summary(doc: Doc, revision: number, lineage?:{source:Doc;command:Doc}, approvalId:string|null=null) {
   const diff=lineage?revisionDiff(lineage.source.content,doc.content):null;
-  return { origin:doc.plannerConfig.provider==='manual'?'manual' as const:'generated' as const, id: doc._id, projectId: doc.projectId, parentId: lineage?.source._id??null, sourceDraftRevision: doc.sourceDraftRevision, state: 'review_ready' as const,
+  return { origin:doc.plannerConfig.provider==='manual'?'manual' as const:'generated' as const, id: doc._id, projectId: doc.projectId, parentId: lineage?.source._id??null, sourceDraftRevision: doc.sourceDraftRevision, state: approvalId?'approved' as const:'review_ready' as const,
     title: doc.content.title as string, contentHash: doc.contentHash as string, storyHash: doc.storyHash as string,
     estimatedDurationSeconds: doc.estimatedDurationSeconds as number, wordCount: doc.wordCount as number,
-    stale: doc.sourceDraftRevision !== revision, warnings: [], changeSummary: diff?`Updated ${diff.changedSceneIds.length} scene(s)${diff.changedFields.length?` and ${diff.changedFields.join(", ")}`:""}. Review before applying.`:null, changedSceneIds: diff?.changedSceneIds??[], approvalId: null, createdAt: doc.createdAt.toISOString() };
+    stale: doc.sourceDraftRevision !== revision, warnings: [], changeSummary: diff?`Updated ${diff.changedSceneIds.length} scene(s)${diff.changedFields.length?` and ${diff.changedFields.join(", ")}`:""}. Review before applying.`:null, changedSceneIds: diff?.changedSceneIds??[], approvalId, createdAt: doc.createdAt.toISOString() };
 }
 export function storyboardService(db: Db, client: MongoClient, secret: string, provider: () => StoryboardProvider, now = () => new Date(), background = false) {
   const requests = db.collection<Doc>('storyboardRequests'), candidates = db.collection<Doc>('storyboards'), projects = db.collection<Doc>('projects');
@@ -42,6 +42,10 @@ export function storyboardService(db: Db, client: MongoClient, secret: string, p
     const source=await candidates.findOne({_id:command.sourceStoryboardId,ownerId,projectId},{session});
     if(!source||storyboardHashes(source.content).contentHash!==command.sourceContentHash)throw new ProjectError(409,'SOURCE_CHANGED','The source storyboard could not be verified.');
     return {source,command};
+  }
+  async function approval(doc:Doc,session:Parameters<typeof liveProject>[3]) {
+    const saved=await db.collection<Doc>('approvals').findOne({ownerId:doc.ownerId,projectId:doc.projectId,kind:'story',subjectId:doc._id,contentHash:doc.contentHash,subjectHash:doc.storyHash,canonicalizationVersion:doc.canonicalizationVersion},{session,projection:{_id:1}});
+    return saved? saved._id:null;
   }
   async function execute(ownerId:string,projectId:string,claim:{doc:Doc;adapter:StoryboardProvider;draft:IdeaFields}) {
       let result: ReturnType<typeof validateStoryboard> | undefined, state = 'completed', errorCode: string | null = null, issueCodes:string[]=[];
@@ -92,7 +96,7 @@ export function storyboardService(db: Db, client: MongoClient, secret: string, p
       const doc = await candidates.findOne({ _id: id, ownerId }, { session });
       if (!doc) throw new ProjectError(404, 'NOT_FOUND', 'Storyboard not found.');
       const parent = await live(ownerId, doc.projectId, session);
-      return { ...summary(doc, parent.draftRevision,await lineage(ownerId,doc.projectId,doc.createdByJobId,session)), content: doc.content as Storyboard };
+      return { ...summary(doc, parent.draftRevision,await lineage(ownerId,doc.projectId,doc.createdByJobId,session),await approval(doc,session)), content: doc.content as Storyboard };
     }),
     list: (ownerId: string, projectId: string, input: {limit: number; cursor?: string}) => inTransaction(client, async session => {
       const parent = await live(ownerId, projectId, session);
@@ -115,7 +119,7 @@ export function storyboardService(db: Db, client: MongoClient, secret: string, p
         const payload = Buffer.from(JSON.stringify({v:1,ownerId,projectId,at:last.createdAt.toISOString(),id:last._id,expires:now().getTime()+86400000})).toString('base64url');
         nextCursor = `${payload}.${sign(payload)}`;
       }
-      const data=[];for(const doc of items)data.push(summary(doc,parent.draftRevision,await lineage(ownerId,projectId,doc.createdByJobId,session)));
+      const data=[];for(const doc of items)data.push(summary(doc,parent.draftRevision,await lineage(ownerId,projectId,doc.createdByJobId,session),await approval(doc,session)));
       return {data,page:{hasMore,nextCursor}};
     }),
     async create(ownerId: string, projectId: string, key: string, input: {expectedDraftRevision: number}|RevisionRequest) {
