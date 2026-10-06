@@ -1794,6 +1794,703 @@
         }
       }
     },
+    "/api/projects/{id}/draft/apply": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "applyStoryboardToDraft",
+        "description": "Explicit immutable candidate copy into the working draft. Shared revision and exact content hash required. Same-key replay returns the original snapshot, even after subsequent edits; reread the draft for current state. No approval or provider call.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must exactly match configured application origin."
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "string",
+              "pattern": "^[\\x21-\\x7e]{16,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "expectedDraftRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483646
+                  },
+                  "storyboardId": {
+                    "type": "string",
+                    "pattern": "^stb_[a-f0-9]{32}$"
+                  },
+                  "expectedContentHash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "expectedDraftRevision",
+                  "storyboardId",
+                  "expectedContentHash"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current working draft. Validation describes structural/content checks, not approval or factual accuracy.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "projectId",
+                        "conversationId",
+                        "revision",
+                        "topic",
+                        "audience",
+                        "notes",
+                        "voicePreset",
+                        "editablePlan",
+                        "sourceStoryboardId",
+                        "planStale",
+                        "contentHash",
+                        "validation",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "projectId": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "type": "string",
+                          "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+                        },
+                        "conversationId": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "topic": {
+                          "type": "string",
+                          "maxLength": 2000
+                        },
+                        "audience": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 20000
+                        },
+                        "voicePreset": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "editablePlan": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "schemaVersion": {
+                                  "type": "number",
+                                  "const": 2
+                                },
+                                "title": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "audience": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                },
+                                "learningObjective": {
+                                  "type": "string",
+                                  "maxLength": 500
+                                },
+                                "language": {
+                                  "type": "string",
+                                  "const": "en"
+                                },
+                                "voicePreset": {
+                                  "type": "string",
+                                  "const": "daniel-test"
+                                },
+                                "sources": {
+                                  "maxItems": 20,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "provided_notes",
+                                          "illustrative"
+                                        ]
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 20000,
+                                        "pattern": "\\S"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "kind",
+                                      "text"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "scenes": {
+                                  "minItems": 3,
+                                  "maxItems": 10,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "maxLength": 65
+                                      },
+                                      "kicker": {
+                                        "type": "string",
+                                        "maxLength": 35
+                                      },
+                                      "narration": {
+                                        "type": "string",
+                                        "maxLength": 1400
+                                      },
+                                      "pronunciation": {
+                                        "maxItems": 20,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "phrase": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "maxLength": 150,
+                                              "pattern": "\\S"
+                                            },
+                                            "occurrence": {
+                                              "type": "integer",
+                                              "minimum": 1,
+                                              "maximum": 20
+                                            },
+                                            "spokenAs": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "maxLength": 150,
+                                              "pattern": "\\S"
+                                            }
+                                          },
+                                          "required": [
+                                            "phrase",
+                                            "occurrence",
+                                            "spokenAs"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "visual": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "title"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "labels": {
+                                                    "minItems": 1,
+                                                    "maxItems": 4,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "maxLength": 30
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "labels"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "takeaway"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "labels": {
+                                                    "minItems": 1,
+                                                    "maxItems": 4,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "maxLength": 30
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "labels"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "flow"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "steps": {
+                                                    "minItems": 2,
+                                                    "maxItems": 4,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "id": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        },
+                                                        "label": {
+                                                          "type": "string",
+                                                          "maxLength": 30
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "id",
+                                                        "label"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  },
+                                                  "edges": {
+                                                    "minItems": 1,
+                                                    "maxItems": 6,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "id": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        },
+                                                        "from": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        },
+                                                        "to": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "id",
+                                                        "from",
+                                                        "to"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "steps",
+                                                  "edges"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "comparison"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "left": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "heading": {
+                                                        "type": "string",
+                                                        "maxLength": 18
+                                                      },
+                                                      "points": {
+                                                        "minItems": 1,
+                                                        "maxItems": 3,
+                                                        "type": "array",
+                                                        "items": {
+                                                          "type": "string",
+                                                          "maxLength": 26
+                                                        }
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "heading",
+                                                      "points"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  },
+                                                  "right": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "heading": {
+                                                        "type": "string",
+                                                        "maxLength": 18
+                                                      },
+                                                      "points": {
+                                                        "minItems": 1,
+                                                        "maxItems": 3,
+                                                        "type": "array",
+                                                        "items": {
+                                                          "type": "string",
+                                                          "maxLength": 26
+                                                        }
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "heading",
+                                                      "points"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  }
+                                                },
+                                                "required": [
+                                                  "left",
+                                                  "right"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "events": {
+                                        "minItems": 1,
+                                        "maxItems": 20,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "id": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                            },
+                                            "targetId": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                            },
+                                            "action": {
+                                              "type": "string",
+                                              "enum": [
+                                                "reveal",
+                                                "emphasize",
+                                                "connect",
+                                                "compare"
+                                              ]
+                                            },
+                                            "cue": {
+                                              "type": "object",
+                                              "properties": {
+                                                "phrase": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 150,
+                                                  "pattern": "\\S"
+                                                },
+                                                "occurrence": {
+                                                  "type": "integer",
+                                                  "minimum": 1,
+                                                  "maximum": 20
+                                                },
+                                                "offsetMs": {
+                                                  "type": "integer",
+                                                  "minimum": -500,
+                                                  "maximum": 500
+                                                }
+                                              },
+                                              "required": [
+                                                "phrase",
+                                                "occurrence",
+                                                "offsetMs"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            "durationMs": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 3000
+                                            }
+                                          },
+                                          "required": [
+                                            "id",
+                                            "targetId",
+                                            "action",
+                                            "cue",
+                                            "durationMs"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "sourceIds": {
+                                        "maxItems": 20,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "title",
+                                      "kicker",
+                                      "narration",
+                                      "pronunciation",
+                                      "visual",
+                                      "events",
+                                      "sourceIds"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "schemaVersion",
+                                "title",
+                                "audience",
+                                "learningObjective",
+                                "language",
+                                "voicePreset",
+                                "sources",
+                                "scenes"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sourceStoryboardId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "planStale": {
+                          "type": "boolean"
+                        },
+                        "contentHash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "validation": {
+                          "type": "object",
+                          "required": [
+                            "valid",
+                            "issues"
+                          ],
+                          "properties": {
+                            "valid": {
+                              "type": "boolean"
+                            },
+                            "issues": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "path",
+                                  "code",
+                                  "message"
+                                ],
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/projects/{id}/idea-suggestions": {
       "parameters": [
         {
@@ -2613,7 +3310,7 @@
         "operationId": "getIdeaDraft",
         "responses": {
           "200": {
-            "description": "Current idea draft. Validation is false until storyboard approval exists. No provider availability is implied.",
+            "description": "Current working draft. Validation describes structural/content checks, not approval or factual accuracy.",
             "headers": {
               "X-Request-Id": {
                 "schema": {
@@ -2695,13 +3392,470 @@
                           "maxLength": 64
                         },
                         "editablePlan": {
-                          "type": "null"
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "schemaVersion": {
+                                  "type": "number",
+                                  "const": 2
+                                },
+                                "title": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "audience": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                },
+                                "learningObjective": {
+                                  "type": "string",
+                                  "maxLength": 500
+                                },
+                                "language": {
+                                  "type": "string",
+                                  "const": "en"
+                                },
+                                "voicePreset": {
+                                  "type": "string",
+                                  "const": "daniel-test"
+                                },
+                                "sources": {
+                                  "maxItems": 20,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "provided_notes",
+                                          "illustrative"
+                                        ]
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 20000,
+                                        "pattern": "\\S"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "kind",
+                                      "text"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "scenes": {
+                                  "minItems": 3,
+                                  "maxItems": 10,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "maxLength": 65
+                                      },
+                                      "kicker": {
+                                        "type": "string",
+                                        "maxLength": 35
+                                      },
+                                      "narration": {
+                                        "type": "string",
+                                        "maxLength": 1400
+                                      },
+                                      "pronunciation": {
+                                        "maxItems": 20,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "phrase": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "maxLength": 150,
+                                              "pattern": "\\S"
+                                            },
+                                            "occurrence": {
+                                              "type": "integer",
+                                              "minimum": 1,
+                                              "maximum": 20
+                                            },
+                                            "spokenAs": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "maxLength": 150,
+                                              "pattern": "\\S"
+                                            }
+                                          },
+                                          "required": [
+                                            "phrase",
+                                            "occurrence",
+                                            "spokenAs"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "visual": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "title"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "labels": {
+                                                    "minItems": 1,
+                                                    "maxItems": 4,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "maxLength": 30
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "labels"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "takeaway"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "labels": {
+                                                    "minItems": 1,
+                                                    "maxItems": 4,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "maxLength": 30
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "labels"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "flow"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "steps": {
+                                                    "minItems": 2,
+                                                    "maxItems": 4,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "id": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        },
+                                                        "label": {
+                                                          "type": "string",
+                                                          "maxLength": 30
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "id",
+                                                        "label"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  },
+                                                  "edges": {
+                                                    "minItems": 1,
+                                                    "maxItems": 6,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "id": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        },
+                                                        "from": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        },
+                                                        "to": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "id",
+                                                        "from",
+                                                        "to"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "steps",
+                                                  "edges"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "comparison"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "left": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "heading": {
+                                                        "type": "string",
+                                                        "maxLength": 18
+                                                      },
+                                                      "points": {
+                                                        "minItems": 1,
+                                                        "maxItems": 3,
+                                                        "type": "array",
+                                                        "items": {
+                                                          "type": "string",
+                                                          "maxLength": 26
+                                                        }
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "heading",
+                                                      "points"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  },
+                                                  "right": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "heading": {
+                                                        "type": "string",
+                                                        "maxLength": 18
+                                                      },
+                                                      "points": {
+                                                        "minItems": 1,
+                                                        "maxItems": 3,
+                                                        "type": "array",
+                                                        "items": {
+                                                          "type": "string",
+                                                          "maxLength": 26
+                                                        }
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "heading",
+                                                      "points"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  }
+                                                },
+                                                "required": [
+                                                  "left",
+                                                  "right"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "events": {
+                                        "minItems": 1,
+                                        "maxItems": 20,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "id": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                            },
+                                            "targetId": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                            },
+                                            "action": {
+                                              "type": "string",
+                                              "enum": [
+                                                "reveal",
+                                                "emphasize",
+                                                "connect",
+                                                "compare"
+                                              ]
+                                            },
+                                            "cue": {
+                                              "type": "object",
+                                              "properties": {
+                                                "phrase": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 150,
+                                                  "pattern": "\\S"
+                                                },
+                                                "occurrence": {
+                                                  "type": "integer",
+                                                  "minimum": 1,
+                                                  "maximum": 20
+                                                },
+                                                "offsetMs": {
+                                                  "type": "integer",
+                                                  "minimum": -500,
+                                                  "maximum": 500
+                                                }
+                                              },
+                                              "required": [
+                                                "phrase",
+                                                "occurrence",
+                                                "offsetMs"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            "durationMs": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 3000
+                                            }
+                                          },
+                                          "required": [
+                                            "id",
+                                            "targetId",
+                                            "action",
+                                            "cue",
+                                            "durationMs"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "sourceIds": {
+                                        "maxItems": 20,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "title",
+                                      "kicker",
+                                      "narration",
+                                      "pronunciation",
+                                      "visual",
+                                      "events",
+                                      "sourceIds"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "schemaVersion",
+                                "title",
+                                "audience",
+                                "learningObjective",
+                                "language",
+                                "voicePreset",
+                                "sources",
+                                "scenes"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "sourceStoryboardId": {
-                          "type": "null"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "planStale": {
-                          "const": false
+                          "type": "boolean"
                         },
                         "contentHash": {
                           "type": "string",
@@ -2719,7 +3873,7 @@
                           ],
                           "properties": {
                             "valid": {
-                              "const": false
+                              "type": "boolean"
                             },
                             "issues": {
                               "type": "array",
@@ -2830,6 +3984,462 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 64
+                      },
+                      "editablePlan": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "schemaVersion": {
+                                "type": "number",
+                                "const": 2
+                              },
+                              "title": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "audience": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "learningObjective": {
+                                "type": "string",
+                                "maxLength": 500
+                              },
+                              "language": {
+                                "type": "string",
+                                "const": "en"
+                              },
+                              "voicePreset": {
+                                "type": "string",
+                                "const": "daniel-test"
+                              },
+                              "sources": {
+                                "maxItems": 20,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                    },
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "provided_notes",
+                                        "illustrative"
+                                      ]
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 20000,
+                                      "pattern": "\\S"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "kind",
+                                    "text"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "scenes": {
+                                "minItems": 3,
+                                "maxItems": 10,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                    },
+                                    "title": {
+                                      "type": "string",
+                                      "maxLength": 65
+                                    },
+                                    "kicker": {
+                                      "type": "string",
+                                      "maxLength": 35
+                                    },
+                                    "narration": {
+                                      "type": "string",
+                                      "maxLength": 1400
+                                    },
+                                    "pronunciation": {
+                                      "maxItems": 20,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "phrase": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 150,
+                                            "pattern": "\\S"
+                                          },
+                                          "occurrence": {
+                                            "type": "integer",
+                                            "minimum": 1,
+                                            "maximum": 20
+                                          },
+                                          "spokenAs": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 150,
+                                            "pattern": "\\S"
+                                          }
+                                        },
+                                        "required": [
+                                          "phrase",
+                                          "occurrence",
+                                          "spokenAs"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "visual": {
+                                      "anyOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "component": {
+                                              "type": "string",
+                                              "const": "title"
+                                            },
+                                            "version": {
+                                              "type": "number",
+                                              "const": 1
+                                            },
+                                            "data": {
+                                              "type": "object",
+                                              "properties": {
+                                                "labels": {
+                                                  "minItems": 1,
+                                                  "maxItems": 4,
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "string",
+                                                    "maxLength": 30
+                                                  }
+                                                }
+                                              },
+                                              "required": [
+                                                "labels"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "required": [
+                                            "component",
+                                            "version",
+                                            "data"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "component": {
+                                              "type": "string",
+                                              "const": "takeaway"
+                                            },
+                                            "version": {
+                                              "type": "number",
+                                              "const": 1
+                                            },
+                                            "data": {
+                                              "type": "object",
+                                              "properties": {
+                                                "labels": {
+                                                  "minItems": 1,
+                                                  "maxItems": 4,
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "string",
+                                                    "maxLength": 30
+                                                  }
+                                                }
+                                              },
+                                              "required": [
+                                                "labels"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "required": [
+                                            "component",
+                                            "version",
+                                            "data"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "component": {
+                                              "type": "string",
+                                              "const": "flow"
+                                            },
+                                            "version": {
+                                              "type": "number",
+                                              "const": 1
+                                            },
+                                            "data": {
+                                              "type": "object",
+                                              "properties": {
+                                                "steps": {
+                                                  "minItems": 2,
+                                                  "maxItems": 4,
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "id": {
+                                                        "type": "string",
+                                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                      },
+                                                      "label": {
+                                                        "type": "string",
+                                                        "maxLength": 30
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "id",
+                                                      "label"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  }
+                                                },
+                                                "edges": {
+                                                  "minItems": 1,
+                                                  "maxItems": 6,
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "id": {
+                                                        "type": "string",
+                                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                      },
+                                                      "from": {
+                                                        "type": "string",
+                                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                      },
+                                                      "to": {
+                                                        "type": "string",
+                                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "id",
+                                                      "from",
+                                                      "to"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  }
+                                                }
+                                              },
+                                              "required": [
+                                                "steps",
+                                                "edges"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "required": [
+                                            "component",
+                                            "version",
+                                            "data"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "component": {
+                                              "type": "string",
+                                              "const": "comparison"
+                                            },
+                                            "version": {
+                                              "type": "number",
+                                              "const": 1
+                                            },
+                                            "data": {
+                                              "type": "object",
+                                              "properties": {
+                                                "left": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "heading": {
+                                                      "type": "string",
+                                                      "maxLength": 18
+                                                    },
+                                                    "points": {
+                                                      "minItems": 1,
+                                                      "maxItems": 3,
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "maxLength": 26
+                                                      }
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "heading",
+                                                    "points"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                "right": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "heading": {
+                                                      "type": "string",
+                                                      "maxLength": 18
+                                                    },
+                                                    "points": {
+                                                      "minItems": 1,
+                                                      "maxItems": 3,
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "string",
+                                                        "maxLength": 26
+                                                      }
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "heading",
+                                                    "points"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              },
+                                              "required": [
+                                                "left",
+                                                "right"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "required": [
+                                            "component",
+                                            "version",
+                                            "data"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      ]
+                                    },
+                                    "events": {
+                                      "minItems": 1,
+                                      "maxItems": 20,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                          },
+                                          "targetId": {
+                                            "type": "string",
+                                            "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                          },
+                                          "action": {
+                                            "type": "string",
+                                            "enum": [
+                                              "reveal",
+                                              "emphasize",
+                                              "connect",
+                                              "compare"
+                                            ]
+                                          },
+                                          "cue": {
+                                            "type": "object",
+                                            "properties": {
+                                              "phrase": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 150,
+                                                "pattern": "\\S"
+                                              },
+                                              "occurrence": {
+                                                "type": "integer",
+                                                "minimum": 1,
+                                                "maximum": 20
+                                              },
+                                              "offsetMs": {
+                                                "type": "integer",
+                                                "minimum": -500,
+                                                "maximum": 500
+                                              }
+                                            },
+                                            "required": [
+                                              "phrase",
+                                              "occurrence",
+                                              "offsetMs"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          "durationMs": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 3000
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "targetId",
+                                          "action",
+                                          "cue",
+                                          "durationMs"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "sourceIds": {
+                                      "maxItems": 20,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "title",
+                                    "kicker",
+                                    "narration",
+                                    "pronunciation",
+                                    "visual",
+                                    "events",
+                                    "sourceIds"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "schemaVersion",
+                              "title",
+                              "audience",
+                              "learningObjective",
+                              "language",
+                              "voicePreset",
+                              "sources",
+                              "scenes"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "additionalProperties": false,
@@ -2847,7 +4457,7 @@
         },
         "responses": {
           "200": {
-            "description": "Current idea draft. Validation is false until storyboard approval exists. No provider availability is implied.",
+            "description": "Current working draft. Validation describes structural/content checks, not approval or factual accuracy.",
             "headers": {
               "X-Request-Id": {
                 "schema": {
@@ -2929,13 +4539,470 @@
                           "maxLength": 64
                         },
                         "editablePlan": {
-                          "type": "null"
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "schemaVersion": {
+                                  "type": "number",
+                                  "const": 2
+                                },
+                                "title": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "audience": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                },
+                                "learningObjective": {
+                                  "type": "string",
+                                  "maxLength": 500
+                                },
+                                "language": {
+                                  "type": "string",
+                                  "const": "en"
+                                },
+                                "voicePreset": {
+                                  "type": "string",
+                                  "const": "daniel-test"
+                                },
+                                "sources": {
+                                  "maxItems": 20,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "provided_notes",
+                                          "illustrative"
+                                        ]
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 20000,
+                                        "pattern": "\\S"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "kind",
+                                      "text"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "scenes": {
+                                  "minItems": 3,
+                                  "maxItems": 10,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "maxLength": 65
+                                      },
+                                      "kicker": {
+                                        "type": "string",
+                                        "maxLength": 35
+                                      },
+                                      "narration": {
+                                        "type": "string",
+                                        "maxLength": 1400
+                                      },
+                                      "pronunciation": {
+                                        "maxItems": 20,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "phrase": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "maxLength": 150,
+                                              "pattern": "\\S"
+                                            },
+                                            "occurrence": {
+                                              "type": "integer",
+                                              "minimum": 1,
+                                              "maximum": 20
+                                            },
+                                            "spokenAs": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "maxLength": 150,
+                                              "pattern": "\\S"
+                                            }
+                                          },
+                                          "required": [
+                                            "phrase",
+                                            "occurrence",
+                                            "spokenAs"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "visual": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "title"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "labels": {
+                                                    "minItems": 1,
+                                                    "maxItems": 4,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "maxLength": 30
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "labels"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "takeaway"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "labels": {
+                                                    "minItems": 1,
+                                                    "maxItems": 4,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "maxLength": 30
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "labels"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "flow"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "steps": {
+                                                    "minItems": 2,
+                                                    "maxItems": 4,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "id": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        },
+                                                        "label": {
+                                                          "type": "string",
+                                                          "maxLength": 30
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "id",
+                                                        "label"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  },
+                                                  "edges": {
+                                                    "minItems": 1,
+                                                    "maxItems": 6,
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "id": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        },
+                                                        "from": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        },
+                                                        "to": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "id",
+                                                        "from",
+                                                        "to"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "steps",
+                                                  "edges"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "component": {
+                                                "type": "string",
+                                                "const": "comparison"
+                                              },
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "data": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "left": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "heading": {
+                                                        "type": "string",
+                                                        "maxLength": 18
+                                                      },
+                                                      "points": {
+                                                        "minItems": 1,
+                                                        "maxItems": 3,
+                                                        "type": "array",
+                                                        "items": {
+                                                          "type": "string",
+                                                          "maxLength": 26
+                                                        }
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "heading",
+                                                      "points"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  },
+                                                  "right": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "heading": {
+                                                        "type": "string",
+                                                        "maxLength": 18
+                                                      },
+                                                      "points": {
+                                                        "minItems": 1,
+                                                        "maxItems": 3,
+                                                        "type": "array",
+                                                        "items": {
+                                                          "type": "string",
+                                                          "maxLength": 26
+                                                        }
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "heading",
+                                                      "points"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  }
+                                                },
+                                                "required": [
+                                                  "left",
+                                                  "right"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "component",
+                                              "version",
+                                              "data"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "events": {
+                                        "minItems": 1,
+                                        "maxItems": 20,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "id": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                            },
+                                            "targetId": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                            },
+                                            "action": {
+                                              "type": "string",
+                                              "enum": [
+                                                "reveal",
+                                                "emphasize",
+                                                "connect",
+                                                "compare"
+                                              ]
+                                            },
+                                            "cue": {
+                                              "type": "object",
+                                              "properties": {
+                                                "phrase": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 150,
+                                                  "pattern": "\\S"
+                                                },
+                                                "occurrence": {
+                                                  "type": "integer",
+                                                  "minimum": 1,
+                                                  "maximum": 20
+                                                },
+                                                "offsetMs": {
+                                                  "type": "integer",
+                                                  "minimum": -500,
+                                                  "maximum": 500
+                                                }
+                                              },
+                                              "required": [
+                                                "phrase",
+                                                "occurrence",
+                                                "offsetMs"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            "durationMs": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 3000
+                                            }
+                                          },
+                                          "required": [
+                                            "id",
+                                            "targetId",
+                                            "action",
+                                            "cue",
+                                            "durationMs"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "sourceIds": {
+                                        "maxItems": 20,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "title",
+                                      "kicker",
+                                      "narration",
+                                      "pronunciation",
+                                      "visual",
+                                      "events",
+                                      "sourceIds"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "schemaVersion",
+                                "title",
+                                "audience",
+                                "learningObjective",
+                                "language",
+                                "voicePreset",
+                                "sources",
+                                "scenes"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "sourceStoryboardId": {
-                          "type": "null"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "planStale": {
-                          "const": false
+                          "type": "boolean"
                         },
                         "contentHash": {
                           "type": "string",
@@ -2953,7 +5020,7 @@
                           ],
                           "properties": {
                             "valid": {
-                              "const": false
+                              "type": "boolean"
                             },
                             "issues": {
                               "type": "array",

@@ -616,3 +616,8 @@ Storyboard execution now uses a persisted Mongo queue plus a separate Node worke
 The planner permits four total calls within 180 seconds from enqueue (30-second individual calls), targeted repairs for completed invalid responses, and bounded backoff for explicit transient HTTP responses. Safe ID normalization and unambiguous cue-case correction precede strict semantic validation. Narration, facts and unresolved cues are never invented by local correction. Unknown provider outcomes and interrupted running workers are fenced and expire without automatic replay. A new user-requested generation may consume quota again.
 
 The local launcher starts and stops the worker alongside Next. A persistent setup runs `storyboards:worker` separately; Vercel alone does not run this loop. One worker handles one job at a time, so queue wait consumes the same deadline. No cancellation, autoscaling or process supervisor is implemented. This brings only local storyboard orchestration forward from F13; planned hosted Inngest/video jobs remain unimplemented.
+
+
+## F10b1 editing backend checkpoint
+
+Manual editing now uses the existing revisioned project draft. Explicit apply copies an immutable candidate into that draft in a transaction with the selected candidate pointer and an idempotent response receipt. Text changes share the same revision as idea changes, preventing cross-tab lost updates. Incomplete bounded text is durable and accompanied by validation issues; it is never approval. Idea changes retain the working copy but invalidate its freshness. No new provider job or alternate working-copy collection is introduced. The browser editor (F10b2), immutable edited-version approval and conversational revisions (F11) remain separate checkpoints.

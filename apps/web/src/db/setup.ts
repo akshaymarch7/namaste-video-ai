@@ -10,7 +10,7 @@ export const migrationId = 'mig_foundation00000001';
 export const migrationChecksum = createHash('sha256')
   .update(JSON.stringify([migrationDefinition, ...foundationDefinitions])).digest('hex');
 
-type MigrationOptions = { upgradeFrom?: Record<string, object>; successors?: Record<string, object> };
+type MigrationOptions = { upgradeFrom?: Record<string, object>; successors?: Record<string, object | object[]> };
 async function ensureCollection(db: Db, definition: CollectionDefinition, optionsForMigration: MigrationOptions = {}) {
   const options = { validator: definition.validator, validationLevel: 'strict' as const, validationAction: 'error' as const };
   try {
@@ -28,7 +28,7 @@ async function ensureCollection(db: Db, definition: CollectionDefinition, option
     existing.options.validator = options.validator;
   }
   if (!existing || !(isDeepStrictEqual(existing.options?.validator, options.validator)
-    || (optionsForMigration.successors?.[definition.name] && isDeepStrictEqual(existing.options?.validator, optionsForMigration.successors[definition.name])))
+    || (optionsForMigration.successors?.[definition.name] && [optionsForMigration.successors[definition.name]].flat().some(successor=>isDeepStrictEqual(existing.options?.validator, successor))))
     || existing.options?.validationLevel !== 'strict' || existing.options?.validationAction !== 'error') {
     throw new DatabaseError('DB_SCHEMA_DRIFT', `Schema differs for ${definition.name}; use a new reviewed migration.`);
   }

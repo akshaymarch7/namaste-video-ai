@@ -1,3 +1,4 @@
+import {setupEditableDrafts} from '../src/drafts/edit-setup';
 import {runStoryboardJob} from '../src/storyboards/worker';
 import { setupStoryboardQueue } from '../src/storyboards/queue-setup';
 import assert from 'node:assert/strict';
@@ -31,7 +32,7 @@ const config = { origin: 'http://127.0.0.1:3002', secure: false, secret: randomB
 before(async () => {
   replica = await MongoMemoryReplSet.create({ binary: { version: '8.0.17' }, replSet: { count: 1, ip: '127.0.0.1', storageEngine: 'wiredTiger' } });
   client = await new MongoClient(replica.getUri(), { promoteLongs: false }).connect(); db = client.db('drafts_test');
-  await setupDatabase(db); await setupProjects(db); await setupDrafts(db); await setupIdeas(db); await setupStoryboards(db); await setupStoryboardQueue(db); await setupAuth(db, client, config);
+  await setupDatabase(db); await setupProjects(db); await setupDrafts(db); await setupIdeas(db); await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db); await setupAuth(db, client, config);
   const auth = createAuth(db, client, config); deps = { db, client, config, auth };
   drafts = draftService(db, client); projects = projectService(db, client, config.secret);
   const identities = [];
@@ -208,4 +209,69 @@ test('worker rechecks admission before dispatch and refuses invalid queue record
  try{await runStoryboardJob(db,client,provider);}finally{await db.collection('internalAccess').updateOne({normalizedEmail:'owner@example.test'},{$set:{enabled:true}});}
  assert.equal(calls,before);assert.equal((await svc.latest(owner,item.id))?.errorCode,'ACCESS_DISABLED');assert.equal((await projects.get(owner,item.id)).activeJobId,null);
  await assert.rejects(db.collection('storyboardQueue').insertOne({unexpected:true}));
+});
+
+const applyReq=(id:string,body:unknown,key=randomUUID(),headers:Record<string,string>={})=>handleProjects(new Request(`${config.origin}/api/projects/${id}/draft/apply`,{method:'POST',headers:{Cookie:cookie,Origin:config.origin,'Content-Type':'application/json','Idempotency-Key':key,...headers},body:JSON.stringify(body)}),'draft-apply',id,async()=>deps);
+const editReq=(id:string,body:unknown,headers:Record<string,string>={})=>handleProjects(new Request(`${config.origin}/api/projects/${id}/draft`,{method:'PATCH',headers:{Cookie:cookie,Origin:config.origin,'Content-Type':'application/json',...headers},body:JSON.stringify(body)}),'draft-save',id,async()=>deps);
+async function editableFixture(){const project=await make(),result=await service().create(owner,project.id,randomUUID(),input),candidate=await service().get(owner,result.data.storyboardId!);return {project,candidate,body:{expectedDraftRevision:2,storyboardId:candidate.id,expectedContentHash:candidate.contentHash}};}
+test('apply is owner-scoped, revision/hash checked, atomic and exactly replayable after later edits',async()=>{
+ const {project,candidate,body}=await editableFixture(),key=randomUUID();
+ assert.equal((await applyReq(project.id,body,key,{Cookie:''})).status,401);
+ assert.equal((await applyReq(project.id,body,key,{Cookie:otherCookie})).status,404);
+ assert.equal((await applyReq(project.id,body,key,{Origin:'https://evil.example'})).status,403);
+ assert.equal((await applyReq(project.id,{...body,expectedContentHash:'0'.repeat(64)})).status,409);
+ assert.equal((await applyReq(project.id,{...body,expectedDraftRevision:1})).status,409);
+ const otherProject=await make();assert.equal((await applyReq(otherProject.id,body)).status,404);
+ const response=await applyReq(project.id,body,key);assert.equal(response.status,200);const applied=(await response.json()).data;
+ assert.equal(applied.revision,3);assert.equal(applied.sourceStoryboardId,candidate.id);assert.equal(applied.planStale,false);assert.equal(applied.validation.valid,true);
+ assert.equal((await projects.get(owner,project.id)).currentStoryboardId,candidate.id);
+ const content=structuredClone(applied.editablePlan);content.scenes[0].title='Edited title';
+ const saved=await editReq(project.id,{expectedRevision:3,changes:{editablePlan:content}});assert.equal(saved.status,200);assert.equal((await saved.json()).data.revision,4);
+ const replay=await applyReq(project.id,body,key);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');assert.deepEqual((await replay.json()).data,applied);
+ assert.equal((await drafts.get(owner,project.id)).editablePlan?.scenes[0].title,'Edited title');
+ assert.equal((await applyReq(project.id,{...body,expectedDraftRevision:4},key)).status,409);
+ assert.deepEqual((await service().get(owner,candidate.id)).content,candidate.content);
+});
+test('incomplete narration and labels persist with validation; unsafe structures do not save',async()=>{
+ const {project,body}=await editableFixture();const applied=(await (await applyReq(project.id,body)).json()).data;
+ const plan=structuredClone(applied.editablePlan);plan.scenes[0].narration='';plan.scenes[0].visual.data.labels[0]='';
+ const response=await editReq(project.id,{expectedRevision:3,changes:{editablePlan:plan}});assert.equal(response.status,200);const saved=(await response.json()).data;assert.equal(saved.validation.valid,false);assert.ok(saved.validation.issues.some((x:any)=>x.path.includes('narration')));
+ assert.deepEqual((await drafts.get(owner,project.id)).editablePlan,plan);
+ for(const bad of [{...plan,script:'unsafe'},{...plan,scenes:[]},{...plan,scenes:[{...plan.scenes[0],id:'../bad'},...plan.scenes.slice(1)]}])assert.equal((await editReq(project.id,{expectedRevision:4,changes:{editablePlan:bad}})).status,422);
+ assert.equal((await drafts.get(owner,project.id)).revision,4);
+ const brokenCue=structuredClone(applied.editablePlan);brokenCue.scenes[0].narration=brokenCue.scenes[0].narration.replace('Water','Liquid');
+ const checked=(await (await editReq(project.id,{expectedRevision:4,changes:{editablePlan:brokenCue}})).json()).data;assert.equal(checked.validation.valid,false);assert.ok(checked.validation.issues.some((x:any)=>x.code==='MISSING_CUE'));
+});
+test('idea saves retain the working plan, mark it stale, and share one conflict fence',async()=>{
+ const {project,body}=await editableFixture();const applied=(await (await applyReq(project.id,body)).json()).data;
+ const changed=await drafts.save(owner,project.id,{expectedRevision:3,changes:{topic:'Another topic'}});
+ assert.deepEqual(changed.editablePlan,applied.editablePlan);assert.equal(changed.planStale,true);assert.equal(changed.validation.valid,false);
+ assert.equal((await editReq(project.id,{expectedRevision:3,changes:{editablePlan:applied.editablePlan}})).status,409);
+ const cleared=await drafts.save(owner,project.id,{expectedRevision:4,changes:{editablePlan:null}});assert.equal(cleared.sourceStoryboardId,null);assert.equal(cleared.planStale,false);assert.equal((await projects.get(owner,project.id)).currentStoryboardId,null);
+ assert.equal((await editReq(project.id,{expectedRevision:5,changes:{editablePlan:applied.editablePlan}})).status,409);
+});
+test('simultaneous apply replays once; migration replays preserve the edited copy and strict schema',async()=>{
+ const {project,body}=await editableFixture(),key=randomUUID();const responses=await Promise.all(Array.from({length:3},()=>applyReq(project.id,body,key)));
+ for(const response of responses)assert.equal(response.status,200);
+ const saved=await drafts.get(owner,project.id);assert.equal(saved.revision,3);
+ await setupProjects(db);await setupDrafts(db);await setupIdeas(db);await setupStoryboards(db);await setupStoryboardQueue(db);await setupEditableDrafts(db);
+ assert.deepEqual(await drafts.get(owner,project.id),saved);
+ await assert.rejects(db.collection('drafts').updateOne({projectId:project.id},{$set:{'editablePlan.scenes.0.visual.data.script':'unsafe'}}));
+ const stale=await drafts.save(owner,project.id,{expectedRevision:3,changes:{notes:'Changed context'}});
+ const replaced=(await (await applyReq(project.id,{...body,expectedDraftRevision:stale.revision})).json()).data;assert.equal(replaced.planStale,true);
+});
+
+test('apply receipt failure rolls back draft and parent; clearing or editing cannot cross ownership',async()=>{
+ const {project,body}=await editableFixture(),before=await drafts.get(owner,project.id),key=randomUUID();
+ const definition=(await db.listCollections({name:'draftCommands'},{nameOnly:false}).toArray())[0];
+ await db.command({collMod:'draftCommands',validator:{$and:[definition.options!.validator,{projectId:{$ne:project.id}}]}});
+ try{assert.equal((await applyReq(project.id,body,key)).status,503);}finally{await db.command({collMod:'draftCommands',validator:definition.options!.validator});}
+ assert.deepEqual(await drafts.get(owner,project.id),before);assert.equal((await projects.get(owner,project.id)).currentStoryboardId,null);
+ assert.equal((await applyReq(project.id,body,key)).status,200);
+ assert.equal((await editReq(project.id,{expectedRevision:3,changes:{editablePlan:null}},{Cookie:otherCookie})).status,404);
+ assert.equal((await editReq(project.id,{expectedRevision:3,changes:{editablePlan:null}},{Origin:'https://evil.example'})).status,403);
+ assert.equal((await drafts.get(owner,project.id)).revision,3);
+ await db.collection('projects').updateOne({_id:project.id as never},{$set:{deletedAt:new Date()}});
+ assert.equal((await applyReq(project.id,body,key)).status,404);
+ await rejects(drafts.get(owner,project.id),'NOT_FOUND');
 });

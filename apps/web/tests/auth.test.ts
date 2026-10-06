@@ -1,3 +1,4 @@
+import {setupEditableDrafts} from '../src/drafts/edit-setup';
 import { setupStoryboardQueue } from '../src/storyboards/queue-setup';
 import { setupStoryboards } from '../src/storyboards/setup';
 import assert from 'node:assert/strict';
@@ -39,7 +40,7 @@ before(async () => {
   await setupProjects(db);
   await setupDrafts(db);
   await setupIdeas(db);
-  await setupStoryboards(db); await setupStoryboardQueue(db);
+  await setupStoryboards(db); await setupStoryboardQueue(db);await setupEditableDrafts(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, account);
   const auth = createAuth(db, client, config);
@@ -239,6 +240,9 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     const projectResponse = await fetch(`${origin}/api/projects`, { method: 'POST', headers: { Cookie: cookies(login), Origin: origin, 'Content-Type': 'application/json', 'Idempotency-Key': 'actual-route-test-0001' }, body: JSON.stringify({ title: 'HTTP project' }) });
     assert.equal(projectResponse.status, 201);
     const project = (await projectResponse.json()).data;
+    const applyUrl=`${origin}/api/projects/${project.id}/draft/apply`;
+    assert.equal((await fetch(applyUrl,{method:'POST'})).status,401);
+    assert.equal((await fetch(applyUrl,{method:'POST',headers:{Cookie:cookies(login),Origin:origin,'Content-Type':'application/json','Idempotency-Key':'invalid-apply-test-key'},body:'{}'})).status,422);
     const ideaUrl = `${origin}/api/projects/${project.id}/idea-suggestions`;
     assert.equal((await fetch(ideaUrl)).status, 401);
     assert.equal((await fetch(ideaUrl, { headers: { Cookie: cookies(login) } })).status, 200);

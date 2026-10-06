@@ -1,3 +1,4 @@
+import {editableStoryboardSchema,applyStoryboard} from '../storyboards/editable-contract';
 import { storyboardPaths } from '../storyboards/openapi';
 import { z } from 'zod';
 import { ideaRequestSchema, suggestionSchema } from '../ideas/contracts';
@@ -35,19 +36,20 @@ export function projectsOpenApi() {
   const changes = (draftRequest.content['application/json'].schema as { properties: { changes: { minProperties?: number; properties: Record<string, object> } } }).properties.changes;
   changes.minProperties = 1;
   for (const [key, maxLength] of Object.entries({ topic: 2000, audience: 200, notes: 20000 })) Object.assign(changes.properties[key], { maxLength, description: 'Unicode code points; whitespace preserved.' });
-  const draftResponse = { description: 'Current idea draft. Validation is false until storyboard approval exists. No provider availability is implied.', headers: responseHeaders, content: content({ type: 'object', required: ['data', 'meta'], properties: { meta, data: {
+  const draftResponse = { description: 'Current working draft. Validation describes structural/content checks, not approval or factual accuracy.', headers: responseHeaders, content: content({ type: 'object', required: ['data', 'meta'], properties: { meta, data: {
     type: 'object', additionalProperties: false,
     required: ['projectId','conversationId','revision','topic','audience','notes','voicePreset','editablePlan','sourceStoryboardId','planStale','contentHash','validation','updatedAt'],
     properties: { projectId: schema(projectId), conversationId: { type: 'string' }, revision: { type: 'integer', minimum: 1 },
       topic: { type: 'string', maxLength: 2000 }, audience: { type: 'string', maxLength: 200 }, notes: { type: 'string', maxLength: 20000 }, voicePreset: { type: 'string', maxLength: 64 },
-      editablePlan: { type: 'null' }, sourceStoryboardId: { type: 'null' }, planStale: { const: false }, contentHash: { type: 'string', pattern: '^[a-f0-9]{64}$' }, updatedAt: { type: 'string', format: 'date-time' },
-      validation: { type: 'object', required: ['valid','issues'], properties: { valid: { const: false }, issues: { type: 'array', items: { type: 'object', required: ['path','code','message'], properties: { path: { type: 'string' }, code: { type: 'string' }, message: { type: 'string' } } } } } },
+      editablePlan: schema(editableStoryboardSchema.nullable()), sourceStoryboardId: { type: ['string','null'] }, planStale: { type: 'boolean' }, contentHash: { type: 'string', pattern: '^[a-f0-9]{64}$' }, updatedAt: { type: 'string', format: 'date-time' },
+      validation: { type: 'object', required: ['valid','issues'], properties: { valid: { type: 'boolean' }, issues: { type: 'array', items: { type: 'object', required: ['path','code','message'], properties: { path: { type: 'string' }, code: { type: 'string' }, message: { type: 'string' } } } } } },
     },
   } } }) };
   return { openapi: '3.1.0', info: { title: 'NamasteVideo project and idea draft API', version: '0.4.0', description: 'Implemented slice only. DELETE completes synchronously for empty projects (204); populated project cleanup and selectedVideoId mutation are not yet supported.' },
     servers: [{ url: '/' }], security: [{ session: [] }], components: { schemas: { Project: project }, responses: { Error: errorResponse }, securitySchemes: { session: { type: 'apiKey', in: 'cookie', name: 'better-auth.session_token', description: 'Better Auth HttpOnly session cookie; production uses its __Secure- prefix. Obtain it via the session facade.' } } },
     paths: {
       ...storyboardPaths(),
+      '/api/projects/{id}/draft/apply':{parameters:[{in:'path',name:'id',required:true,schema:schema(projectId)}],post:{operationId:'applyStoryboardToDraft',description:'Explicit immutable candidate copy into the working draft. Shared revision and exact content hash required. Same-key replay returns the original snapshot, even after subsequent edits; reread the draft for current state. No approval or provider call.',parameters:keyed,requestBody:body(applyStoryboard),responses:{...errors,200:draftResponse}}},
       '/api/projects/{id}/idea-suggestions': {
         parameters: [{ in: 'path', name: 'id', required: true, schema: schema(projectId) }],
         get: { operationId: 'getLatestIdeaSuggestions', responses: { ...errors, 200: ideaResponse, 202: ideaResponse } },

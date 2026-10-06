@@ -85,7 +85,7 @@ test('HTTP authentication, foreign ownership, Origin and input validation', asyn
   assert.equal((await req(item.id, undefined, { Cookie: otherCookie })).status, 403);
   await db.collection('internalAccess').updateOne({ provisionedUserId: other }, { $set: { enabled: true } });
   for (const body of [{ changes: { topic: 'x' } }, { expectedRevision: 1, changes: {} }, { ...input, ownerId: other },
-    { expectedRevision: 1, changes: { editablePlan: null } }, { expectedRevision: 1, changes: { notes: 'x'.repeat(20001) } },
+    { expectedRevision: 1, changes: { editablePlan: {} } }, { expectedRevision: 1, changes: { notes: 'x'.repeat(20001) } },
     { expectedRevision: 1, changes: { topic: '😀'.repeat(2001) } }, { expectedRevision: 1, changes: { audience: 'x'.repeat(201) } },
     { expectedRevision: 1, changes: { voicePreset: 'unknown' } }]) assert.equal((await req(item.id, body)).status, 422);
   assert.equal((await drafts.get(owner, item.id)).revision, 1);

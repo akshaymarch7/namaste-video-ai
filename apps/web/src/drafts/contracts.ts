@@ -1,13 +1,14 @@
 import { z } from 'zod';
+import {editableStoryboardSchema,type EditableStoryboard} from '../storyboards/editable-contract';
 // Count Unicode code points, matching MongoDB maxLength; preserve whitespace during editing.
 const text = (max: number) => z.string().refine(value => [...value].length <= max);
 export const ideaFields = z.object({ topic: text(2000), audience: text(200), notes: text(20000), voicePreset: z.string().min(1).max(64) }).strict();
-export const patchDraft = z.object({ expectedRevision: z.number().int().min(1).max(2147483646), changes: ideaFields.partial().refine(value => Object.keys(value).length > 0) }).strict();
+export const patchDraft = z.object({ expectedRevision: z.number().int().min(1).max(2147483646), changes: ideaFields.partial().extend({editablePlan:editableStoryboardSchema.nullable().optional()}).refine(value => Object.keys(value).length > 0) }).strict();
 export type IdeaFields = z.infer<typeof ideaFields>;
 export type DraftPatch = z.infer<typeof patchDraft>;
 export type DraftView = IdeaFields & {
-  projectId: string; conversationId: string; revision: number; editablePlan: null; sourceStoryboardId: null;
-  planStale: false; contentHash: string; validation: { valid: false; issues: { path: string; code: string; message: string }[] }; updatedAt: string;
+  projectId: string; conversationId: string; revision: number; editablePlan: EditableStoryboard|null; sourceStoryboardId: string|null;
+  planStale: boolean; contentHash: string; validation: { valid: boolean; issues: { path: string; code: string; message: string }[] }; updatedAt: string;
 };
 // Stable application preset, not an exposed provider ID or a live availability guarantee.
 export const selectableVoices = ['daniel-test'] as const;

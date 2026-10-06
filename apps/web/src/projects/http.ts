@@ -1,3 +1,4 @@
+import {applyStoryboard} from '../storyboards/editable-contract';
 import 'server-only';
 import { assertDraftsReady } from '../drafts/setup';
 import { draftService } from '../drafts/service';
@@ -10,7 +11,7 @@ import { HttpError, readBody } from '../auth/http';
 import { assertProjectsReady } from './setup';
 import { createProject, renameProject, deleteProject, listProjects, projectId, idempotencyKey, ProjectError } from './contracts';
 import { projectService } from './service';
-export type ProjectAction = 'list' | 'create' | 'read' | 'rename' | 'delete' | 'draft-read' | 'draft-save';
+export type ProjectAction = 'list' | 'create' | 'read' | 'rename' | 'delete' | 'draft-read' | 'draft-save' | 'draft-apply';
 export async function handleProjects(request: Request, action: ProjectAction, rawId?: string, getDependencies = dependencies) {
   const requestId = `req_${randomUUID().replaceAll('-', '')}`;
   const headers = new Headers({ 'Cache-Control': 'private, no-store', 'X-Request-Id': requestId });
@@ -27,10 +28,15 @@ export async function handleProjects(request: Request, action: ProjectAction, ra
     if (parsedId && !parsedId.success) throw new ProjectError(404, 'NOT_FOUND', 'Project not found.');
     const target = parsedId?.data!;
     await assertProjectsReady(db);
-    if (action === 'draft-read' || action === 'draft-save') {
+    if (action === 'draft-read' || action === 'draft-save' || action === 'draft-apply') {
       await assertDraftsReady(db);
       if (new URL(request.url).search) throw new ProjectError(422, 'VALIDATION_FAILED', 'Query parameters are not supported.');
       const drafts = draftService(db, client);
+      if(action==='draft-apply'){
+        const result=await drafts.apply(ownerId,target,idempotencyKey.parse(request.headers.get('idempotency-key')),applyStoryboard.parse(await readBody(request)));
+        if(result.replayed)headers.set('Idempotency-Replayed','true');
+        return reply(result.data);
+      }
       return reply(action === 'draft-read' ? await drafts.get(ownerId, target) : await drafts.save(ownerId, target, patchDraft.parse(await readBody(request))));
     }
     const service = projectService(db, client, config.secret);
