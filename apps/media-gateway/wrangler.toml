@@ -1,0 +1,13 @@
+name = "namastevideo-media-dev"
+main = "../web/src/storage/gateway.ts"
+compatibility_date = "2026-10-07"
+workers_dev = false
+# Set an explicit private bucket binding and gateway route before deployment.
+# Supply MEDIA_SERVICE_SECRET using Worker secrets; never commit it here.
+[vars]
+APP_ORIGIN = "https://replace-with-web-origin.example"
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "replace-with-private-dev-bucket"
+[observability]
+enabled = false

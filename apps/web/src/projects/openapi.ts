@@ -1,3 +1,4 @@
+import {storagePaths} from '../storage/openapi';
 import {editableStoryboardSchema,applyStoryboard} from '../storyboards/editable-contract';
 import { storyboardPaths } from '../storyboards/openapi';
 import { z } from 'zod';
@@ -49,6 +50,7 @@ export function projectsOpenApi() {
     servers: [{ url: '/' }], security: [{ session: [] }], components: { schemas: { Project: project }, responses: { Error: errorResponse }, securitySchemes: { session: { type: 'apiKey', in: 'cookie', name: 'better-auth.session_token', description: 'Better Auth HttpOnly session cookie; production uses its __Secure- prefix. Obtain it via the session facade.' } } },
     paths: {
       ...storyboardPaths(),
+      ...storagePaths(),
       '/api/projects/{id}/draft/apply':{parameters:[{in:'path',name:'id',required:true,schema:schema(projectId)}],post:{operationId:'applyStoryboardToDraft',description:'Explicit immutable candidate copy into the working draft. Shared revision and exact content hash required. Same-key replay returns the original snapshot, even after subsequent edits; reread the draft for current state. No approval or provider call.',parameters:keyed,requestBody:body(applyStoryboard),responses:{...errors,200:draftResponse}}},
       '/api/projects/{id}/idea-suggestions': {
         parameters: [{ in: 'path', name: 'id', required: true, schema: schema(projectId) }],

@@ -1,0 +1,11 @@
+import {z} from 'zod';
+export const assetId=z.string().regex(/^ast_[a-f0-9]{32}$/);
+export const sha256=z.string().regex(/^[a-f0-9]{64}$/);
+export const kinds={video:{type:'video/mp4',ext:'mp4'},preview:{type:'video/mp4',ext:'mp4'},audio:{type:'audio/mpeg',ext:'mp3'},thumbnail:{type:'image/png',ext:'png'},alignment:{type:'application/json',ext:'json'},timeline:{type:'application/json',ext:'json'},captions:{type:'text/vtt',ext:'vtt'},qa:{type:'application/json',ext:'json'}} as const;
+export const kindSchema=z.enum(['video','preview','audio','thumbnail','alignment','timeline','captions','qa']);
+export const MAX_ASSET_BYTES=64*1024*1024;
+export const accessRequest=z.object({purpose:z.enum(['preview','download'])}).strict();
+export const accessView=z.object({url:z.string().url(),expiresAt:z.string().datetime(),contentType:z.string(),bytes:z.number().int().positive()}).strict();
+export const assetView=z.object({id:assetId,projectId:z.string(),kind:kindSchema,state:z.enum(['staging','ready','deleting','deleted']),contentType:z.string(),bytes:z.number().int(),createdAt:z.string().datetime()}).strict();
+export const mediaAuthRequest=z.object({token:z.string().regex(/^[A-Za-z0-9_-]{43}$/),method:z.enum(['GET','HEAD']),range:z.string().max(128).optional()}).strict();
+export const mediaAuthView=z.object({objectKey:z.string().max(1024),contentType:z.string(),bytes:z.number().int().min(1).max(MAX_ASSET_BYTES),sha256,disposition:z.string()}).strict();
