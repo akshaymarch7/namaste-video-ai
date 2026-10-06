@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F12 local QA passed, including completed browser downloads; live R2 verification remains pending configuration.** Independent checks covered private inventory, thumbnail preview, PNG/VTT downloads with exact checksum matches, link revocation, expiry rejection and missing-file recovery. Eighteen storage tests and fourteen project tests rerun successfully. Migration 011 is required. No Cloudflare deployment or live R2 claim is made; rendering remains future work.
+**F12 local QA passed, including completed browser downloads; R2 credentials now configured; upload/gateway verification remains pending.** Independent checks covered private inventory, thumbnail preview, PNG/VTT downloads with exact checksum matches, link revocation, expiry rejection and missing-file recovery. Eighteen storage tests and fourteen project tests rerun successfully. Migration 011 is required. No Cloudflare deployment or live R2 claim is made; rendering remains future work.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -1294,3 +1294,10 @@ Evidence screenshots contain only synthetic data: [desktop media library](design
 **Limits:** the bucket was an in-memory fixture and the Worker handler ran under Node, so this does not verify live R2 conditional puts/readback, Cloudflare bindings/runtime, TLS/hosted streaming or deployed configuration. The ten-minute browser countdown was not waited out; expiry rejection used a past-expiry database fixture plus the deterministic suite. No audio/video codec playback, seeking or large-file performance matrix was run. Types/build/prototype checks were not repeated for this documentation-only QA change; implementation evidence remains separate. No application code, deployment or next-feature work was added.
 
 Reset the browser viewport, closed the QA tab and stopped the isolated server, gateway and database. Removed credentials, runner/source copy and the two hash-verified disposable downloads. No private media or bearer URLs were committed. Port 3001 was already not listening before this run; no original review server was stopped. F12 remains partial until live R2 configuration and verification are completed.
+
+
+## Development R2 credentials — October 7, 2026
+
+User requested collecting the remaining R2 settings from their signed-in Chrome session. Existing buckets belonged to a different project, so created private `namastevideo-dev` with Standard storage and automatic Asia Pacific placement. Dashboard confirmed Public Access Disabled. Created `namastevideo-dev-local` user token with Object Read & Write restricted to this bucket (default non-expiring lifetime); no account-wide bucket administration granted.
+
+Saved only R2_BUCKET, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY into ignored `apps/web/.env.local`, preserving existing entries and restricting file permissions to 0600. Secrets were not printed or committed. Using the saved environment, an actual SDK ListObjectsV2 request to the configured bucket returned HTTP 200. This verifies credential/bucket connectivity only, not upload integrity, gateway deployment or browser delivery. No objects were uploaded and no MongoDB migrations were run in this credential-collection step. Local ignored screenshot `apps/web/runs/r2-private-bucket.png` records the private bucket confirmation without credentials. No application code changed; runtime test suites were not repeated. Full live storage and Atlas verification remain pending.
