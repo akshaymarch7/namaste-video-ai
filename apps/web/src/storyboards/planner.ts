@@ -45,9 +45,23 @@ export function normalizeCandidate(raw: unknown): unknown {
     });
   });return plan;
 }
+export type PlannerTask = {
+ system: string;
+ payload: Record<string, unknown>;
+ requirements: Record<string, unknown>;
+ repairInstruction: string;
+ promptVersion: string;
+ validate(raw:unknown): ReturnType<typeof validateStoryboard>;
+};
 export async function planStoryboard(input: IdeaFields, config = geminiConfig(), request = fetch,
   observe: (event: PlanningDiagnostic) => void = () => {},
   options: {deadline?:number; progress?:(value:PlanningProgress)=>Promise<void>; sleep?:(ms:number)=>Promise<void>} = {}) {
+  return runStoryboardPlanner(input,config,request,observe,options);
+}
+// Shared bounded provider execution; task validators are trusted server code, never model input.
+export async function runStoryboardPlanner(input: IdeaFields, config = geminiConfig(), request = fetch,
+  observe: (event: PlanningDiagnostic) => void = () => {},
+  options: {deadline?:number; progress?:(value:PlanningProgress)=>Promise<void>; sleep?:(ms:number)=>Promise<void>} = {}, task?:PlannerTask) {
   const parsedInput=ideaFields.safeParse(input);
   if(!parsedInput.success)throw new ProviderError('INVALID_DRAFT');
   input=parsedInput.data;
@@ -64,7 +78,7 @@ export async function planStoryboard(input: IdeaFields, config = geminiConfig(),
     try {
       const response=await request(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`,{
         method:'POST', headers:{'Content-Type':'application/json','x-goog-api-key':config.key},redirect:'error',signal:AbortSignal.timeout(Math.max(1,Math.min(30000,deadline-Date.now()))),
-        body:JSON.stringify({systemInstruction:{parts:[{text:`${system}\nWire-format exception: visual has component, version and dataJson. dataJson is a JSON-encoded string containing ONLY the data object for that component from this application contract. Do not output a data field beside dataJson. Application contract for the decoded result:\n${JSON.stringify(z.toJSONSchema(storyboardSchema))}`}]},contents:[{role:'user',parts:[{text:JSON.stringify({savedIdea:input,requirements:{sceneCount:6,narrationWordsPerScene:"28–34 words in each narration field; 168–204 narration words overall",cueRule:"Copy an exact case-sensitive substring from the final narration, with the correct one-based occurrence. Prefer the first word with occurrence 1."}, ...(repair?{repair:{...repair,instruction:'Repair only the invalid fields and their dependent cues while preserving valid scenes, facts, and the saved topic. Recheck every changed scene. For narration length, distribute the required added or removed words across the scenes rather than rewriting the topic. unrecognized_keys means remove ALL keys outside the schema; the root permits only schemaVersion, title, audience, learningObjective, language, voicePreset, sources, scenes. DURATION_ESTIMATE_OUT_OF_RANGE includes actual, minimum and maximum NARRATION WORD COUNTS. If actual is below minimum, expand the narration with concrete explanation; if above maximum, shorten it. The total narration must contain 150–225 words; aim for six scenes each with 28–34 narration words. Titles and labels do not count. MISSING_CUE means copy an exact case-sensitive substring from the final narration. Return the complete replacement JSON object.'}}:{})})}]}],
+        body:JSON.stringify({systemInstruction:{parts:[{text:`${task?.system??system}\nWire-format exception: visual has component, version and dataJson. dataJson is a JSON-encoded string containing ONLY the data object for that component from this application contract. Do not output a data field beside dataJson. Application contract for the decoded result:\n${JSON.stringify(z.toJSONSchema(storyboardSchema))}`}]},contents:[{role:'user',parts:[{text:JSON.stringify({savedIdea:input,...task?.payload,requirements:task?.requirements??{sceneCount:6,narrationWordsPerScene:"28–34 words in each narration field; 168–204 narration words overall",cueRule:"Copy an exact case-sensitive substring from the final narration, with the correct one-based occurrence. Prefer the first word with occurrence 1."}, ...(repair?{repair:{...repair,instruction:task?.repairInstruction??'Repair only the invalid fields and their dependent cues while preserving valid scenes, facts, and the saved topic. Recheck every changed scene. For narration length, distribute the required added or removed words across the scenes rather than rewriting the topic. unrecognized_keys means remove ALL keys outside the schema; the root permits only schemaVersion, title, audience, learningObjective, language, voicePreset, sources, scenes. DURATION_ESTIMATE_OUT_OF_RANGE includes actual, minimum and maximum NARRATION WORD COUNTS. If actual is below minimum, expand the narration with concrete explanation; if above maximum, shorten it. The total narration must contain 150–225 words; aim for six scenes each with 28–34 narration words. Titles and labels do not count. MISSING_CUE means copy an exact case-sensitive substring from the final narration. Return the complete replacement JSON object.'}}:{})})}]}],
           generationConfig:{...ideaThinking(config.model),responseMimeType:'application/json',responseJsonSchema:plannerResponseSchema(),maxOutputTokens:8192}}),
       });
       httpStatus=response.status;
@@ -78,8 +92,9 @@ export async function planStoryboard(input: IdeaFields, config = geminiConfig(),
       if(typeof raw!=='string'||!raw)throw new ProviderError('PROVIDER_RESPONSE_INVALID');
       try {
         await options.progress?.({stage:'checking',attempt,issueCodes:[]});
-        const result=validateStoryboard(normalizeCandidate(decodePlannerCandidate(JSON.parse(raw))),input); category='OK';
-        return {...result,plannerConfig:{provider:'gemini' as const,model:config.model,promptVersion:plannerPromptVersion},attempts:attempt};
+        const decoded=decodePlannerCandidate(JSON.parse(raw));
+        const result=task?task.validate(decoded):validateStoryboard(normalizeCandidate(decoded),input); category='OK';
+        return {...result,plannerConfig:{provider:'gemini' as const,model:config.model,promptVersion:task?.promptVersion??plannerPromptVersion},attempts:attempt};
       } catch(error) {
         if(!(error instanceof StoryboardInvalid||error instanceof SyntaxError))throw error;
         issueCodes=[...new Set(error instanceof StoryboardInvalid?error.issues.map(i=>i.code):['INVALID_JSON'])];

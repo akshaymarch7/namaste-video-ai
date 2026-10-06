@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F10b2 — independent QA passed; P2 conflict-comparison finding verified fixed.** User accepted F10b1 API QA/code review. Editable working copies, narration/on-screen text controls, validation feedback, explicit save/reload, replacement confirmation and conflict/unknown-save recovery are implemented. Verification and limits are recorded below. Generated candidates remain immutable; approval remains F11.
+**F11a — storyboard revision engine implemented; ready for code review.** User approved F10b2 and its P2 comparison fix. The new server-only engine supports whole-story and scene-scoped revision candidates with trusted differences and bounded repair. Deterministic tests pass; live revision quality has not been measured. Persistence/dashboard integration is F11b, immutable approval is F11c. No new browser controls are present in this checkpoint.
 
 Internal authentication APIs and initial database collections are implemented and tested locally. Cinema sign-in/recovery and a protected workspace entry are available. Personal project create/list/read/rename/delete APIs are available; the My videos library UI is implemented, while hosted rendering and Instagram integration remain future work; no hosted database has been provisioned. The local video pipeline remains separately usable.
 
@@ -45,8 +45,10 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F09b | Storyboard candidate storage and APIs | Done; user approved | 24 targeted tests rerun, two live candidates and extended HTTP isolation/recovery/pagination checks; prior 109 web tests/types/build recorded below |
 | F10a | Storyboard generation and review UI | Done; user approved including reliability fixes | Desktop/mobile review, successful and failed reload recovery, two-tab conflict/history checks, 11 client tests; prior types/build below |
 | F10b1 | Editable storyboard persistence/API | Done; user approved | 69 targeted tests and six actual-HTTP check groups covering apply/edit/replay/conflicts/isolation/preservation; evidence below |
-| F10b2 | Cinema storyboard text editor | QA passed; awaiting user acceptance | Prior desktop/mobile editing and save recovery passed; P2 cue comparison fix browser-verified on bc129c3; 23 UI/controller tests rerun |
-| F11 | Conversational storyboard revisions and approval | Planned | Changed scenes, restore, stale-result handling, immutable approved version |
+| F10b2 | Cinema storyboard text editor | Done; user approved | Prior desktop/mobile editing and save recovery passed; P2 cue comparison fix browser-verified on bc129c3; 23 UI/controller tests rerun |
+| F11a | Storyboard revision engine | Implemented; awaiting review | 45 storyboard tests (10 new revision tests), 23 prototype tests, types/build; no live revision or persistence claim |
+| F11b | Revision persistence and dashboard workflow | Planned | Snapshot admission, saved candidates, reload/stale recovery, review/apply and restore |
+| F11c | Immutable storyboard approval | Planned | Exact-version approval and integration boundary for later rendering |
 | F12 | Private R2 asset adapter and media access | Planned | Private upload/read, owner-authorized access, expiry and missing-asset behavior |
 | F13 | Durable generation job orchestration | Partial: local storyboard queue brought forward; hosted jobs planned | Inngest integration, one active job, deduplication, progress and cancellation |
 | F14 | Hosted rendering integration | Planned | Approved storyboard to validated MP4; resource/runtime benchmark; previous version retained |
@@ -1034,3 +1036,18 @@ Verification: `npm run test:storyboard-ui` **23/23** passed; `npm run typecheck:
 `npm run test:storyboard-ui` under Node 24 passed **23/23**, including both new regressions. The tests independently exercise pronunciation phrase/spoken-as/occurrence differences; this fixture has no pronunciation entries, so a pronunciation-only browser conflict was not claimed. Timing values were visually confirmed, not edited through the UI. The preceding independent desktop/mobile, validation and actual timeout-recovery checks remain valid separate evidence; no providers were called. Typechecks/build and unrelated suites were not repeated for this targeted documentation-only QA checkpoint.
 
 Evidence: [corrected cue conflict comparison](design/verification/f10b2-qa-cue-conflict-fixed.jpg). No new blocker found. F10b2 QA is passed within the recorded scope; user acceptance remains separate, and F11 has not begun.
+
+
+## F11a — Storyboard revision engine — October 6, 2026
+
+**Acceptance/scope:** user approved F10b2 including the independently verified comparison fix. F11 is split into engine (F11a), persistent revision/dashboard workflow (F11b), and immutable approval (F11c). This slice implements a server-only revision engine accepting a validated PlanV2 source snapshot, saved idea, trusted freshness flag, bounded instruction and optional stable scene ID. It returns a validated candidate and deterministic changed-scene/metadata-field lists with `requiresApproval:true`. It performs no database writes and grants no approval.
+
+Whole-story requests may revise content/title/objective/sources but retain scene IDs/order/count and voice/language/audience. Scene-scoped requests additionally preserve root metadata and all other scenes exactly. Source inputs are cloned/validated before async work; caller mutation cannot change the baseline. Unknown scenes, stale or invalid sources and invalid instructions fail before provider dispatch. Unchanged output is rejected rather than reported as applied. Results are checked by the server, not a model-provided change summary. Existing planner ID normalization is deliberately bypassed for revision results to preserve stable identities.
+
+The engine reuses the established bounded Gemini executor: four total calls, completed-invalid-result repair, transient backoff, 30-second per-call timeout and three-minute deadline. Authorization/configuration/ambiguous network outcomes stop without automatic retries. Out-of-scope changes enter bounded repair against the original source. Logs retain only existing sanitized status/category/duration/issue codes. No keys or content are logged by these changes.
+
+**Files:** new `apps/web/src/storyboards/revisions.ts` and `tests/storyboard-revisions.test.ts`; shared executor extraction in `src/storyboards/planner.ts`; web storyboard test command; README, API/system design checkpoint notes and Project Status. Public routes/OpenAPI/database schemas and frontend remain unchanged. Prototype CLI/rendering stay intact.
+
+**Verification:** `npm run test:storyboards` **45/45**, including ten new tests for scoped/global revisions, source immutability, stable IDs, trusted diff, scope repair/exhaustion, no-op/invalid result rejection, pre-dispatch failures, timeout/auth/deadline behavior and transient retries/sanitized diagnostics. Existing real disposable Mongo storage/queue/apply tests passed. `npm run check` passed both TypeScript checks and **23/23** prototype tests. `npm run build` and `git diff --check` passed. All provider responses were labelled deterministic fixtures; no provider quota or live browser check was needed for this server-module slice.
+
+**Remaining:** F11b must authorize and snapshot owner/project/version/hash/revision in durable admission, persist revision candidates/lineage/conversation, and add review/apply/restoration plus stale-result/reload handling. The caller freshness flag is not an HTTP security boundary. F11c owns immutable explicit approval; no generated revision inherits approval. Scene insertion/deletion/reordering, voice/language/audience changes and video-side revisions are unsupported here. Structural validation cannot establish factual accuracy or instruction fulfillment; live Gemini revision evaluation is pending. There is no new dashboard checkpoint to test yet. Stop at this engine checkpoint for code review before the next slice.
