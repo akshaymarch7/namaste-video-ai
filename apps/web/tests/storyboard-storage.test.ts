@@ -1,3 +1,5 @@
+import {setupStoryboardRevisions,assertStoryboardRevisionsReady} from '../src/storyboards/revision-setup';
+import {revisionRequest} from '../src/storyboards/api-contracts';
 import {setupEditableDrafts} from '../src/drafts/edit-setup';
 import {runStoryboardJob} from '../src/storyboards/worker';
 import { setupStoryboardQueue } from '../src/storyboards/queue-setup';
@@ -32,7 +34,7 @@ const config = { origin: 'http://127.0.0.1:3002', secure: false, secret: randomB
 before(async () => {
   replica = await MongoMemoryReplSet.create({ binary: { version: '8.0.17' }, replSet: { count: 1, ip: '127.0.0.1', storageEngine: 'wiredTiger' } });
   client = await new MongoClient(replica.getUri(), { promoteLongs: false }).connect(); db = client.db('drafts_test');
-  await setupDatabase(db); await setupProjects(db); await setupDrafts(db); await setupIdeas(db); await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db); await setupAuth(db, client, config);
+  await setupDatabase(db); await setupProjects(db); await setupDrafts(db); await setupIdeas(db); await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db); await setupStoryboardRevisions(db); await setupAuth(db, client, config);
   const auth = createAuth(db, client, config); deps = { db, client, config, auth };
   drafts = draftService(db, client); projects = projectService(db, client, config.secret);
   const identities = [];
@@ -274,4 +276,98 @@ test('apply receipt failure rolls back draft and parent; clearing or editing can
  await db.collection('projects').updateOne({_id:project.id as never},{$set:{deletedAt:new Date()}});
  assert.equal((await applyReq(project.id,body,key)).status,404);
  await rejects(drafts.get(owner,project.id),'NOT_FOUND');
+});
+
+const revisionSeed=async()=>{
+ const item=await make();const generated=await service().create(owner,item.id,randomUUID(),input);
+ const candidate=await service().get(owner,generated.data.storyboardId!);
+ const body=revisionRequest.parse({expectedDraftRevision:2,source:{kind:'storyboard',id:candidate.id,hash:candidate.contentHash},instruction:'Clarify the opening title',sceneId:candidate.content.scenes[0].id});
+ return {item,candidate,body};
+};
+const revise=(id:string,body:unknown,key=randomUUID(),headers:Record<string,string>={})=>handleStoryboards(new Request(`${config.origin}/api/projects/${id}/revisions`,{method:'POST',headers:{Cookie:cookie,Origin:config.origin,'Content-Type':'application/json','Idempotency-Key':key,...headers},body:JSON.stringify(body)}),'revise',id,async()=>deps,provider);
+const revisionProvider=(onRun:()=>void=()=>{}):StoryboardProvider=>({model:'fixture-model',run:async(_idea,context)=>{
+ onRun();assert.ok(context.revision);const content=structuredClone(context.revision.source);content.scenes[0].title='A clearer opening';return {content};
+}});
+test('revision migration replays with strict bounded command documents',async()=>{
+ await setupStoryboardRevisions(db);await assertStoryboardRevisionsReady(db);
+ await rejects(assertStoryboardRevisionsReady(client.db('missing_revision_setup')),'STORYBOARD_SETUP_REQUIRED');
+ await assert.rejects(db.collection('storyboardRevisions').insertOne({unexpected:true}));
+});
+test('revision admission is idempotent and worker preserves source/draft with trusted lineage',async()=>{
+ const {item,candidate,body}=await revisionSeed(),key=randomUUID(),before=await drafts.get(owner,item.id);
+ const responses=await Promise.all([revise(item.id,body,key),revise(item.id,body,key)]);
+ assert.deepEqual(responses.map(r=>r.status),[202,202]);const receipts=await Promise.all(responses.map(r=>r.json()));
+ assert.equal(receipts[0].data.id,receipts[1].data.id);let count=0;
+ await Promise.all([runStoryboardJob(db,client,()=>revisionProvider(()=>{count++;})),runStoryboardJob(db,client,()=>revisionProvider(()=>{count++;}))]);
+ assert.equal(count,1);const completed=(await service().latest(owner,item.id))!;
+ const result=storyboardView.parse(await service().get(owner,completed.storyboardId!));
+ assert.equal(result.parentId,candidate.id);assert.deepEqual(result.changedSceneIds,[body.sceneId]);assert.match(result.changeSummary!,/Updated 1 scene/);
+ assert.equal(result.approvalId,null);assert.equal(result.stale,false);
+ assert.deepEqual((await service().get(owner,candidate.id)).content,candidate.content);assert.deepEqual(await drafts.get(owner,item.id),before);
+ const replay=await revise(item.id,body,key);assert.equal(replay.status,200);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');assert.equal((await replay.json()).data.storyboardId,result.id);
+ assert.equal((await revise(item.id,{...body,instruction:'Different'},key)).status,409);
+ const history=await service().list(owner,item.id,{limit:20});assert.equal(history.data.find(x=>x.id===result.id)?.parentId,candidate.id);
+ const queue=await db.collection('storyboardQueue').findOne({_id:completed.id as never});assert.equal(queue?.draft,null);
+});
+test('revision auth/origin/source/revision/scope checks reject before queueing',async()=>{
+ const {item,body}=await revisionSeed();
+ for(const [headers,status] of [[{Cookie:''},401],[{Cookie:otherCookie},404],[{Origin:'https://wrong.test'},403]] as const)assert.equal((await revise(item.id,body,randomUUID(),headers)).status,status);
+ for(const [patch,status] of [[{expectedDraftRevision:1},409],[{source:{...body.source,hash:'0'.repeat(64)}},409],[{sceneId:'absent'},422],[{instruction:' '},422],[{source:{...body.source,kind:'video'}},422],[{extra:true},422]] as const)assert.equal((await revise(item.id,{...body,...patch})).status,status);
+ const foreign=await make(other);assert.equal((await revise(foreign.id,body)).status,404);
+ assert.equal(await db.collection('storyboardRevisions').countDocuments({projectId:item.id}),0);assert.equal((await projects.get(owner,item.id)).activeJobId,null);
+});
+test('applied fresh source is allowed; edited working copy and stale source are rejected',async()=>{
+ const {item,candidate,body}=await revisionSeed();
+ const applied=await drafts.apply(owner,item.id,randomUUID(),{expectedDraftRevision:2,storyboardId:candidate.id,expectedContentHash:candidate.contentHash});
+ const revision=applied.data.revision;assert.equal((await revise(item.id,{...body,expectedDraftRevision:revision})).status,202);
+ await runStoryboardJob(db,client,()=>revisionProvider());
+ const plan=structuredClone(candidate.content);plan.scenes[0].title='Manual edit';
+ const saved=await drafts.save(owner,item.id,{expectedRevision:revision,changes:{editablePlan:plan}});
+ assert.equal((await revise(item.id,{...body,expectedDraftRevision:saved.revision})).status,409);
+});
+test('edits during queued revision retain snapshot and make result stale without overwriting draft',async()=>{
+ const {item,body}=await revisionSeed();assert.equal((await revise(item.id,body)).status,202);
+ await drafts.save(owner,item.id,{expectedRevision:2,changes:{topic:'Another topic'}});
+ const before=await drafts.get(owner,item.id);await runStoryboardJob(db,client,()=>revisionProvider());
+ const result=await service().get(owner,(await service().latest(owner,item.id))!.storyboardId!);
+ assert.equal(result.stale,true);assert.deepEqual(await drafts.get(owner,item.id),before);
+});
+test('revision results are revalidated independently of provider and preserve prior candidate on failure',async()=>{
+ const {item,candidate,body}=await revisionSeed();await revise(item.id,body);
+ await runStoryboardJob(db,client,()=>({model:'fixture-model',run:async(_input,context)=>{const content=structuredClone(context.revision!.source);content.scenes[1].title='Out of scope';return {content};}}));
+ const failed=(await service().latest(owner,item.id))!;assert.equal(failed.state,'failed');assert.equal(failed.errorCode,'STORYBOARD_INVALID');
+ assert.equal((await service().list(owner,item.id,{limit:20})).data.length,1);assert.deepEqual((await service().get(owner,candidate.id)).content,candidate.content);
+});
+test('revision command insertion failure rolls back receipt, queue and project slot',async()=>{
+ const {item,body}=await revisionSeed(),key=randomUUID();
+ const definition=(await db.listCollections({name:'storyboardRevisions'},{nameOnly:false}).toArray())[0];
+ await db.command({collMod:'storyboardRevisions',validator:{$and:[definition.options!.validator,{projectId:{$ne:item.id}}]}});
+ try{assert.equal((await revise(item.id,body,key)).status,503);}finally{await db.command({collMod:'storyboardRevisions',validator:definition.options!.validator});}
+ assert.equal(await db.collection('storyboardQueue').countDocuments({projectId:item.id}),0);
+ assert.equal(await db.collection('storyboardRequests').countDocuments({projectId:item.id}),1);
+ assert.equal((await projects.get(owner,item.id)).activeJobId,null);
+ assert.equal((await revise(item.id,body,key)).status,202);await runStoryboardJob(db,client,()=>revisionProvider());
+});
+test('revision queue expiry makes no provider call and retains replay and source history',async()=>{
+ const {item,body,candidate}=await revisionSeed();let date=new Date();const key=randomUUID();
+ const svc=storyboardService(db,client,config.secret,provider,()=>date,true);
+ const queued=await svc.create(owner,item.id,key,body);
+ await rejects(svc.create(owner,item.id,randomUUID(),body),'PROJECT_BUSY');
+ await rejects(svc.create(owner,item.id,randomUUID(),input),'PROJECT_BUSY');
+ date=new Date(date.getTime()+180001);let count=0;await runStoryboardJob(db,client,()=>revisionProvider(()=>{count++;}),()=>date);
+ const replay=await svc.create(owner,item.id,key,body);assert.equal(replay.data.id,queued.data.id);assert.equal(replay.data.errorCode,'QUEUE_EXPIRED');assert.equal(count,0);
+ assert.deepEqual((await svc.get(owner,candidate.id)).content,candidate.content);
+});
+test('ambiguous revision result is not re-executed on replay',async()=>{
+ const {item,body}=await revisionSeed(),key=randomUUID();await revise(item.id,body,key);let count=0;
+ await runStoryboardJob(db,client,()=>({model:'fixture-model',run:async()=>{count++;throw new ProviderError('PROVIDER_OUTCOME_UNKNOWN');}}));
+ const replay=await revise(item.id,body,key);assert.equal((await replay.json()).data.state,'unknown');
+ assert.equal(await runStoryboardJob(db,client,()=>revisionProvider(()=>{count++;})),false);assert.equal(count,1);
+});
+test('missing revision metadata cannot turn accepted revision into fresh generation',async()=>{
+ const {item,body}=await revisionSeed();const response=await revise(item.id,body),receipt=(await response.json()).data;
+ const command=await db.collection('storyboardRevisions').findOne({_id:receipt.id as never});assert.ok(command);
+ await db.collection('storyboardRevisions').deleteOne({_id:receipt.id as never});let count=0;
+ await runStoryboardJob(db,client,()=>revisionProvider(()=>{count++;}));
+ assert.equal(count,0);assert.equal((await service().latest(owner,item.id))?.errorCode,'SOURCE_CHANGED');
 });

@@ -1,3 +1,4 @@
+import {setupStoryboardRevisions} from '../src/storyboards/revision-setup';
 import {setupEditableDrafts} from '../src/drafts/edit-setup';
 import { setupStoryboardQueue } from '../src/storyboards/queue-setup';
 import { setupStoryboards } from '../src/storyboards/setup';
@@ -40,7 +41,7 @@ before(async () => {
   await setupProjects(db);
   await setupDrafts(db);
   await setupIdeas(db);
-  await setupStoryboards(db); await setupStoryboardQueue(db);await setupEditableDrafts(db);
+  await setupStoryboards(db); await setupStoryboardQueue(db);await setupEditableDrafts(db);await setupStoryboardRevisions(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, account);
   const auth = createAuth(db, client, config);
@@ -272,6 +273,8 @@ test('actual Next.js routes allow the full session round trip and expose no nati
       assert.equal(read.status, 200);
       assert.deepEqual((await read.json()).data, suffix === 'storyboards' ? [] : null);
     }
+    assert.equal((await fetch(`${origin}/api/projects/${project.id}/revisions`,{method:'POST'})).status,401);
+    assert.equal((await fetch(`${origin}/api/projects/${project.id}/revisions`,{method:'POST',headers:{Cookie:cookies(login),Origin:origin,'Content-Type':'application/json','Idempotency-Key':'revision-http-test-0001'},body:JSON.stringify({expectedDraftRevision:1})})).status,422);
     const invalidStoryboard = await fetch(`${origin}/api/projects/${project.id}/storyboards`, {method:'POST',headers:{Cookie:cookies(login),Origin:origin,'Content-Type':'application/json','Idempotency-Key':'storyboard-http-test-0001'},body:JSON.stringify({expectedDraftRevision:1})});
     assert.equal(invalidStoryboard.status,422);assert.equal((await invalidStoryboard.json()).error.code,'INVALID_DRAFT');
     assert.equal((await fetch(`${origin}/api/storyboards/stb_00000000000000000000000000000000`,{headers:{Cookie:cookies(login)}})).status,404);

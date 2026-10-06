@@ -1,3 +1,4 @@
+import {setupStoryboardRevisions} from '../src/storyboards/revision-setup';
 import {setupEditableDrafts} from '../src/drafts/edit-setup';
 import { setupStoryboardQueue } from '../src/storyboards/queue-setup';
 import { setupStoryboards } from '../src/storyboards/setup';
@@ -46,7 +47,7 @@ try {
   await setupProjects(db);
   await setupDrafts(db);
   await setupIdeas(db);
-  await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db);
+  await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db); await setupStoryboardRevisions(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, input);
   // Explicit environment wins over any web env file. Do not inherit provider or migration credentials.

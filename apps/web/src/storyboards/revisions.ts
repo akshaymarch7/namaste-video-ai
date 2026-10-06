@@ -1,16 +1,12 @@
 import 'server-only';
-import {z} from 'zod';
 import {isDeepStrictEqual} from 'node:util';
 import {ideaFields,type IdeaFields} from '../drafts/contracts';
 import {geminiConfig,ProviderError} from '../ideas/providers';
-import {storyboardSchema,validateStoryboard,StoryboardInvalid,type Storyboard} from './contracts';
+import {validateStoryboard,StoryboardInvalid,type Storyboard} from './contracts';
 import {runStoryboardPlanner,type PlanningDiagnostic,type PlanningProgress} from './planner';
 
-export const revisionInstruction=z.object({
- instruction:z.string().trim().min(1).max(4000),
- sceneId:storyboardSchema.shape.scenes.element.shape.id.optional(),
-}).strict();
-export type RevisionInstruction=z.infer<typeof revisionInstruction>;
+export {revisionInstruction,type RevisionInstruction} from './revision-input';
+import {revisionInstruction,type RevisionInstruction} from './revision-input';
 export const revisionPromptVersion='storyboard-revision-v2-core-1';
 
 // A structural difference is not proof of unchanged meaning. Every result here

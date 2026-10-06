@@ -213,6 +213,415 @@
     }
   },
   "paths": {
+    "/api/projects/{id}/revisions": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "reviseStoryboardCandidate",
+        "description": "Queues an immutable storyboard-source revision. Requires current draft revision, exact source hash and either a source at that revision or its unchanged fresh applied working copy. Manual edited plans must first become immutable sources in a future slice. Video sources are unsupported. Same-key replay recovers the shared storyboard receipt; provider work never happens inside the HTTP request. Results preserve the source, draft and selection, and expose parentId/changedSceneIds/changeSummary in existing storyboard reads. Every result needs review; no approval is inherited.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "string",
+              "pattern": "^[\\x21-\\x7e]{16,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "instruction": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "sceneId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,49}$"
+                  },
+                  "expectedDraftRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647
+                  },
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "storyboard"
+                      },
+                      "id": {
+                        "type": "string",
+                        "pattern": "^stb_[a-f0-9]{32}$"
+                      },
+                      "hash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "id",
+                      "hash"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "instruction",
+                  "expectedDraftRevision",
+                  "source"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Owner-scoped result. Running receipts return 202; terminal receipts return 200.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "const": "true"
+                },
+                "description": "Present only on a same-key POST replay."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^job_[a-f0-9]{32}$"
+                        },
+                        "projectId": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "running",
+                            "completed",
+                            "failed",
+                            "unknown"
+                          ]
+                        },
+                        "sourceDraftRevision": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "storyboardId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^stb_[a-f0-9]{32}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "errorCode": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "deadline": {
+                          "type": "string"
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "planning",
+                            "repairing",
+                            "retrying",
+                            "checking",
+                            "ready",
+                            "stopped"
+                          ]
+                        },
+                        "attempt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4
+                        },
+                        "issueCodes": {
+                          "maxItems": 30,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "projectId",
+                        "state",
+                        "sourceDraftRevision",
+                        "model",
+                        "storyboardId",
+                        "errorCode",
+                        "createdAt",
+                        "updatedAt",
+                        "deadline"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Owner-scoped result. Running receipts return 202; terminal receipts return 200.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "const": "true"
+                },
+                "description": "Present only on a same-key POST replay."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^job_[a-f0-9]{32}$"
+                        },
+                        "projectId": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "running",
+                            "completed",
+                            "failed",
+                            "unknown"
+                          ]
+                        },
+                        "sourceDraftRevision": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "storyboardId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^stb_[a-f0-9]{32}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "errorCode": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "deadline": {
+                          "type": "string"
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "planning",
+                            "repairing",
+                            "retrying",
+                            "checking",
+                            "ready",
+                            "stopped"
+                          ]
+                        },
+                        "attempt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4
+                        },
+                        "issueCodes": {
+                          "maxItems": 30,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "projectId",
+                        "state",
+                        "sourceDraftRevision",
+                        "model",
+                        "storyboardId",
+                        "errorCode",
+                        "createdAt",
+                        "updatedAt",
+                        "deadline"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/projects/{id}/storyboards": {
       "parameters": [
         {
@@ -655,7 +1064,15 @@
                             "type": "string"
                           },
                           "parentId": {
-                            "type": "null"
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^stb_[a-f0-9]{32}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "sourceDraftRevision": {
                             "type": "integer",
@@ -695,12 +1112,20 @@
                             }
                           },
                           "changeSummary": {
-                            "type": "null"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "changedSceneIds": {
                             "type": "array",
                             "items": {
-                              "not": {}
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9-]{0,49}$"
                             }
                           },
                           "approvalId": {
@@ -1199,7 +1624,15 @@
                           "type": "string"
                         },
                         "parentId": {
-                          "type": "null"
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^stb_[a-f0-9]{32}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "sourceDraftRevision": {
                           "type": "integer",
@@ -1239,12 +1672,20 @@
                           }
                         },
                         "changeSummary": {
-                          "type": "null"
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "changedSceneIds": {
                           "type": "array",
                           "items": {
-                            "not": {}
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9-]{0,49}$"
                           }
                         },
                         "approvalId": {
