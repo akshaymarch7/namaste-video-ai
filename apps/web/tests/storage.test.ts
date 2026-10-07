@@ -73,3 +73,29 @@ test('R2 recovery reads enforce checksum, content type and byte bounds',async()=
  assert.deepEqual(await store.read('key',body.length,hash,'application/json'),body);assert.equal(closed,true);
  for(const mode of ['type','oversized','corrupt']){variant=mode;closed=false;await fail(store.read('key',body.length,hash,'application/json'),'ASSET_INTEGRITY_FAILED');assert.equal(closed,true);}
 });
+
+
+test('gateway rejects authorization redirects without following them or reading private storage',async()=>{
+ let reads=0,calls=0;
+ const bucket:Bucket={head:async()=>{reads++;return null;},get:async()=>{reads++;return null;}};
+ for(const status of [301,302,303,307,308]){
+  const response=await gateway(new Request(delivery.origin+'/media/'+'a'.repeat(43)),env(bucket),(async(_url,init)=>{
+   calls++;assert.equal(init?.redirect,'manual');
+   return new Response(null,{status,headers:{Location:'https://untrusted.example/secret'}});
+  }) as typeof fetch);
+  assert.equal(response.status,503);assert.equal(response.headers.get('x-media-failure'),`authorization-http-${status}`);
+  assert.equal(response.headers.get('location'),null);assert.equal(await response.text(),'');
+ }
+ assert.equal(calls,5);assert.equal(reads,0);
+});
+test('gateway diagnostics expose fixed categories, never exception details or bearer values',async()=>{
+ let reads=0;
+ const bucket:Bucket={head:async()=>{reads++;return null;},get:async()=>{reads++;return null;}};
+ for(const [error,category] of [[new TypeError('private-token-and-secret'),'type-error'],[new DOMException('private-token','TimeoutError'),'timeout'],[new Error('private-object-key'),'exception']] as const){
+  const response=await gateway(new Request(delivery.origin+'/media/'+'a'.repeat(43)),env(bucket),(async()=>{throw error;}) as typeof fetch);
+  assert.equal(response.status,503);assert.equal(response.headers.get('x-media-failure'),`authorization-${category}`);
+  assert.equal(response.headers.get('cache-control'),'private, no-store');
+  assert.equal(JSON.stringify([...response.headers]).includes('private-token'),false);assert.equal(await response.text(),'');
+ }
+ assert.equal(reads,0);
+});
