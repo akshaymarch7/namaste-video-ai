@@ -30,6 +30,7 @@ export const fixtureTimeline=()=>compileV2(renderFixture,{notes:'',voicePreset:'
 export function layoutStressFixture():Storyboard{
   const plan=structuredClone(renderFixture);
   for(const scene of plan.scenes){
+    scene.kicker='W'.repeat(35);
     const v=scene.visual;
     if(v.component==='flow')v.data.steps.forEach(s=>{s.label='Reliable distributed systems';});
     else if(v.component==='comparison')for(const side of [v.data.left,v.data.right]){

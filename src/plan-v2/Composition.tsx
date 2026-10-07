@@ -53,8 +53,11 @@ function Scene({scene,index,total,fixture,audio}:{scene:RenderScene;index:number
   const frame=useCurrentFrame(),caption=scene.captions.find(c=>frame>=c.start&&frame<c.end);
   return <AbsoluteFill style={{background:'#f5f3ec',color:ink,fontFamily:'DM Sans',padding:'125px 85px 100px'}}>
     {audio&&<Audio src={staticFile(`${scene.id}.mp3`)}/>}
-    <div style={{display:'flex',justifyContent:'space-between',fontSize:23,letterSpacing:3,fontWeight:600,color:teal}}><span>{scene.kicker}</span><span>{String(index+1).padStart(2,'0')} / {String(total).padStart(2,'0')}</span></div>
-    <div style={{marginTop:55,height:260,opacity:fade(frame),transform:`translateY(${(1-fade(frame))*20}px)`}}><h1 style={{fontSize:scene.title.length>40?52:scene.title.length>28?62:80,lineHeight:1.05,letterSpacing:-3,margin:0,fontWeight:600,overflowWrap:'anywhere'}}>{scene.title}</h1></div>
+    <div style={{display:'grid',gridTemplateColumns:'minmax(0, 1fr) 130px',columnGap:24,alignItems:'start',height:56,flexShrink:0,fontSize:23,lineHeight:1.2,letterSpacing:3,fontWeight:600,color:teal}}>
+      <span style={{minWidth:0,overflowWrap:'anywhere'}}>{scene.kicker}</span>
+      <span style={{whiteSpace:'nowrap',textAlign:'right'}}>{String(index+1).padStart(2,'0')} / {String(total).padStart(2,'0')}</span>
+    </div>
+    <div style={{marginTop:27,height:260,opacity:fade(frame),transform:`translateY(${(1-fade(frame))*20}px)`}}><h1 style={{fontSize:scene.title.length>40?52:scene.title.length>28?62:80,lineHeight:1.05,letterSpacing:-3,margin:0,fontWeight:600,overflowWrap:'anywhere'}}>{scene.title}</h1></div>
     <div style={{marginTop:5,opacity:fade(frame)}}><DiagramV2 scene={scene}/></div>
     <div style={{position:'absolute',bottom:225,left:90,right:90,height:170,display:'flex',alignItems:'center',justifyContent:'center'}}>{caption&&<div style={{background:ink,color:'#fff',borderRadius:22,padding:'23px 34px',fontSize:40,lineHeight:1.3,textAlign:'center',maxWidth:850,overflowWrap:'anywhere'}}>{caption.text}</div>}</div>
     <div style={{position:'absolute',bottom:105,left:90,right:90,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:20,color:'#6c827b'}}><span>{fixture?'SILENT FIXTURE · SYNTHETIC TIMING':'AI-GENERATED NARRATION'}</span><div style={{display:'flex',gap:8}}>{Array.from({length:total},(_,i)=><div key={i} style={{width:i===index?38:10,height:7,borderRadius:5,background:i<=index?teal:'#d4ded5'}}/>)}</div></div>
