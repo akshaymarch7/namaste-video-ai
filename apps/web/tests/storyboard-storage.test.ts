@@ -519,3 +519,19 @@ test('approval revalidates semantic constraints and stored canonical hashes',asy
  await db.collection('storyboards').updateOne({_id:candidate.id as never},{$set:{content:broken,...hashes}});
  const invalid=await approveReq(project.id,{...command,expectedContentHash:hashes.contentHash});assert.equal((await invalid.json()).error.code,'INVALID_DRAFT');assert.equal(await db.collection('approvals').countDocuments({projectId:project.id}),0);
 });
+
+test('bounded storyboard execution cannot consume another queued request',async()=>{
+ const first=await make(),second=await make();
+ const a=storyboardReceipt.parse(await (await req(first.id,'create',input)).json().then(body=>body.data));
+ const b=storyboardReceipt.parse(await (await req(second.id,'create',input)).json().then(body=>body.data));
+ const before=calls;
+ assert.equal(await runStoryboardJob(db,client,provider,undefined,b.id),true);
+ assert.equal(calls,before+1);
+ assert.equal((await service().latest(owner,second.id))!.state,'completed');
+ assert.equal((await db.collection('storyboardQueue').findOne({_id:a.id as never}))!.state,'queued');
+ assert.equal(await runStoryboardJob(db,client,provider,undefined,b.id),false);
+ assert.equal(calls,before+1);
+ assert.equal(await runStoryboardJob(db,client,provider,undefined,'job_'+'f'.repeat(32)),false);
+ await assert.rejects(runStoryboardJob(db,client,provider,undefined,'invalid'));
+ await runStoryboardJob(db,client,provider,undefined,a.id);
+});

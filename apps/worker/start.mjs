@@ -1,10 +1,12 @@
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {workerConfig} from './config.mjs';
+import {workerInvocation} from './invocation.mjs';
 try{
- const {env,script}=workerConfig(process.argv[2]);
+ const invocation=workerInvocation(process.argv.slice(2));
+ const {env}=workerConfig(invocation.role);
  const root=fileURLToPath(new URL('../../',import.meta.url));
- const child=spawn(process.execPath,['--conditions=react-server','--import','tsx',`apps/web/scripts/${script}`],{cwd:root,env,stdio:'inherit'});
+ const child=spawn(process.execPath,['--conditions=react-server','--import','tsx',`apps/web/scripts/${invocation.script}`,...invocation.args],{cwd:root,env,stdio:'inherit'});
  // tini -g forwards to descendants too. Keep the parent alive until the worker exits.
  process.on('SIGTERM',()=>child.kill('SIGTERM'));
  process.on('SIGINT',()=>child.kill('SIGINT'));

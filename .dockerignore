@@ -16,6 +16,7 @@
 !apps/web/scripts/
 !apps/web/scripts/storyboards-worker.ts
 !apps/web/scripts/generations-worker.ts
+!apps/web/scripts/cloud-job.ts
 !apps/worker/
 !apps/worker/**
 # Final exclusions also protect against accidental future source-adjacent secrets.

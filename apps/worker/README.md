@@ -36,3 +36,20 @@ Monitor process exits, queue deadlines, failed/unknown outcomes, memory and disk
 Use `apps/media-gateway/wrangler.toml` with the actual private dev bucket, the deployed Vercel origin and an HTTPS gateway route. Keep R2 public access disabled. Put the same random `MEDIA_SERVICE_SECRET` into the Worker and Vercel; set `MEDIA_GATEWAY_ORIGIN` on Vercel. Do not enable request URL/body logs: playback URLs are bearer grants. The existing gateway validates GET/HEAD/range requests against `/api/internal/media-authorize` before reading the bucket.
 
 Acceptance requires: one real hosted idea → storyboard → approved generation → R2 → authenticated preview/download; exact MP4/VTT hashes; Range/HEAD/expired/revoked grants; cross-owner denial; reload recovery; queued/running shutdown with no duplicate speech; container resource benchmark; and a human listening review. None is claimed by the preparation commit. No Instagram publishing belongs to this checkpoint.
+
+## Cloud Run Jobs direction (supersedes the Render proposal)
+
+The user selected Cloud Run Jobs for the low-usage cloud-only pilot. Do not import `render.yaml` or create the proposed always-running Render services.
+
+The image now defaults to an invalid bounded invocation and fails closed until a specific persisted request ID is supplied:
+
+```text
+generation --job job_<32 lowercase hex characters>
+storyboard --job job_<32 lowercase hex characters>
+```
+
+These arguments use `apps/web/scripts/cloud-job.ts`, which executes only the selected request and exits. Explicit one-argument `generation`/`storyboard` commands retain the legacy continuous workers for existing local workflows. Never configure those one-argument commands on Cloud Run Jobs. An execution's process exit is not a substitute for its persisted business outcome; inspect Atlas job state. A missing or already-claimed/completed job is a no-op, not an instruction to consume another request.
+
+Proposed Cloud Run settings: one task, parallelism one, platform retries zero, generation timeout 900 seconds and storyboard timeout 180 seconds; preserve the existing enqueue-relative deadlines. Limit active generations through the existing database admission/leases, and add dispatch admission limits before enabling dashboard triggers. These are planned host settings, not deployed evidence.
+
+A complete integration still requires authenticated dashboard dispatch, durable handling of failed/ambiguous trigger acknowledgements, a bounded reconciliation mechanism, narrow runtime identities/secret access, a Linux image build/benchmark and hosted playback acceptance. Do not start a worker against the real queue as a configuration check. The user explicitly requested a pause before billable workloads, including remote image builds and live execution.

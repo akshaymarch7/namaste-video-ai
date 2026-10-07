@@ -14,7 +14,7 @@ COPY src ./src
 COPY scripts/render-v2-job.ts ./scripts/render-v2-job.ts
 COPY apps/web/tsconfig.json ./apps/web/tsconfig.json
 COPY apps/web/src ./apps/web/src
-COPY apps/web/scripts/storyboards-worker.ts apps/web/scripts/generations-worker.ts ./apps/web/scripts/
+COPY apps/web/scripts/storyboards-worker.ts apps/web/scripts/generations-worker.ts apps/web/scripts/cloud-job.ts ./apps/web/scripts/
 COPY apps/worker ./apps/worker
 RUN chown -R node:node /app
 USER node
@@ -24,4 +24,5 @@ RUN node --import tsx apps/worker/smoke.ts
 ENV NODE_ENV=production
 # Forward shutdown to the entire process group, including renderer/Chromium children.
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "node", "apps/worker/start.mjs"]
-CMD ["generation"]
+# An unconfigured Cloud Run execution must exit, never start an endless poller.
+CMD ["generation", "--job", "required"]
