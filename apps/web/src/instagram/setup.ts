@@ -15,5 +15,31 @@ export const instagramDefinitions=[
  def('instagramCommands',{keyHash:hash,requestHash:hash,response:{bsonType:'object'}},{},[{name:'instagram_command',key:{ownerId:1,keyHash:1},unique:true}]),
 ];
 const id='mig_instagram0000001',checksum=createHash('sha256').update(JSON.stringify(instagramDefinitions)).digest('hex');
-export async function setupInstagram(db:Db){return runMigration(db,'015-instagram',id,checksum,instagramDefinitions);}
-export async function assertInstagramReady(db:Db){if(!await db.collection('schemaMigrations').findOne({_id:id as never,checksum,state:'completed'}))throw new DatabaseError('INSTAGRAM_SETUP_REQUIRED','Run db:setup before connecting Instagram.');}
+// Keep 015's definitions/checksum immutable: deployed databases already recorded them.
+export const facebookDefinitions:CollectionDefinition[]=instagramDefinitions.slice(0,2).map(definition=>{
+ const next=structuredClone(definition);
+ const schema=next.validator.$jsonSchema as {properties:Record<string,unknown>;allOf?:unknown[]};
+ const provider={enum:['instagram','facebook']},numeric={bsonType:'string',pattern:'^\\d{1,100}$'};
+ if(next.name==='instagramConnections'){
+  Object.assign(schema.properties,{provider,providerAppId:numeric,tokenKind:{enum:['instagram_user','facebook_page']},pageId:numeric,pageName:text,accountType:{enum:['BUSINESS','CREATOR','PROFESSIONAL']}});
+  schema.allOf=[{oneOf:[
+   {not:{anyOf:['provider','providerAppId','tokenKind','pageId','pageName'].map(key=>({required:[key]}))}},
+   {required:['provider','providerAppId','tokenKind'],properties:{provider:{enum:['instagram']},tokenKind:{enum:['instagram_user']}},not:{anyOf:[{required:['pageId']},{required:['pageName']}] }},
+   {required:['provider','providerAppId','tokenKind','pageId','pageName'],properties:{provider:{enum:['facebook']},tokenKind:{enum:['facebook_page']}}},
+  ]}];
+ }else{
+  Object.assign(schema.properties,{provider,providerAppId:numeric,pageId:numeric});
+  schema.allOf=[{oneOf:[
+   {not:{anyOf:['provider','providerAppId','pageId'].map(key=>({required:[key]}))}},
+   {required:['provider','providerAppId'],properties:{provider:{enum:['instagram']}},not:{required:['pageId']}},
+   {required:['provider','providerAppId','pageId'],properties:{provider:{enum:['facebook']}}},
+  ]}];
+ }
+ return next;
+});
+const facebookId='mig_instagramfb00001',facebookChecksum=createHash('sha256').update(JSON.stringify(facebookDefinitions)).digest('hex');
+export async function setupInstagram(db:Db){
+ await runMigration(db,'015-instagram',id,checksum,instagramDefinitions,{successors:Object.fromEntries(facebookDefinitions.map(d=>[d.name,d.validator]))});
+ return runMigration(db,'016-instagram-facebook',facebookId,facebookChecksum,facebookDefinitions,{upgradeFrom:Object.fromEntries(instagramDefinitions.slice(0,2).map(d=>[d.name,d.validator]))});
+}
+export async function assertInstagramReady(db:Db){if(!await db.collection('schemaMigrations').findOne({_id:facebookId as never,checksum:facebookChecksum,state:'completed'}))throw new DatabaseError('INSTAGRAM_SETUP_REQUIRED','Run db:setup before connecting Instagram.');}

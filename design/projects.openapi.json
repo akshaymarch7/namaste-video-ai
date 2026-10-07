@@ -5587,6 +5587,10 @@
                   "returnProjectId": {
                     "type": "string",
                     "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+                  },
+                  "pageId": {
+                    "type": "string",
+                    "pattern": "^\\d{1,100}$"
                   }
                 },
                 "additionalProperties": false
@@ -5594,7 +5598,7 @@
             }
           }
         },
-        "description": "Creates a ten-minute, single-use session-bound authorization. New connects supersede earlier callbacks. Only a configured HTTPS same-origin callback is accepted.",
+        "description": "Creates a ten-minute, single-use session-bound authorization. New connects supersede earlier callbacks. Only a configured HTTPS same-origin callback is accepted. Facebook Login requires an explicit numeric pageId; direct Instagram Login rejects pageId. Provider, app and Page are pinned to the receipt.",
         "responses": {
           "200": {
             "description": "Owner-scoped response. Publishing remains disabled in F18.",
@@ -5755,7 +5759,8 @@
                                       "type": "string",
                                       "enum": [
                                         "BUSINESS",
-                                        "CREATOR"
+                                        "CREATOR",
+                                        "PROFESSIONAL"
                                       ]
                                     }
                                   },
@@ -5763,6 +5768,39 @@
                                     "id",
                                     "username",
                                     "type"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "provider": {
+                              "type": "string",
+                              "enum": [
+                                "instagram",
+                                "facebook"
+                              ]
+                            },
+                            "page": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "pattern": "^\\d{1,100}$"
+                                    },
+                                    "name": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 256
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "name"
                                   ],
                                   "additionalProperties": false
                                 },
@@ -5820,6 +5858,15 @@
               }
             },
             "headers": {
+              "X-Instagram-Provider": {
+                "description": "Configured login route; facebook requires explicit Page ID.",
+                "schema": {
+                  "enum": [
+                    "instagram",
+                    "facebook"
+                  ]
+                }
+              },
               "X-Instagram-Configured": {
                 "description": "Server configuration readiness only, not live provider verification.",
                 "schema": {
@@ -5963,7 +6010,8 @@
                                       "type": "string",
                                       "enum": [
                                         "BUSINESS",
-                                        "CREATOR"
+                                        "CREATOR",
+                                        "PROFESSIONAL"
                                       ]
                                     }
                                   },
@@ -5971,6 +6019,39 @@
                                     "id",
                                     "username",
                                     "type"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "provider": {
+                              "type": "string",
+                              "enum": [
+                                "instagram",
+                                "facebook"
+                              ]
+                            },
+                            "page": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "pattern": "^\\d{1,100}$"
+                                    },
+                                    "name": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 256
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "name"
                                   ],
                                   "additionalProperties": false
                                 },

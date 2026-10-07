@@ -36,7 +36,7 @@ test('authorization uses documented reauthentication parameter and exact redirec
 for(const shortWrapped of [false,true])for(const accountWrapped of [false,true]){
  test(`exchange accepts ${shortWrapped?'documented enveloped':'flat'} token and ${accountWrapped?'documented enveloped':'flat'} account`,async()=>{
   const {provider,requests}=fixture([shortWrapped?envelope(short):short,long,accountWrapped?envelope(account):account]);
-  assert.deepEqual(await provider.exchange('fixture-code'),{token:long.access_token,expiresIn:long.expires_in,account:{id:'123',username:account.username,type:'CREATOR'},scopes:[...scopes]});
+  assert.deepEqual(await provider.exchange('fixture-code'),{token:long.access_token,expiresIn:long.expires_in,account:{id:'123',username:account.username,type:'CREATOR'},scopes:[...scopes],provider:'instagram',tokenKind:'instagram_user'});
   assert.equal(requests.length,3);
   assert.equal(requests[0].url,'https://api.instagram.com/oauth/access_token');
   assert.equal(requests[0].init.method,'POST');

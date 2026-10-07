@@ -28,6 +28,7 @@ export async function handleInstagram(request:Request,action:'read'|'connect'|'c
    return new Response(null,{status:303,headers:{...headers,Location:location}});
   }
   headers['X-Instagram-Configured']=settings?'true':'false';
+  headers['X-Instagram-Provider']=settings?.provider??'instagram';
   const data=action==='read'?await service.get(session.user.id):action==='connect'?await service.connect(session.user.id,session.session.id,await readBody(request)):await service.disconnect(session.user.id,request.headers.get('idempotency-key')??'',await readBody(request));
   return Response.json({data,meta:{requestId}},{headers});
  }catch(e){
