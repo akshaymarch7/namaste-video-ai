@@ -69,3 +69,16 @@
 .media-preview video,.media-preview audio,.media-preview img { display:block; max-width:100%; width:100%; max-height:65vh; }
 
 .generation-panel .button { margin-inline-end: .5rem; margin-block-start: .75rem; }
+
+/* F15: Cinema review workspace; video artwork retains its own palette. */
+.video-review-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(240px, 1fr); gap: 24px; margin-top: 24px; align-items: start; }
+.video-review-player { background: #080808; border: 1px solid var(--border); border-radius: 16px; margin: 24px 0; padding: 12px; display: grid; place-items: center; min-height: 320px; }
+.video-review-player video { display: block; max-width: 100%; max-height: 650px; border-radius: 8px; }
+.video-review-player > div { padding: 24px; text-align: center; }
+.video-review-check { display: flex; align-items: start; gap: 12px; margin: 24px 0 16px; }
+.video-version-list { list-style: none; padding: 0; display: grid; gap: 20px; }
+.video-version-list button { width: 100%; text-align: left; overflow-wrap: anywhere; }
+.video-version-list button[aria-pressed="true"] { border-color: var(--accent); }
+.video-review .actions { flex-wrap: wrap; }
+@media (max-width: 760px) { .video-review-grid { grid-template-columns: minmax(0, 1fr); } .video-review-player { min-height: 240px; } }
+.video-review { padding: 60px 24px; }

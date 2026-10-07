@@ -1,3 +1,4 @@
+import {setupVideos} from '../src/videos/setup';
 import type {ExecutionAdapters} from '../src/jobs/execution';
 import {syntheticSpeech} from '../../../src/pipeline/timing';
 import {setupJobs,assertJobsReady} from '../src/jobs/setup';
@@ -32,7 +33,7 @@ let owner:string,other:string,cookie:string,otherCookie:string;
 const config={origin:'http://127.0.0.1:3002',secure:false,secret:randomBytes(48).toString('base64url')};
 before(async()=>{
  replica=await MongoMemoryReplSet.create({binary:{version:'8.0.17'},replSet:{count:1,ip:'127.0.0.1',storageEngine:'wiredTiger'}});client=await new MongoClient(replica.getUri(),{promoteLongs:false}).connect();db=client.db('storage_test');
- for(const setup of [setupDatabase,setupProjects,setupDrafts,setupIdeas,setupStoryboards,setupStoryboardQueue,setupEditableDrafts,setupStoryboardRevisions,setupStoryboardSnapshots,setupStoryboardApprovals,setupStorage,setupJobs])await setup(db);
+ for(const setup of [setupDatabase,setupProjects,setupDrafts,setupIdeas,setupStoryboards,setupStoryboardQueue,setupEditableDrafts,setupStoryboardRevisions,setupStoryboardSnapshots,setupStoryboardApprovals,setupStorage,setupJobs,setupVideos])await setup(db);
  await setupAuth(db,client,config);const auth=createAuth(db,client,config);deps={db,client,auth,config};const users=[];
  for(const email of ['owner@example.test','other@example.test']){const input={name:'Media QA',email,password:'Media-fixture-only-4829!'};const user=await provisionUser(db,client,config,input);const r=await auth.api.signInEmail({body:input,asResponse:true});users.push({id:user.userId,cookie:r.headers.getSetCookie().map(v=>v.split(';')[0]).join('; ')});}
  [owner,other]=users.map(u=>u.id);[cookie,otherCookie]=users.map(u=>u.cookie);
@@ -175,4 +176,52 @@ test('queue expiration projects attention; repair restores old outcomes idempote
  assert.equal((await projects.get(owner,s.project.id)).flags.needsAttention,true);
  assert.equal((await projects.get(owner,success.project.id)).flags.ready,true);
  assert.equal((await repairGenerationProjectFlags(db,client)).generationProjectFlagsRepaired,0);
+});
+
+test('video versions are atomic, paginated, selected with CAS and approved by exact bytes',async()=>{
+ const {videoService}=await import('../src/videos/service'),{videoHash}=await import('../src/videos/materialize');
+ const s=await seed(),svc=videoService(db,client),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data;
+ await runGenerationJob(db,client,j.id,undefined,undefined,executionDouble().adapters);
+ const first=(await svc.list(owner,s.project.id,1)).data[0];assert.equal(first.approval,null);
+ const body={expectedOutputHash:first.outputHash,expectedRenderSpecHash:first.renderSpecHash,approve:true};
+ await fail(svc.mutate(owner,first.id,'approve',randomUUID(),{...body,expectedOutputHash:'0'.repeat(64)}),'HASH_MISMATCH');
+ await fail(svc.get(other,first.id),'NOT_FOUND');await fail(svc.list(other,s.project.id,20),'NOT_FOUND');
+ const key=randomUUID(),a=await svc.mutate(owner,first.id,'approve',key,body);
+ assert.equal(a.data.subjectHash,videoHash({outputHash:first.outputHash,renderSpecHash:first.renderSpecHash}));
+ assert.equal((await svc.mutate(owner,first.id,'approve',key,body)).replayed,true);
+ await fail(svc.mutate(owner,first.id,'approve',key,{...body,expectedOutputHash:'0'.repeat(64)}),'IDEMPOTENCY_KEY_REUSED');
+ const next=(await service().create(owner,s.project.id,randomUUID(),{...s.input,acknowledgePossibleRepeat:true})).data;
+ await runGenerationJob(db,client,next.id,undefined,undefined,executionDouble().adapters);
+ const page=await svc.list(owner,s.project.id,1),second=page.data[0];assert.notEqual(second.id,first.id);assert.equal(second.approval,null);assert.equal(page.project.selectedVideoId,first.id);assert.equal(page.project.latestReadyVideoId,second.id);
+ assert.equal((await svc.list(owner,s.project.id,1,page.page.nextCursor!)).data[0].id,first.id);
+ const selectionKey=randomUUID();await svc.mutate(owner,second.id,'select',selectionKey,{expectedProjectRevision:page.project.revision});
+ assert.equal((await svc.mutate(owner,second.id,'select',selectionKey,{expectedProjectRevision:page.project.revision})).replayed,true);
+ await fail(svc.mutate(owner,first.id,'select',randomUUID(),{expectedProjectRevision:page.project.revision}),'REVISION_CONFLICT');
+ assert.equal((await svc.get(owner,first.id)).approval!.id,a.data.id);
+});
+
+test('video HTTP rejects unauthenticated, foreign, CSRF and extra fields; approval replay stays private',async()=>{
+ const {handleVideos}=await import('../src/videos/http');const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data;
+ await runGenerationJob(db,client,j.id,undefined,undefined,executionDouble().adapters);
+ const call=(action:'list'|'read'|'approve',id:string,headers:Record<string,string>,body?:unknown,query='')=>handleVideos(new Request(config.origin+'/api/test'+query,{method:body?'POST':'GET',headers,...(body?{body:JSON.stringify(body)}:{})}),action,id,async()=>deps);
+ assert.equal((await call('list',s.project.id,{})).status,401);
+ assert.equal((await call('list',s.project.id,{Cookie:otherCookie})).status,404);
+ assert.equal((await call('list',s.project.id,{Cookie:cookie},undefined,'?limit=1&limit=2')).status,422);
+ const response=await call('list',s.project.id,{Cookie:cookie});assert.equal(response.headers.get('cache-control'),'private, no-store');const v=(await response.json()).data[0];
+ const body={expectedOutputHash:v.outputHash,expectedRenderSpecHash:v.renderSpecHash,approve:true},headers={Cookie:cookie,Origin:config.origin,'Content-Type':'application/json','Idempotency-Key':randomUUID()};
+ assert.equal((await call('approve',v.id,{...headers,Origin:'https://foreign.test'},body)).status,403);
+ assert.equal((await call('approve',v.id,headers,{...body,ownerId:other})).status,422);
+ assert.equal((await call('approve',v.id,headers,body)).status,200);
+ assert.equal((await call('approve',v.id,headers,body)).headers.get('Idempotency-Replayed'),'true');
+ // Tombstone in the DB to exercise lifecycle denial even for recorded commands.
+ await db.collection('projects').updateOne({_id:s.project.id as never},{$set:{deletedAt:new Date()}});
+ assert.equal((await call('approve',v.id,headers,body)).status,404);assert.equal((await call('read',v.id,headers)).status,404);
+});
+
+test('legacy outputs backfill once without approving or overriding a user selection',async()=>{
+ const {backfillVideos}=await import('../src/videos/materialize'),{videoService}=await import('../src/videos/service');
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data;await runGenerationJob(db,client,j.id,undefined,undefined,executionDouble().adapters);
+ const v=(await videoService(db,client).list(owner,s.project.id,20)).data[0];await db.collection('videos').deleteOne({_id:v.id as never});
+ assert.equal((await backfillVideos(db,client)).videosBackfilled,1);assert.equal((await backfillVideos(db,client)).videosBackfilled,0);
+ assert.equal((await videoService(db,client).get(owner,v.id)).approval,null);
 });

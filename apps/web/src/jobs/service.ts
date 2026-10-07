@@ -1,3 +1,5 @@
+import {assertVideosReady} from '../videos/setup';
+import {materializeVideo} from '../videos/materialize';
 import 'server-only';
 import {randomUUID,createHash} from 'node:crypto';
 import {Long,type Db,type MongoClient,type Document,type ClientSession} from 'mongodb';
@@ -69,7 +71,7 @@ export function generationService(db:Db,client:MongoClient,now=()=>new Date()){
 // A missing adapter retains the legacy pure-preflight behavior for local contract tests.
 // Production execution is only dispatched by the explicit local worker with adapters.
 export async function runGenerationJob(db:Db,client:MongoClient,id:string,now=()=>new Date(),beforeFinish?:()=>Promise<void>,adapters?:ExecutionAdapters){
- await assertJobsReady(db);const jobs=db.collection<Doc>('generationJobs');
+ await assertJobsReady(db);if(adapters)await assertVideosReady(db);const jobs=db.collection<Doc>('generationJobs');
  const claimed=await inTransaction(client,async session=>{
   const job=await jobs.findOne({_id:id},{session});if(!job||!activeStates.includes(job.state))return null;
   let parent;try{parent=await liveProject(db,job.ownerId,job.projectId,session,now());}catch(e){if((e as {code?:string}).code!=='NOT_FOUND')throw e;}
@@ -98,8 +100,9 @@ export async function runGenerationJob(db:Db,client:MongoClient,id:string,now=()
   const parent=await db.collection<Doc>('projects').findOne({_id:job.projectId,ownerId:job.ownerId,deletedAt:null,activeJobId:id},{session});
   const cancel=job.state==='cancel_requested';const unavailable=!parent||!await isAdmitted(db,job.ownerId);const expired=job.deadlineAt<=now()||job.leaseUntil<=now();
   const state=cancel?'cancelled':unavailable||expired||errorCode==='INPUT_INVALID'?'failed':completion?'succeeded':'needs_input';
-  if(state==='succeeded'&&completion){await db.collection<Doc>('assets').insertMany(completion.assets,{session});await db.collection<Doc>('renderOutputs').insertOne(completion.output,{session});}
+  let videoId:string|undefined;
+  if(state==='succeeded'&&completion){await db.collection<Doc>('assets').insertMany(completion.assets,{session});await db.collection<Doc>('renderOutputs').insertOne(completion.output,{session});videoId=await materializeVideo(db,job,completion.output,session);}
   await jobs.updateOne({_id:id,fence:claimed.fence},{$set:{state,stage:state==='succeeded'?'complete':'stopped',errorCode:cancel||state==='succeeded'?null:unavailable?'ACCESS_UNAVAILABLE':expired?'JOB_DEADLINE':errorCode,updatedAt:now(),finishedAt:now(),leaseUntil:null},$inc:{revision:1}},{session});
-  await db.collection<Doc>('projects').updateOne({_id:job.projectId,ownerId:job.ownerId,activeJobId:id},{$unset:{activeJobId:''},$set:{'flags.needsAttention':['failed','needs_input'].includes(state),...(state==='succeeded'?{'flags.ready':true}:{}),updatedAt:now()},$inc:{contentRevision:Long.ONE}},{session});
+  await db.collection<Doc>('projects').updateOne({_id:job.projectId,ownerId:job.ownerId,activeJobId:id},{$unset:{activeJobId:''},$set:{'flags.needsAttention':['failed','needs_input'].includes(state),...(state==='succeeded'?{'flags.ready':true,latestReadyVideoId:videoId,...(!parent?.selectedVideoId?{selectedVideoId:videoId}:{})}:{}),updatedAt:now()},$inc:{contentRevision:Long.ONE}},{session});
  });return true;
 }

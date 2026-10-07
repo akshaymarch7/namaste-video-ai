@@ -1,0 +1,15 @@
+import {z} from 'zod';
+import {videoId,videoView,approveRequest,selectRequest,approvalView,selectionView} from './contracts';
+import {projectId,idempotencyKey} from '../projects/contracts';
+export function videoPaths(){
+ const schema=(v:z.ZodType)=>z.toJSONSchema(v),content=(v:unknown)=>({'application/json':{schema:v}}),params=(v:z.ZodType)=>[{in:'path',name:'id',required:true,schema:schema(v)}];
+ const errors=Object.fromEntries([400,401,403,404,409,413,415,422,503].map(n=>[n,{$ref:'#/components/responses/Error'}]));
+ const response=(v:unknown)=>({description:'Owner-scoped result. Private/no-store; X-Request-Id header and meta.requestId.',content:content({type:'object',required:['data','meta'],properties:{data:v,meta:{type:'object',properties:{requestId:{type:'string'}}}}})});
+ const mutation=(action:string,input:z.ZodType,output:z.ZodType)=>({operationId:action,description:'Exact immutable version. Same-key replay returns the original result after current ownership/admission checks. Selection uses project metadata revision; approval never publishes or approves another version.',parameters:[{in:'header',name:'Origin',required:true,schema:{type:'string'}},{in:'header',name:'Idempotency-Key',required:true,schema:schema(idempotencyKey)}],requestBody:{required:true,content:content(schema(input))},responses:{...errors,200:response(schema(output))}});
+ return {
+ '/api/projects/{id}/videos':{parameters:params(projectId),get:{operationId:'listVideoVersions',description:'Newest first by immutable createdAt/id. Cursor is an existing same-owner/project video ID; newly completed versions appear on refresh.',parameters:[{in:'query',name:'limit',schema:{type:'integer',minimum:1,maximum:50,default:20}},{in:'query',name:'cursor',schema:schema(videoId)}],responses:{...errors,200:{description:'Video versions, page and project selection snapshot.',content:content({type:'object',required:['data','page','project','meta'],properties:{data:{type:'array',items:schema(videoView)},page:{type:'object',properties:{hasMore:{type:'boolean'},nextCursor:{anyOf:[schema(videoId),{type:'null'}]}}},project:{type:'object',properties:{id:schema(projectId),title:{type:'string'},revision:{type:'integer'},selectedVideoId:{anyOf:[schema(videoId),{type:'null'}]},latestReadyVideoId:{anyOf:[schema(videoId),{type:'null'}]}}},meta:{type:'object'}}})}}}},
+ '/api/videos/{id}':{parameters:params(videoId),get:{operationId:'getVideoVersion',responses:{...errors,200:response(schema(videoView))}}},
+ '/api/videos/{id}/approve':{parameters:params(videoId),post:mutation('approveVideoVersion',approveRequest,approvalView)},
+ '/api/videos/{id}/select':{parameters:params(videoId),post:mutation('selectVideoVersion',selectRequest,selectionView)},
+ };
+}

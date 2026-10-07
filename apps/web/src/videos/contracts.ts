@@ -1,0 +1,11 @@
+import {z} from 'zod';
+import {projectId} from '../projects/contracts';
+import {assetId,sha256} from '../storage/contracts';
+export const videoId=z.string().regex(/^vid_[a-f0-9]{32}$/);
+export const approvalView=z.object({id:z.string().regex(/^apr_[a-f0-9]{32}$/),projectId,kind:z.literal('video'),subjectId:videoId,subjectHash:sha256,outputHash:sha256,renderSpecHash:sha256,approvedAt:z.string().datetime()}).strict();
+export const videoView=z.object({id:videoId,projectId,storyboardId:z.string(),title:z.string(),duration:z.number().min(60).max(90),outputAssetId:assetId,captionsAssetId:assetId,outputHash:sha256,renderSpecHash:sha256,createdAt:z.string().datetime(),approval:approvalView.nullable()}).strict();
+export const approveRequest=z.object({expectedOutputHash:sha256,expectedRenderSpecHash:sha256,approve:z.literal(true)}).strict();
+export const selectRequest=z.object({expectedProjectRevision:z.number().int().min(1).max(2147483646)}).strict();
+export const selectionView=z.object({projectId,videoId,projectRevision:z.number().int().positive()}).strict();
+export const listQuery=z.object({limit:z.string().regex(/^(?:[1-9]|[1-4][0-9]|50)$/).default('20').transform(Number),cursor:videoId.optional()}).strict();
+export type Video=z.infer<typeof videoView>;

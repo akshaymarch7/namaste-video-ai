@@ -1,3 +1,5 @@
+import {setupVideos} from '../src/videos/setup';
+import {backfillVideos} from '../src/videos/materialize';
 import {repairGenerationProjectFlags} from '../src/jobs/repair-project-flags';
 import {setupJobs} from '../src/jobs/setup';
 import {setupStorage} from '../src/storage/setup';
@@ -23,8 +25,9 @@ try {
   const drafts = await setupDrafts(db);
   const ideas = await setupIdeas(db);
   const storyboards = await setupStoryboards(db); const queue = await setupStoryboardQueue(db); const editable = await setupEditableDrafts(db); const revisions = await setupStoryboardRevisions(db); const snapshots = await setupStoryboardSnapshots(db); const approvals = await setupStoryboardApprovals(db);const storage = await setupStorage(db); const jobs = await setupJobs(db);
-  const repairs = await repairGenerationProjectFlags(db,client);
-  console.log(JSON.stringify({ status: 'ok', repairs, migrations: [result, projects, drafts, ideas, storyboards, queue, editable, revisions, snapshots, approvals, storage, jobs] }));
+  const videos = await setupVideos(db);
+  const repairs = {...await repairGenerationProjectFlags(db,client),...await backfillVideos(db,client)};
+  console.log(JSON.stringify({ status: 'ok', repairs, migrations: [result, projects, drafts, ideas, storyboards, queue, editable, revisions, snapshots, approvals, storage, jobs, videos] }));
 } catch (error) {
   // Driver diagnostics can include connection strings or document data. Do not print them.
   console.error(JSON.stringify({
