@@ -1858,3 +1858,9 @@ Limits / next acceptance:
 - Reproduced the user's report on the hosted Settings page at a 1728px viewport: sidebar occupied the full width at y=0; content began below it at y=276.5. The wrapper was `library-shell` with computed `display:block`.
 - Cause: both personal Settings and Instagram Settings omitted `library-base`, the shared responsive two-column grid used by My Videos. Added that class to their existing wrapper; preserved the existing Cinema CSS and its 760px mobile breakpoint. No settings, authentication or Instagram behavior changed.
 - Files: `apps/web/components/preferences/settings.tsx`, `apps/web/components/instagram/connection.tsx`, this status record. Web typecheck, existing preference/controller tests **8/8**, Instagram/controller tests **11/11**, and `git diff --check` passed. No implementation-mirroring test added for the two-class correction. Hosted laptop browser verification follows the authorized dev deployment.
+
+### Settings layout — hosted verification passed
+
+- Verified deployed fix `68549a0` on both `/settings` and `/settings/instagram`. At 1024px, sidebar is 200px wide and content starts at x=200; at 1280px and 1440px, sidebar is 240px wide and content starts at x=240. Both share y=0 with computed grid layout. Document width stays within the viewport at every checked width; no horizontal overflow.
+- Personal preference fields and the existing connected Instagram identity loaded normally; no save, disconnect, reconnect or provider operation was performed. Visually inspected the 1280px Settings screenshot, retained locally under ignored `apps/web/runs/settings-laptop-fixed-1280.png`.
+- Restored browser viewport to its original 1728px size and closed the temporary QA tab. Existing app tab remains open. Test/typecheck evidence remains **19/19 plus web typecheck** above. GitHub dev matched the fix commit; main unchanged. No new mobile or unrelated feature QA is claimed.
