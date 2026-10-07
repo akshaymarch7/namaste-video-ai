@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import {Button} from '../ui';
+import {generationError} from '../../src/jobs/messages';
 import {generationStore,createGenerationController,generationTransport,type GenerationState} from './generation-controller';
 import type {generationRequest} from '../../src/jobs/contracts';
 import type {z} from 'zod';
@@ -12,8 +13,8 @@ export function GenerationPanel({projectId,userId,input,blocked}:{projectId:stri
  useEffect(()=>{setConfirm(false);},[identity,blocked]);
  useEffect(()=>{let storage:Storage;try{storage=window.sessionStorage;}catch{setState({job:null,pending:null,busy:false,ready:false,error:'RECOVERY_STORAGE'});return;}const instance=createGenerationController(projectId,generationStore(storage,userId,projectId),generationTransport,s=>{setState(s);if(s.error==='UNAUTHENTICATED')window.location.replace(signInLocation('expired'));if(s.error==='ACCESS_DISABLED')window.location.replace('/access-help?state=disabled');});controller.current=instance;setState(instance.snapshot());void instance.load();const timer=setInterval(()=>{if(document.visibilityState==='visible')void instance.load();},3000);return()=>{clearInterval(timer);instance.dispose();controller.current=null;};},[projectId,userId]);
  const active=state?.job&&['queued','running','cancel_requested'].includes(state.job.state);
- return <section className="panel generation-panel" aria-label="Video generation"><p className="eyebrow">NEXT · VIDEO</p><h2>Bring your storyboard to life.</h2><p>Generate Daniel’s narration, synchronized motion graphics and captions from your approved version. Your local generation worker must be running. Earlier videos stay available.</p>
- {state?.job&&<div role="status"><strong>{state.job.state==='succeeded'?'Video ready':state.job.state==='needs_input'?'Generation needs attention':state.job.state==='queued'?'Waiting for the local generation worker':state.job.state==='running'?(stageLabels[state.job.stage]??'Processing'):state.job.state==='cancel_requested'?'Cancellation requested':state.job.state==='cancelled'?'Job cancelled':'Job stopped'}</strong><p>Job {state.job.id.slice(-8)} · attempt {state.job.attempt} · revision {state.job.revision}</p>{state.job.errorCode&&<p>{generationError(state.job.errorCode)}</p>}{state.job.state==='succeeded'&&<Link href={`/projects/${projectId}/video`}>Review video</Link>}</div>}
+ return <section className="panel generation-panel" aria-label="Video generation"><p className="eyebrow">NEXT · VIDEO</p><h2>Bring your storyboard to life.</h2><p>Generate Daniel’s narration, synchronized motion graphics and captions from your approved version. Earlier videos stay available.</p>
+ {state?.job&&<div role="status"><strong>{state.job.state==='succeeded'?'Video ready':state.job.state==='needs_input'?'Generation needs attention':state.job.state==='queued'?'Queued for generation':state.job.state==='running'?(stageLabels[state.job.stage]??'Processing'):state.job.state==='cancel_requested'?'Cancellation requested':state.job.state==='cancelled'?'Job cancelled':'Job stopped'}</strong><p>Job {state.job.id.slice(-8)} · attempt {state.job.attempt} · revision {state.job.revision}</p>{state.job.errorCode&&<p>{generationError(state.job.errorCode)}</p>}{state.job.state==='succeeded'&&<Link href={`/projects/${projectId}/video`}>Review video</Link>}</div>}
  {state?.error&&<p role="alert">{state.error==='RECOVERY_STORAGE'?'Recovery storage is unavailable. Reload after enabling browser storage.':state.error==='PROJECT_BUSY'?'Another request is running in this project.':'The request could not be completed or confirmed. Your storyboard is saved. Refresh or recover the pending request.'}</p>}
  {state?.pending?<><p>A request needs recovery. Recovering uses the original inputs and does not create a duplicate job.</p><Button disabled={state.busy} onClick={()=>void controller.current?.recover()}>Recover job request</Button></>:<>
  <Button disabled={blocked||!input||!state?.ready||state.busy||!!active||state.error==='RECOVERY_STORAGE'} onClick={()=>setConfirm(true)}>Generate video</Button>
@@ -23,19 +24,5 @@ export function GenerationPanel({projectId,userId,input,blocked}:{projectId:stri
  </section>;
 }
 
-function generationError(code:string){
- const messages:Record<string,string>={
-  RENDER_CONFIG_CHANGED:'The renderer was updated before this job ran. Start a fresh generation to use the current renderer.',
-  QUEUE_EXPIRED:'The job expired before the worker started. Your storyboard is saved.',
-  PROVIDER_OUTCOME_UNKNOWN:'The speech provider may have processed the request, but its result could not be confirmed. We did not automatically repeat it. Generating again may use credits again.',
-  SPEECH_RECOVERY_REQUIRED:'The narration could not be recovered from private storage. We did not repeat the speech request. Check storage before generating again.',
-  SPEECH_ACCESS_DENIED:'ElevenLabs denied this request. Check the configured API key and voice permissions.',
-  SPEECH_QUOTA_LIMIT:'ElevenLabs returned a quota or rate limit. Check the account before generating again.',
-  SPEECH_TIMING_INVALID:'The measured narration or motion timing did not pass validation. Review the storyboard before generating again.',
-  RENDERER_NOT_CONNECTED:'This earlier preparation job has no renderer. Generate a new job from your approved storyboard.',
-  JOB_DEADLINE:'The job reached its time limit. Your storyboard and earlier videos are preserved.',
- };
- return messages[code]??'Generation stopped without replacing earlier videos. Check the worker before generating again.';
-}
 
 const stageLabels:Record<string,string>={speech:'Creating narration',rendering:'Rendering your video',uploading:'Saving private video',checking:'Checking approved input'};

@@ -1,3 +1,4 @@
+if(process.env.CLOUD_RUN_ENABLED==='1')throw Error('Continuous local workers are disabled in Cloud Run mode.');
 import {createDatabaseConnection} from '../src/db/client';
 import {readDatabaseConfig} from '../src/db/config';
 import {dispatchJobs} from '../src/jobs/dispatch';

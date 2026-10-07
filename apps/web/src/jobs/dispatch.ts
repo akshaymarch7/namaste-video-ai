@@ -6,6 +6,7 @@ import {liveProject} from '../generation/live-project';
 import {assertJobsReady} from './setup';
 type Doc=Document&{_id:string};
 export async function dispatchJobs(db:Db,client:MongoClient,send:(event:{id:string;name:'namaste/generation.requested';data:{jobId:string}})=>Promise<unknown>,now=()=>new Date(),shouldStop=()=>false){
+ if(process.env.CLOUD_RUN_ENABLED==='1')throw Error('LOCAL_DISPATCH_DISABLED');
  await assertJobsReady(db);
  const jobs=db.collection<Doc>('generationJobs'),outbox=db.collection<Doc>('generationOutbox');
  // Bounded reconciliation runs independently of browsers. A sent event can be lost or execution interrupted.

@@ -1,0 +1,80 @@
+# PREPARED ONLY. Reuses the verified image; bounded runtime code is unchanged.
+# Create version 1 of each role-scoped secret separately; no values in source.
+# Applying this file must not execute a job or enable dashboard dispatch.
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: namastevideo-storyboard
+  labels:
+    cloud.googleapis.com/location: us-east1
+spec:
+  template:
+    spec:
+      taskCount: 1
+      parallelism: 1
+      template:
+        spec:
+          serviceAccountName: namastevideo-storyboard@namastevideo-dev-20261007.iam.gserviceaccount.com
+          maxRetries: 0
+          timeoutSeconds: '180'
+          containers:
+            - name: worker
+              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:7993102d998c197b77b97849a583413c7ea06dccd612699ec992c781b1e06277
+              args: ['storyboard', '--job', 'required']
+              resources:
+                limits: {cpu: '2', memory: 4Gi}
+              env:
+                - name: MONGODB_DATABASE
+                  value: namastevideo_dev
+                - name: MONGODB_URI
+                  valueFrom:
+                    secretKeyRef: {name: namastevideo-mongodb-uri, key: '1'}
+                - name: GEMINI_API_KEY
+                  valueFrom:
+                    secretKeyRef: {name: namastevideo-gemini-key, key: '1'}
+                - name: GEMINI_MODEL
+                  value: gemini-3.5-flash-lite
+---
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: namastevideo-generation
+  labels:
+    cloud.googleapis.com/location: us-east1
+spec:
+  template:
+    spec:
+      taskCount: 1
+      parallelism: 1
+      template:
+        spec:
+          serviceAccountName: namastevideo-generation@namastevideo-dev-20261007.iam.gserviceaccount.com
+          maxRetries: 0
+          timeoutSeconds: '900'
+          containers:
+            - name: worker
+              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:7993102d998c197b77b97849a583413c7ea06dccd612699ec992c781b1e06277
+              args: ['generation', '--job', 'required']
+              resources:
+                limits: {cpu: '2', memory: 4Gi}
+              env:
+                - name: MONGODB_DATABASE
+                  value: namastevideo_dev
+                - name: MONGODB_URI
+                  valueFrom:
+                    secretKeyRef: {name: namastevideo-mongodb-uri, key: '1'}
+                - name: ELEVENLABS_API_KEY
+                  valueFrom:
+                    secretKeyRef: {name: namastevideo-elevenlabs-key, key: '1'}
+                - name: R2_ACCOUNT_ID
+                  valueFrom:
+                    secretKeyRef: {name: namastevideo-r2-account, key: '1'}
+                - name: R2_BUCKET
+                  valueFrom:
+                    secretKeyRef: {name: namastevideo-r2-bucket, key: '1'}
+                - name: R2_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: {name: namastevideo-r2-access-key, key: '1'}
+                - name: R2_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: {name: namastevideo-r2-secret-key, key: '1'}
