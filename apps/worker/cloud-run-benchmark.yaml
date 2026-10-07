@@ -1,11 +1,12 @@
 # Replace WORKER_IMAGE_DIGEST with the verified immutable image reference.
+# us-east1 passed the regional startup comparison; see PROJECT_STATUS.md.
 # Creating this job must not execute it. Obtain workload approval before execution.
 apiVersion: run.googleapis.com/v1
 kind: Job
 metadata:
   name: namastevideo-render-benchmark
   labels:
-    cloud.googleapis.com/location: us-central1
+    cloud.googleapis.com/location: us-east1
 spec:
   template:
     spec:
