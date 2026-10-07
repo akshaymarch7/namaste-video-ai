@@ -32,7 +32,7 @@ async function ensureCollection(db: Db, definition: CollectionDefinition, option
     || existing.options?.validationLevel !== 'strict' || existing.options?.validationAction !== 'error') {
     throw new DatabaseError('DB_SCHEMA_DRIFT', `Schema differs for ${definition.name}; use a new reviewed migration.`);
   }
-  await db.collection(definition.name).createIndexes(definition.indexes);
+  if(definition.indexes.length)await db.collection(definition.name).createIndexes(definition.indexes);
 }
 
 export async function setupDatabase(db: Db) {

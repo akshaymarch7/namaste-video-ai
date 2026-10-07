@@ -1,3 +1,5 @@
+import type {ExecutionAdapters} from '../src/jobs/execution';
+import {syntheticSpeech} from '../../../src/pipeline/timing';
 import {setupJobs,assertJobsReady} from '../src/jobs/setup';
 import {generationService,runGenerationJob} from '../src/jobs/service';
 import {dispatchJobs} from '../src/jobs/dispatch';
@@ -57,3 +59,87 @@ test('disabled owner fails admission at worker and frees slot',async()=>{const s
 test('job admission transaction rolls back slot and job when outbox insertion fails',async()=>{const s=await seed();const original=(await db.listCollections({name:'generationOutbox'},{nameOnly:false}).toArray())[0].options!.validator;await db.command({collMod:'generationOutbox',validator:{$and:[original,{jobId:{$exists:false}}]}});try{await assert.rejects(service().create(owner,s.project.id,randomUUID(),s.input));}finally{await db.command({collMod:'generationOutbox',validator:original});}assert.equal(await db.collection('generationJobs').countDocuments({projectId:s.project.id}),0);assert.equal((await db.collection('projects').findOne({_id:s.project.id as never}))!.activeJobId,undefined);});
 test('deleted parent and corrupted frozen input cannot progress',async()=>{const a=await seed(),b=await seed(),ja=(await service().create(owner,a.project.id,randomUUID(),a.input)).data,jb=(await service().create(owner,b.project.id,randomUUID(),b.input)).data;await db.collection('projects').updateOne({_id:a.project.id as never},{$set:{deletedAt:new Date()}});await fail(service().get(owner,ja.id),'NOT_FOUND');await runGenerationJob(db,client,ja.id);assert.equal((await db.collection('generationJobs').findOne({_id:ja.id as never}))!.errorCode,'ACCESS_UNAVAILABLE');await db.collection('generationJobs').updateOne({_id:jb.id as never},{$set:{inputHash:'0'.repeat(64)}});await runGenerationJob(db,client,jb.id);assert.equal((await service().get(owner,jb.id)).errorCode,'INPUT_INVALID');});
 test('signed Inngest route fails closed without configuration or signature',async()=>{const {NextRequest}=await import('next/server');const route=await import('../app/api/inngest/route');const saved=process.env.INNGEST_SIGNING_KEY,dev=process.env.INNGEST_DEV;try{delete process.env.INNGEST_DEV;delete process.env.INNGEST_SIGNING_KEY;assert.equal((await route.POST(new NextRequest('https://app.example.test/api/inngest',{method:'POST',body:'{}'}),{})).status,503);process.env.INNGEST_SIGNING_KEY='signkey-test-'+'0'.repeat(64);const response=await route.POST(new NextRequest('https://app.example.test/api/inngest',{method:'POST',body:'{}',headers:{'Content-Type':'application/json'}}),{});assert.ok([400,401,403].includes(response.status));}finally{if(saved===undefined)delete process.env.INNGEST_SIGNING_KEY;else process.env.INNGEST_SIGNING_KEY=saved;if(dev===undefined)delete process.env.INNGEST_DEV;else process.env.INNGEST_DEV=dev;}});
+
+// Labelled in-memory media doubles test orchestration, not codec/provider quality.
+function executionDouble(){
+ const objects=new Map<string,{body:Uint8Array;hash:string;type:string}>();let speechCalls=0,renderCalls=0;
+ const adapters:ExecutionAdapters={
+  store:{async put(key,body,type,hash){const old=objects.get(key);if(old&&old.hash!==hash)throw Error('immutable conflict');objects.set(key,{body:Uint8Array.from(body),hash,type});},async verify(key,bytes,hash,type){const o=objects.get(key);assert.equal(o?.body.length,bytes);assert.equal(o?.hash,hash);assert.equal(o?.type,type);},async read(key,bytes,hash,type){await adapters.store.verify(key,bytes,hash,type);return objects.get(key)!.body;}},
+  async speech(text){speechCalls++;const s=syntheticSpeech(text,20.7);return {audio:Buffer.from('labelled test audio').toString('base64'),alignment:s.alignment,duration:s.duration};},
+  async render(){renderCalls++;return {video:Buffer.from('labelled test video'),captions:Buffer.from('WEBVTT\n'),duration:63};},
+ };
+ return {adapters,objects,calls:()=>({speechCalls,renderCalls})};
+}
+test('render execution freezes config and atomically exposes output; duplicate delivery spends nothing',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble();
+ const frozen=await db.collection('generationJobs').findOne({_id:j.id as never});assert.equal(frozen!.inputSnapshot.renderConfig.voiceId,'onwK4e9ZLuTAKqWW03F9');
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
+ assert.equal((await service().get(owner,j.id)).state,'succeeded');assert.equal((await service().get(owner,j.id)).stage,'complete');
+ assert.equal(await db.collection('assets').countDocuments({projectId:s.project.id,state:'ready'}),2);assert.equal(await db.collection('renderOutputs').countDocuments({jobId:j.id}),1);
+ assert.deepEqual(d.calls(),{speechCalls:3,renderCalls:1});await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal(d.calls().speechCalls,3);
+ await fail(service().create(owner,s.project.id,randomUUID(),s.input),'REPEAT_ACK_REQUIRED');
+ const next=(await service().create(owner,s.project.id,randomUUID(),{...s.input,acknowledgePossibleRepeat:true})).data;
+ await service().cancel(owner,next.id,randomUUID(),{expectedRevision:1});assert.equal(await db.collection('assets').countDocuments({projectId:s.project.id,state:'ready'}),2);
+});
+test('ambiguous speech is journaled before dispatch and never automatically repeated',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble();let calls=0;
+ d.adapters.speech=async()=>{calls++;assert.equal(await db.collection('speechStages').countDocuments({jobId:j.id,state:'request_started'}),1);throw Error('lost response');};
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal((await service().get(owner,j.id)).errorCode,'PROVIDER_OUTCOME_UNKNOWN');
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal(calls,1);assert.equal(await db.collection('assets').countDocuments({projectId:s.project.id}),0);
+});
+test('expired speech lease stops on ambiguous request and fences a late provider response',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble();let date=new Date(),release!:()=>void,entered!:()=>void;
+ const started=new Promise<void>(r=>entered=r),waiting=new Promise<void>(r=>release=r),synthesize=d.adapters.speech;
+ d.adapters.speech=async(...args)=>{entered();await waiting;return synthesize(...args);};
+ const first=runGenerationJob(db,client,j.id,()=>date,undefined,d.adapters);await started;
+ date=new Date(date.getTime()+91000);await runGenerationJob(db,client,j.id,()=>date,undefined,d.adapters);
+ assert.equal((await service().get(owner,j.id)).errorCode,'PROVIDER_OUTCOME_UNKNOWN');release();await first;
+ assert.equal(d.calls().speechCalls,1);assert.equal(await db.collection('renderOutputs').countDocuments({jobId:j.id}),0);
+});
+test('lease takeover reuses verified stored speech without spending for completed scenes',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble();let date=new Date(),release!:()=>void,entered!:()=>void;
+ const started=new Promise<void>(r=>entered=r),waiting=new Promise<void>(r=>release=r),render=d.adapters.render;let renderAttempts=0;
+ d.adapters.render=async(...args)=>{renderAttempts++;if(renderAttempts===1){entered();await waiting;}return render(...args);};
+ const first=runGenerationJob(db,client,j.id,()=>date,undefined,d.adapters);await started;
+ date=new Date(date.getTime()+91000);await runGenerationJob(db,client,j.id,()=>date,undefined,d.adapters);
+ assert.equal((await service().get(owner,j.id)).state,'succeeded');assert.equal(d.calls().speechCalls,3);release();await first;
+ assert.equal(await db.collection('renderOutputs').countDocuments({jobId:j.id}),1);
+});
+test('cancellation during render prevents asset promotion and keeps earlier output',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble(),render=d.adapters.render;
+ d.adapters.render=async(...args)=>{const current=await service().get(owner,j.id);await service().cancel(owner,j.id,randomUUID(),{expectedRevision:current.revision});return render(...args);};
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
+ assert.equal((await service().get(owner,j.id)).state,'cancelled');assert.equal(await db.collection('assets').countDocuments({projectId:s.project.id}),0);assert.equal(await db.collection('renderOutputs').countDocuments({jobId:j.id}),0);
+});
+test('upload failure cannot expose a partial ready output',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble(),put=d.adapters.store.put;
+ d.adapters.store.put=async(...args)=>{if(args[2]==='text/vtt')throw Error('storage failure');await put(...args);};
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal((await service().get(owner,j.id)).state,'needs_input');
+ assert.equal(await db.collection('assets').countDocuments({projectId:s.project.id}),0);assert.equal(await db.collection('renderOutputs').countDocuments({jobId:j.id}),0);
+});
+test('measured timing failure stops before renderer invocation',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble();
+ d.adapters.speech=async text=>{const s=syntheticSpeech(text,5);return {audio:'dGVzdA==',alignment:s.alignment,duration:s.duration};};
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal((await service().get(owner,j.id)).errorCode,'SPEECH_TIMING_INVALID');assert.equal(d.calls().renderCalls,0);
+});
+test('lost speech upload acknowledgement recovers exact stored bytes without repeating TTS',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble(),put=d.adapters.store.put;
+ d.adapters.store.put=async(...args)=>{await put(...args);if(args[2]==='application/json')throw Error('lost acknowledgement');};
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal((await service().get(owner,j.id)).state,'succeeded');assert.equal(d.calls().speechCalls,3);
+});
+test('same owner cannot start another leased generation in a different project',async()=>{
+ const a=await seed(),b=await seed(),ja=(await service().create(owner,a.project.id,randomUUID(),a.input)).data,jb=(await service().create(owner,b.project.id,randomUUID(),b.input)).data,d=executionDouble();
+ let release!:()=>void,entered!:()=>void;const started=new Promise<void>(r=>entered=r),wait=new Promise<void>(r=>release=r);
+ const first=runGenerationJob(db,client,ja.id,undefined,async()=>{entered();await wait;},d.adapters);await started;
+ assert.equal(await runGenerationJob(db,client,jb.id,undefined,undefined,d.adapters),false);assert.equal((await service().get(owner,jb.id)).state,'queued');
+ release();await first;await runGenerationJob(db,client,jb.id,undefined,undefined,d.adapters);assert.equal((await service().get(owner,jb.id)).state,'succeeded');
+});
+test('failed final transaction exposes neither assets nor output; replay resumes verified speech',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble();
+ const original=(await db.listCollections({name:'renderOutputs'},{nameOnly:false}).toArray())[0].options!.validator;
+ await db.command({collMod:'renderOutputs',validator:{$and:[original,{jobId:{$exists:false}}]}});
+ try{await assert.rejects(runGenerationJob(db,client,j.id,undefined,undefined,d.adapters));}finally{await db.command({collMod:'renderOutputs',validator:original});}
+ assert.equal(await db.collection('assets').countDocuments({projectId:s.project.id}),0);
+ const later=new Date(Date.now()+91000);await runGenerationJob(db,client,j.id,()=>later,undefined,d.adapters);
+ assert.equal((await service().get(owner,j.id)).state,'succeeded');assert.equal(d.calls().speechCalls,3);
+});

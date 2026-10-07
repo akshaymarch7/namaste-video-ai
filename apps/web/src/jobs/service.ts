@@ -11,6 +11,9 @@ import {storyboardHashes} from '../storyboards/service';
 import {generationRequest,cancelRequest,jobView,activeStates} from './contracts';
 import {assertJobsReady} from './setup';
 import type {z} from 'zod';
+import {renderConfig} from './render-config';
+import {assertRenderingReady} from './render-setup';
+import {executeGeneration,ExecutionError,type ExecutionAdapters,type RenderCompletion} from './execution';
 type Doc=Document&{_id:string};
 const hash=(v:unknown)=>createHash('sha256').update(canonical(v)).digest('hex');
 const uid=(prefix:string)=>`${prefix}_${randomUUID().replaceAll('-','')}`;
@@ -22,11 +25,13 @@ export function generationService(db:Db,client:MongoClient,now=()=>new Date()){
  async function command(ownerId:string,projectId:string,route:string,key:string,input:unknown,session:ClientSession){const keyHash=hash(key),requestHash=hash(input),scope={ownerId,projectId,route,keyHash};const old=await commands.findOne(scope,{session});if(old&&old.requestHash!==requestHash)throw fail('IDEMPOTENCY_KEY_REUSED','Recover the original request with its original inputs.');return {scope,requestHash,old};}
  return {
   async create(ownerId:string,projectId:string,key:string,raw:z.infer<typeof generationRequest>){
-   await assertJobsReady(db);const input=generationRequest.parse(raw);
+   await assertJobsReady(db);await assertRenderingReady(db);const input=generationRequest.parse(raw);
    return inTransaction(client,async session=>{
     const parent=await liveProject(db,ownerId,projectId,session,now());const cmd=await command(ownerId,projectId,'create',key,input,session);
     if(cmd.old)return {data:jobView.parse(cmd.old.response),replayed:true};
     if(parent.activeJobId)throw fail('PROJECT_BUSY','Wait for the current request.');
+    const previousSpeech=await db.collection('speechStages').findOne({ownerId,projectId},{session});
+    if(previousSpeech&&!input.acknowledgePossibleRepeat)throw fail('REPEAT_ACK_REQUIRED','Generating again can use speech credits again. Confirm before continuing.');
     const draft=await db.collection<Doc>('drafts').findOne({ownerId,projectId},{session});
     if(!draft||draft.revision!==input.expectedDraftRevision||parent.draftRevision!==input.expectedDraftRevision)throw fail('REVISION_CONFLICT','Review the latest saved draft.');
     if(draft.contentHash!==input.expectedDraftHash)throw fail('HASH_MISMATCH','Review the latest saved draft.');
@@ -39,7 +44,7 @@ export function generationService(db:Db,client:MongoClient,now=()=>new Date()){
     if(source.sourceDraftRevision!==draft.revision&&!applied)throw fail('SOURCE_CHANGED','Review and approve a current storyboard.');
     try{validateStoryboard(source.content,{notes:draft.notes,voicePreset:draft.voicePreset});}catch{throw fail('INVALID_DRAFT','Resolve storyboard validation issues first.',422);}
     const date=now(),id=uid('job');
-    const inputSnapshot={plan:source.content,notes:draft.notes,voicePreset:draft.voicePreset,contentHash:source.contentHash,storyHash:source.storyHash,canonicalizationVersion:1};
+    const inputSnapshot={plan:source.content,notes:draft.notes,voicePreset:draft.voicePreset,contentHash:source.contentHash,storyHash:source.storyHash,canonicalizationVersion:1,renderConfig};
     const job:Doc={_id:id,ownerId,projectId,storyboardId:source._id,approvalId:approval._id,inputSnapshot,inputHash:hash(inputSnapshot),state:'queued',stage:'queued',revision:1,attempt:0,fence:0,leaseUntil:null,deadlineAt:new Date(date.getTime()+15*60000),errorCode:null,createdAt:date,updatedAt:date,finishedAt:null};
     await db.collection<Doc>('projects').updateOne({_id:projectId,ownerId,deletedAt:null},{$set:{activeJobId:id},$inc:{contentRevision:Long.ONE}},{session});
     await jobs.insertOne(job,{session});
@@ -61,8 +66,9 @@ export function generationService(db:Db,client:MongoClient,now=()=>new Date()){
   });},
  };
 }
-// No provider/renderer is invoked in F13. F14 must add stage-specific request journals before external side effects.
-export async function runGenerationJob(db:Db,client:MongoClient,id:string,now=()=>new Date(),beforeFinish?:()=>Promise<void>){
+// A missing adapter retains the legacy pure-preflight behavior for local contract tests.
+// Production execution is only dispatched by the explicit local worker with adapters.
+export async function runGenerationJob(db:Db,client:MongoClient,id:string,now=()=>new Date(),beforeFinish?:()=>Promise<void>,adapters?:ExecutionAdapters){
  await assertJobsReady(db);const jobs=db.collection<Doc>('generationJobs');
  const claimed=await inTransaction(client,async session=>{
   const job=await jobs.findOne({_id:id},{session});if(!job||!activeStates.includes(job.state))return null;
@@ -70,19 +76,30 @@ export async function runGenerationJob(db:Db,client:MongoClient,id:string,now=()
   const fresh=await jobs.findOne({_id:id},{session});if(!fresh||!activeStates.includes(fresh.state))return null;
   if(!parent||parent.activeJobId!==id||!await isAdmitted(db,job.ownerId)){await jobs.updateOne({_id:id},{$set:{state:'failed',stage:'stopped',errorCode:'ACCESS_UNAVAILABLE',updatedAt:now(),finishedAt:now(),leaseUntil:null},$inc:{revision:1}},{session});await db.collection<Doc>('projects').updateOne({_id:job.projectId,activeJobId:id},{$unset:{activeJobId:''},$inc:{contentRevision:Long.ONE}},{session});return null;}
   if(fresh.state==='running'&&fresh.leaseUntil>now())return null;
-  // Only pure preflight is safely reclaimable. There are no provider calls here.
+  if(adapters){
+   const scheduler=await db.collection('renderScheduler').updateOne({_id:'global' as never},{$inc:{revision:Long.ONE}},{session});
+   if(!scheduler.matchedCount)throw fail('RENDER_SETUP_REQUIRED','Run db:setup.',503);
+   const leased={_id:{$ne:id},state:{$in:['running','cancel_requested']},leaseUntil:{$gt:now()}};
+   if(await jobs.countDocuments({...leased,ownerId:job.ownerId},{session})||await jobs.countDocuments(leased,{session})>=2)return null;
+  }
+  // External speech is protected by its durable request-start journal on takeover.
   return jobs.findOneAndUpdate({_id:id,revision:fresh.revision},{$set:{state:fresh.state==='cancel_requested'?'cancel_requested':'running',stage:'checking',leaseUntil:new Date(now().getTime()+90000),updatedAt:now()},$inc:{revision:1,attempt:1,fence:1}},{session,returnDocument:'after'});
  });
  if(!claimed)return false;
  await beforeFinish?.();
- let errorCode='RENDERER_NOT_CONNECTED';
+ let errorCode='RENDERER_NOT_CONNECTED';let completion:RenderCompletion|undefined;
  try{if(hash(claimed.inputSnapshot)!==claimed.inputHash)throw Error();validateStoryboard(claimed.inputSnapshot.plan,{notes:claimed.inputSnapshot.notes,voicePreset:claimed.inputSnapshot.voicePreset});}catch{errorCode='INPUT_INVALID';}
+ if(errorCode!=='INPUT_INVALID'&&adapters&&claimed.state!=='cancel_requested'){
+  try{completion=await executeGeneration(db,client,claimed,adapters,now);errorCode='';}
+  catch(e){errorCode=e instanceof ExecutionError?e.code:'RENDER_FAILED';}
+ }
  await inTransaction(client,async session=>{
   const job=await jobs.findOne({_id:id,fence:claimed.fence,state:{$in:['running','cancel_requested']}},{session});if(!job)return;
   const parent=await db.collection<Doc>('projects').findOne({_id:job.projectId,ownerId:job.ownerId,deletedAt:null,activeJobId:id},{session});
-  const cancel=job.state==='cancel_requested';const unavailable=!parent||!await isAdmitted(db,job.ownerId);const expired=job.deadlineAt<=now();
-  const state=cancel?'cancelled':unavailable||expired||errorCode==='INPUT_INVALID'?'failed':'needs_input';
-  await jobs.updateOne({_id:id,fence:claimed.fence},{$set:{state,stage:'stopped',errorCode:cancel?null:unavailable?'ACCESS_UNAVAILABLE':expired?'JOB_DEADLINE':errorCode,updatedAt:now(),finishedAt:now(),leaseUntil:null},$inc:{revision:1}},{session});
+  const cancel=job.state==='cancel_requested';const unavailable=!parent||!await isAdmitted(db,job.ownerId);const expired=job.deadlineAt<=now()||job.leaseUntil<=now();
+  const state=cancel?'cancelled':unavailable||expired||errorCode==='INPUT_INVALID'?'failed':completion?'succeeded':'needs_input';
+  if(state==='succeeded'&&completion){await db.collection<Doc>('assets').insertMany(completion.assets,{session});await db.collection<Doc>('renderOutputs').insertOne(completion.output,{session});}
+  await jobs.updateOne({_id:id,fence:claimed.fence},{$set:{state,stage:state==='succeeded'?'complete':'stopped',errorCode:cancel||state==='succeeded'?null:unavailable?'ACCESS_UNAVAILABLE':expired?'JOB_DEADLINE':errorCode,updatedAt:now(),finishedAt:now(),leaseUntil:null},$inc:{revision:1}},{session});
   await db.collection<Doc>('projects').updateOne({_id:job.projectId,ownerId:job.ownerId,activeJobId:id},{$unset:{activeJobId:''},$inc:{contentRevision:Long.ONE}},{session});
  });return true;
 }

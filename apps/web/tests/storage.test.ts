@@ -66,3 +66,10 @@ test('concurrent identical upload retries never produce a second asset or change
 test('gateway auth outage fails closed; mismatched If-Range returns full content',async()=>{const s=await seed(),grant=await s.service.access(owner,s.input.id,'preview',delivery.origin);let reads=0;const bucket={head:async()=>{reads++;return null;},get:async()=>{reads++;return null;}};assert.equal((await gateway(new Request(grant.url),env(bucket),(async()=>new Response(null,{status:503})) as typeof fetch)).status,503);assert.equal(reads,0);const response=await gateway(new Request(grant.url,{headers:{Range:'bytes=2-4','If-Range':'"old"'}}),env(s.storage.bucket),authCall);assert.equal(response.status,200);assert.equal(await response.text(),'0123456789');});
 
 test('R2 verification rejects intact bytes with missing gateway checksum metadata',async()=>{const body=new TextEncoder().encode('media');const fake={send:async()=>({ContentLength:body.length,ContentType:'video/mp4',Body:(async function*(){yield body;})()})};const store=r2Store({bucket:'test',endpoint:'https://test',accessKeyId:'test',secretAccessKey:'test'},fake as never);await fail(store.verify('key',body.length,digest(body),'video/mp4'),'ASSET_INTEGRITY_FAILED');});
+test('R2 recovery reads enforce checksum, content type and byte bounds',async()=>{
+ const body=Buffer.from('speech fixture'),hash=digest(body);let variant='valid',closed=false;
+ const fake={send:async()=>({ContentLength:body.length,ContentType:variant==='type'?'text/plain':'application/json',Metadata:{sha256:hash},Body:{async *[Symbol.asyncIterator](){yield variant==='oversized'?Buffer.concat([body,body]):variant==='corrupt'?Buffer.alloc(body.length):body;},destroy(){closed=true;}}})};
+ const store=r2Store({bucket:'test',endpoint:'https://test',accessKeyId:'test',secretAccessKey:'test'},fake as never);
+ assert.deepEqual(await store.read('key',body.length,hash,'application/json'),body);assert.equal(closed,true);
+ for(const mode of ['type','oversized','corrupt']){variant=mode;closed=false;await fail(store.read('key',body.length,hash,'application/json'),'ASSET_INTEGRITY_FAILED');assert.equal(closed,true);}
+});
