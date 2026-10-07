@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F17 implemented locally; ready for QA.** User accepted F16 and both fixes. Personal timezone/default-voice settings now include owner-scoped revision-checked saves, conflict review and same-tab recovery. Existing projects are unchanged; see the F17 entry below.
+**F17 local independent QA passed through `14ad96b`.** Desktop/mobile preference saves, validation/discard, both conflict choices, committed-response recovery, sign-out confirmation and future-project defaults passed. The conflict-refresh data-loss issue reproduced at `992557d` was independently closed after `f6d09e2`; the `14ad96b` logo guard retained unsaved input during a guarded navigation attempt. Existing project/draft documents remained unchanged. Relevant tests, typechecks and production build passed; evidence and native-dialog limits are below. No F18 work was started.
 
 **F16 local QA passed; spacing P2 independently closed at `491e685`.** Spacing-only edits now enable rendering and survive draft reload, saved-version reload, VTT download and real rendering. Independent recheck passed 91 tests, both typechecks, production build, desktop/mobile editing and a fresh 72.2-second revision using saved synthetic silent audio with no additional speech calls. Previous selection/approval and exact audio bytes were preserved. Earlier core revision/recovery QA is retained below. Hosted playback and subjective listening remain pending; F17 has its separate checkpoint below.
 
@@ -67,7 +67,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F14 | Hosted rendering integration | Partial: local pipeline implemented; library-filter P2 independently closed; listening and hosted execution pending | Filter recheck: 52 tests/web typecheck, desktop browser and stale-record repair passed. Prior 154-test/media/R2 evidence and limits below. |
 | F15 | Video review, approval and download UI | Implemented: independent local QA passed; hosted media/listening pending | 96 tests/both typechecks; browser preview/recovery, selection conflicts, exact approval and downloaded byte/hash checks below. |
 | F16 | Caption and video revision flow | Local QA passed; spacing P2 independently closed | Prior core-flow QA plus 491e685 recheck: 91 tests, types/build, desktop/mobile spacing, saved/exported text and real silent revision; hosted/listening pending |
-| F17 | Personal preferences UI/API | Implemented; QA checkpoint | API/DB isolation, concurrent saves, future-project snapshots, controller recovery, desktop/mobile settings; evidence below |
+| F17 | Personal preferences UI/API | Local independent QA passed through 14ad96b | Saves, conflicts, lost-response recovery, discard/sign-out, future-project defaults and unchanged old projects; 66 relevant tests, types/build; evidence below |
 | F18 | Personal Instagram authorization | Planned | Official connect/callback, eligibility, reconnect/disconnect and owner isolation |
 | F19 | Reviewed Post now flow | Planned | Exact asset/account/caption; confirmed publication; duplicate/unknown-outcome protection |
 | F20 | Scheduling and schedule management | Planned | Timezone/DST/lead-time validation; durable dispatch; cancel/replace/reconnect races |
@@ -1725,3 +1725,30 @@ Desktop at **1280px** (document1265) and mobile at **390px** (document375) showe
 **Verification:** preference/controller/component suite **8/8** and web typecheck passed; `git diff --check` passed. The added regression checks that the opted-in Brand is a native anchor to `/` without a client click handler, with the existing accessible label, while the default still uses Next.js navigation. Existing conflict-refresh and save-recovery tests remain green. No new browser confirmation-dialog run or production build is claimed for this targeted navigation change.
 
 **Scope:** shared Brand, Settings opt-in, regression test and this status entry only. Existing unrelated QA screenshots remain untouched/uncommitted. No backend, schema, provider or deployment changes. Ready for independent logo-navigation recheck before F18.
+
+
+## F17 — independent local QA and fix rechecks (October 7, 2026)
+
+**Result: PASS through `14ad96b`; no remaining finding from these checks.** Started against `992557d`. During QA, `f6d09e2` and `14ad96b` landed on dev; their exact changed application files were loaded into the isolated test copy, and the affected checks were repeated. This QA commit changes only this record and synthetic screenshots.
+
+### Browser and persistence evidence
+
+- Entered through My Videos → Settings. A labelled legacy `test-preset` preference showed the unavailable-voice option; selecting Daniel and saving UTC persisted after reload. Only Daniel was enabled. Invalid `Mars/Olympus` disabled Save; Discard restored the saved timezone.
+- Two pre-opened tabs preserved the local Asia/Tokyo input while displaying the server's Europe/London value. Use saved preferences adopted the server value without another write. A separate conflict resolved only after explicit Save my changes; its result survived reload.
+- Injected one HTTP 503 **after** a real successful PATCH. The pending save disabled further edits and survived full-document sign-out/sign-in within the same tab. Recover save resent the exact body (`expectedRevision:5`, Europe/Paris, Daniel), received the expected CAS conflict, and allowed Use saved preferences. Audit showed one successful revision increment and a 409 replay, not a duplicate write. A direct pending-state reload attempt stayed on Settings under beforeunload; it is not counted as a completed reload. Fresh-document recovery was verified via sign-out/sign-in instead.
+- Sign out with pending or ordinary unsaved edits showed the inline confirmation. Keep editing retained state. Choosing Sign out again completed logout; signing back in restored the recoverable pending command. No credentials are included in evidence.
+- Created a new project through My Videos after changing the default. Database inspection confirmed the new draft used `daniel-test`; the earlier labelled draft retained `test-preset`. Full serialized earlier project and draft documents were unchanged after repeated preference saves and new-project creation, not just their voice fields.
+- Mobile save passed with a 390×844 viewport override and 375px document width, without horizontal overflow. Existing projects remained unchanged. Timezone remains a stored future scheduling preference; this does not establish scheduling or global date conversion.
+
+### Findings reproduced and closed during this turn
+
+- **Conflict-refresh P2 reproduced at `992557d`:** another tab saved Europe/London; local Asia/Tokyo received PATCH 409 and a deliberately failed follow-up GET. Reload preferences then replaced Asia/Tokyo with Europe/London without a discard/accept-saved choice. Historical [failed read](design/verification/f17-qa-failed-conflict-read.jpg) and [lost draft](design/verification/f17-qa-discarded-conflict.jpg) evidence is retained.
+- **`f6d09e2` independently rechecked and closed:** repeated the failed conflict GET and an additional failed Reload preferences. Asia/Tokyo survived both. The next successful read restored the Europe/London comparison while retaining Asia/Tokyo; audit showed no extra PATCH during the reads. Explicit Save my changes then used fetched revision 10 and committed revision 11. [Preserved local draft after retry](design/verification/f17-qa-fixed-conflict.jpg).
+- **`14ad96b` logo guard checked:** clicking NamasteVideo home with unsaved UTC left the URL at `/settings` and retained UTC. After explicit Discard, the same link navigated to `/`. The browser automation surface did not expose a native beforeunload dialog, so this records guarded-navigation/retention outcomes, not a visual dialog or manual accept/dismiss walkthrough. Inline sign-out confirmation was separately verified above.
+
+### Automated checks, isolation and limits
+
+- Initial `992557d`: project/API suite **17/17**, preference controller suite **5/5**, root suite **41/41**, both TypeScript checks and production build passed. After the fixes: updated preference/component suite **8/8**, web typecheck and production build passed. Final relevant suite total is **66 tests** (17 + 8 + 41); the unchanged project/root suites were not redundantly rerun after controller/Brand-only fixes. `git diff --check` passed.
+- Disposable MongoDB replica set/account and loopback Next.js; no development Atlas data, provider credentials, R2 or external services. One-shot response/read faults existed only in the isolated API route. Normal backend authentication, validation, CAS and project creation were exercised. Temporary services/account were cleaned up, tabs closed and viewport reset.
+- Evidence: [normal conflict](design/verification/f17-qa-conflict.jpg), [interrupted save](design/verification/f17-qa-recovery.jpg), [mobile preferences](design/verification/f17-qa-mobile.jpg), [final saved Settings](design/verification/f17-qa-saved.jpg), plus the closed finding evidence above. Local ignored PATCH audit is in `runs/f17-independent-qa-20261007/patch-audit.jsonl`.
+- Daniel preview was not played in this recheck; the existing preview implementation/evidence is unchanged. Hosted playback and subjective listening remain pending from earlier milestones. No deployment, Instagram/F18 work or main-branch promotion occurred.
