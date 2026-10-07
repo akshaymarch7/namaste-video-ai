@@ -2,7 +2,7 @@
 
 Status: deployment preparation, not a verified hosted runtime. The local host has no Docker executable, so image build/Linux rendering and host resource sizing still need verification before paid provider calls. Existing queue, fencing, speech journal and output promotion are reused unchanged. No endpoint executes user-supplied code.
 
-## Proposed topology
+## Superseded Render topology (reference only)
 
 Vercel handles authenticated requests. Two Render background services poll the existing Atlas queues: `storyboard` runs Gemini planning/revisions; `generation` runs ElevenLabs and Remotion and saves outputs in private R2. The Cloudflare media gateway authorizes each browser request against Vercel. No Redis or Inngest account is required for this deployment. Do not enable duplicate Inngest dispatch for it.
 
@@ -53,3 +53,11 @@ These arguments use `apps/web/scripts/cloud-job.ts`, which executes only the sel
 Proposed Cloud Run settings: one task, parallelism one, platform retries zero, generation timeout 900 seconds and storyboard timeout 180 seconds; preserve the existing enqueue-relative deadlines. Limit active generations through the existing database admission/leases, and add dispatch admission limits before enabling dashboard triggers. These are planned host settings, not deployed evidence.
 
 A complete integration still requires authenticated dashboard dispatch, durable handling of failed/ambiguous trigger acknowledgements, a bounded reconciliation mechanism, narrow runtime identities/secret access, a Linux image build/benchmark and hosted playback acceptance. Do not start a worker against the real queue as a configuration check. The user explicitly requested a pause before billable workloads, including remote image builds and live execution.
+
+## Google Cloud configuration checkpoint — October 8, 2026
+
+Project `namastevideo-dev-20261007` has verified active billing. Cloud Run, Cloud Build, Artifact Registry, Secret Manager and IAM APIs are enabled. The selected pilot region is `us-central1`; cross-region Atlas latency and egress still require measurement. No workload has run.
+
+`cloudbuild.yaml` prepares one credential-free image build from the public repository, checked out at an explicit reviewed full commit SHA. Submit with `--no-source` so local files are never uploaded. Docker's allowlist still applies. The build has a 1,200-second timeout, uses Cloud Logging, and pushes one commit-tagged image. This timeout is a duration limit, not a monetary cap; image storage continues after build completion. Do not submit until the user's billable-workload checkpoint is approved.
+
+Before submission, create the dedicated `namastevideo-build` identity with Artifact Registry Writer on the `namastevideo-workers` repository only and Logs Writer on this project. No Owner/Editor, runtime secrets, provider credentials or database access are needed. These grants are not yet applied. Runtime service accounts and their narrowly scoped secret grants remain a separate setup step. The initial image build tests Chromium/ffprobe startup; it does not prove a complete Linux render or hosted dashboard operation.

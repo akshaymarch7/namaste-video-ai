@@ -1,0 +1,25 @@
+# Submit with --no-source and an explicit reviewed _SOURCE_COMMIT.
+# This build must be separately approved: compute and image storage may be billed.
+steps:
+  - name: gcr.io/cloud-builders/git
+    args: ['clone', 'https://github.com/akshaymarch7/namaste-video-ai.git', 'source']
+  - name: gcr.io/cloud-builders/git
+    dir: source
+    args: ['checkout', '--detach', '${_SOURCE_COMMIT}']
+  - name: gcr.io/cloud-builders/docker
+    dir: source
+    args:
+      - build
+      - -f
+      - apps/worker/Dockerfile
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/namastevideo-workers/worker:${_SOURCE_COMMIT}
+      - .
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/namastevideo-workers/worker:${_SOURCE_COMMIT}
+substitutions:
+  _SOURCE_COMMIT: REQUIRED_COMMIT_SHA
+serviceAccount: projects/$PROJECT_ID/serviceAccounts/namastevideo-build@$PROJECT_ID.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s
