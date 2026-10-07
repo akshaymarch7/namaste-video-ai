@@ -231,7 +231,25 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     assert.equal(deniedPage.status, 307);
     assert.match(deniedPage.headers.get('location') ?? '', /^\/sign-in\?/);
     assert.equal((await deniedPage.text()).includes(account.email), false);
-    assert.equal((await fetch(`${origin}/sign-in`)).status, 200);
+    const signInPage = await fetch(`${origin}/sign-in`);
+    assert.equal(signInPage.status, 200);
+    // Inspect actual server HTML: these protections exist before any script runs.
+    const signInHtml = await signInPage.text();
+    const form = signInHtml.match(/<form\b[^>]*class="auth-form"[^>]*>/)?.[0];
+    assert.ok(form);assert.match(form, /method="post"/);assert.match(form, /action="\/api\/session\/sign-in"/);
+    for (const name of ['email','password']) {
+      const input=signInHtml.match(new RegExp(`<input\\b[^>]*name="${name}"[^>]*>`))?.[0];
+      assert.ok(input);assert.match(input, /disabled=""/);
+    }
+    const submitButton=signInHtml.match(/<button[^>]*type="submit"[^>]*>/)?.[0];
+    assert.ok(submitButton);assert.match(submitButton, /disabled=""/);
+    assert.match(signInHtml, /<noscript>.*JavaScript is required to sign in/);
+    // Defense in depth if native submission is forced: POST body, never a query,
+    // rejected by the JSON-only facade without echoing credentials or redirects.
+    const fallback=await fetch(`${origin}/api/session/sign-in`,{method:'POST',redirect:'manual',headers:{Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({email:account.email,password:account.password})});
+    assert.equal(fallback.status,415);assert.equal(fallback.headers.get('location'),null);
+    assert.equal(new URL(fallback.url).search,'');
+    const fallbackText=await fallback.text();assert.equal(fallbackText.includes(account.password),false);assert.equal(fallbackText.includes(account.email),false);
     assert.match(await (await fetch(`${origin}/access-help`)).text(), /Contact your administrator to restore access/);
     assert.equal((await fetch(`${origin}/api/session`)).status, 401);
     assert.equal((await fetch(`${origin}/api/auth/get-session`)).status, 404);

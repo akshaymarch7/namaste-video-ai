@@ -6,6 +6,8 @@ import { Button } from './ui';
 import { safeReturnTo } from '@/src/auth/navigation';
 
 export function SignInForm({ returnTo, reason }: { returnTo: string; reason?: string }) {
+  const [initialized, setInitialized] = useState(false);
+  useEffect(() => { setInitialized(true); }, []);
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -22,7 +24,7 @@ export function SignInForm({ returnTo, reason }: { returnTo: string; reason?: st
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting.current || remaining > 0) return;
+    if (!initialized || submitting.current || remaining > 0) return;
     submitting.current = true; setBusy(true); setMessage('');
     const form = event.currentTarget;
     const values = new FormData(form);
@@ -43,13 +45,14 @@ export function SignInForm({ returnTo, reason }: { returnTo: string; reason?: st
     finally { submitting.current = false; setBusy(false); }
   }
 
-  return <form className="auth-form" onSubmit={submit} aria-busy={busy}>
+  return <form className="auth-form" method="post" action="/api/session/sign-in" onSubmit={submit} aria-busy={busy}>
+    <noscript><p className="auth-notice">JavaScript is required to sign in. Enable it and reload this page.</p></noscript>
     {reason === 'expired' && <p className="auth-notice" role="status">Your session has ended. Sign in to return to your workspace.</p>}
     {reason === 'signed-out' && <p className="auth-notice" role="status">You’ve been signed out.</p>}
     {message && <div className="auth-error" role="alert" tabIndex={-1} ref={feedback}>{message}{remaining > 0 && <span> Try again in {Math.ceil(remaining / 60)} minute{remaining > 60 ? 's' : ''}.</span>}</div>}
-    <div className="auth-field"><label htmlFor="email">Work email</label><input id="email" name="email" type="email" autoComplete="username" required maxLength={254} placeholder="you@example.com" disabled={busy} autoCapitalize="none" spellCheck={false} /></div>
-    <div className="auth-field"><label htmlFor="password">Password</label><div className="password-field"><input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required maxLength={128} placeholder="Enter your password" disabled={busy} /><button type="button" className="password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)} disabled={busy}>{showPassword ? 'Hide' : 'Show'}</button></div></div>
-    <Button type="submit" disabled={busy || remaining > 0}>{busy ? 'Signing in…' : 'Sign in'}<span aria-hidden="true">→</span></Button>
+    <div className="auth-field"><label htmlFor="email">Work email</label><input id="email" name="email" type="email" autoComplete="username" required maxLength={254} placeholder="you@example.com" disabled={!initialized || busy} autoCapitalize="none" spellCheck={false} /></div>
+    <div className="auth-field"><label htmlFor="password">Password</label><div className="password-field"><input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required maxLength={128} placeholder="Enter your password" disabled={!initialized || busy} /><button type="button" className="password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)} disabled={!initialized || busy}>{showPassword ? 'Hide' : 'Show'}</button></div></div>
+    <Button type="submit" disabled={!initialized || busy || remaining > 0}>{busy ? 'Signing in…' : 'Sign in'}<span aria-hidden="true">→</span></Button>
     <Link className="auth-help-link" href="/access-help">Need help signing in?</Link>
     <p className="auth-internal-note">For approved internal accounts.<br />Your ideas and videos stay in your own workspace.</p>
   </form>;
