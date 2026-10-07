@@ -46,7 +46,7 @@ export function generationService(db:Db,client:MongoClient,now=()=>new Date()){
     const date=now(),id=uid('job');
     const inputSnapshot={plan:source.content,notes:draft.notes,voicePreset:draft.voicePreset,contentHash:source.contentHash,storyHash:source.storyHash,canonicalizationVersion:1,renderConfig};
     const job:Doc={_id:id,ownerId,projectId,storyboardId:source._id,approvalId:approval._id,inputSnapshot,inputHash:hash(inputSnapshot),state:'queued',stage:'queued',revision:1,attempt:0,fence:0,leaseUntil:null,deadlineAt:new Date(date.getTime()+15*60000),errorCode:null,createdAt:date,updatedAt:date,finishedAt:null};
-    await db.collection<Doc>('projects').updateOne({_id:projectId,ownerId,deletedAt:null},{$set:{activeJobId:id},$inc:{contentRevision:Long.ONE}},{session});
+    await db.collection<Doc>('projects').updateOne({_id:projectId,ownerId,deletedAt:null},{$set:{activeJobId:id,'flags.needsAttention':false,updatedAt:date},$inc:{contentRevision:Long.ONE}},{session});
     await jobs.insertOne(job,{session});
     await db.collection('generationOutbox').insertOne({_id:uid('evt') as never,jobId:id,state:'pending',leaseToken:null,leaseUntil:null,availableAt:date,createdAt:date},{session});
     const data=view(job);await commands.insertOne({_id:uid('cmd'),...cmd.scope,requestHash:cmd.requestHash,jobId:id,response:data,createdAt:date},{session});return {data,replayed:false};
@@ -61,7 +61,7 @@ export function generationService(db:Db,client:MongoClient,now=()=>new Date()){
    const date=now(),terminal=job.state==='queued';
    const changed=await jobs.findOneAndUpdate({_id:id,ownerId,revision:job.revision},{$set:{state:terminal?'cancelled':'cancel_requested',stage:terminal?'stopped':job.stage,updatedAt:date,finishedAt:terminal?date:null},$inc:{revision:1}},{session,returnDocument:'after'});
    // All job mutations serialize through this parent; old jobs never release newer slots.
-   await db.collection<Doc>('projects').updateOne({_id:job.projectId,ownerId,activeJobId:id},{$inc:{contentRevision:Long.ONE},...(terminal?{$unset:{activeJobId:''}}:{})},{session});
+   await db.collection<Doc>('projects').updateOne({_id:job.projectId,ownerId,activeJobId:id},{$inc:{contentRevision:Long.ONE},...(terminal?{$unset:{activeJobId:''},$set:{'flags.needsAttention':false,updatedAt:date}}:{})},{session});
    const data=view(changed!);await commands.insertOne({_id:uid('cmd'),...cmd.scope,requestHash:cmd.requestHash,jobId:id,response:data,createdAt:date},{session});return {data,replayed:false};
   });},
  };
@@ -74,7 +74,7 @@ export async function runGenerationJob(db:Db,client:MongoClient,id:string,now=()
   const job=await jobs.findOne({_id:id},{session});if(!job||!activeStates.includes(job.state))return null;
   let parent;try{parent=await liveProject(db,job.ownerId,job.projectId,session,now());}catch(e){if((e as {code?:string}).code!=='NOT_FOUND')throw e;}
   const fresh=await jobs.findOne({_id:id},{session});if(!fresh||!activeStates.includes(fresh.state))return null;
-  if(!parent||parent.activeJobId!==id||!await isAdmitted(db,job.ownerId)){await jobs.updateOne({_id:id},{$set:{state:'failed',stage:'stopped',errorCode:'ACCESS_UNAVAILABLE',updatedAt:now(),finishedAt:now(),leaseUntil:null},$inc:{revision:1}},{session});await db.collection<Doc>('projects').updateOne({_id:job.projectId,activeJobId:id},{$unset:{activeJobId:''},$inc:{contentRevision:Long.ONE}},{session});return null;}
+  if(!parent||parent.activeJobId!==id||!await isAdmitted(db,job.ownerId)){await jobs.updateOne({_id:id},{$set:{state:'failed',stage:'stopped',errorCode:'ACCESS_UNAVAILABLE',updatedAt:now(),finishedAt:now(),leaseUntil:null},$inc:{revision:1}},{session});await db.collection<Doc>('projects').updateOne({_id:job.projectId,activeJobId:id},{$unset:{activeJobId:''},$set:{'flags.needsAttention':true,updatedAt:now()},$inc:{contentRevision:Long.ONE}},{session});return null;}
   if(fresh.state==='running'&&fresh.leaseUntil>now())return null;
   if(adapters){
    const scheduler=await db.collection('renderScheduler').updateOne({_id:'global' as never},{$inc:{revision:Long.ONE}},{session});
@@ -100,6 +100,6 @@ export async function runGenerationJob(db:Db,client:MongoClient,id:string,now=()
   const state=cancel?'cancelled':unavailable||expired||errorCode==='INPUT_INVALID'?'failed':completion?'succeeded':'needs_input';
   if(state==='succeeded'&&completion){await db.collection<Doc>('assets').insertMany(completion.assets,{session});await db.collection<Doc>('renderOutputs').insertOne(completion.output,{session});}
   await jobs.updateOne({_id:id,fence:claimed.fence},{$set:{state,stage:state==='succeeded'?'complete':'stopped',errorCode:cancel||state==='succeeded'?null:unavailable?'ACCESS_UNAVAILABLE':expired?'JOB_DEADLINE':errorCode,updatedAt:now(),finishedAt:now(),leaseUntil:null},$inc:{revision:1}},{session});
-  await db.collection<Doc>('projects').updateOne({_id:job.projectId,ownerId:job.ownerId,activeJobId:id},{$unset:{activeJobId:''},$inc:{contentRevision:Long.ONE}},{session});
+  await db.collection<Doc>('projects').updateOne({_id:job.projectId,ownerId:job.ownerId,activeJobId:id},{$unset:{activeJobId:''},$set:{'flags.needsAttention':['failed','needs_input'].includes(state),...(state==='succeeded'?{'flags.ready':true}:{}),updatedAt:now()},$inc:{contentRevision:Long.ONE}},{session});
  });return true;
 }

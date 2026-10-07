@@ -143,3 +143,36 @@ test('failed final transaction exposes neither assets nor output; replay resumes
  const later=new Date(Date.now()+91000);await runGenerationJob(db,client,j.id,()=>later,undefined,d.adapters);
  assert.equal((await service().get(owner,j.id)).state,'succeeded');assert.equal(d.calls().speechCalls,3);
 });
+
+test('library filters follow generation outcomes and preserve earlier ready output',async()=>{
+ const s=await seed(),projects=projectService(db,client,config.secret),d=executionDouble();
+ const listed=async(filter:'ready'|'needs_attention',actor=owner)=>(await projects.list(actor,{filter,limit:100})).data.some(p=>p.id===s.project.id);
+ const create=async()=> (await service().create(owner,s.project.id,randomUUID(),{...s.input,acknowledgePossibleRepeat:true})).data;
+ let j=await create();await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
+ assert.equal(await listed('ready'),true);assert.equal(await listed('needs_attention'),false);assert.equal(await listed('ready',other),false);
+ j=await create();const broken=executionDouble();broken.adapters.speech=async()=>{throw Error('labelled failure');};
+ await runGenerationJob(db,client,j.id,undefined,undefined,broken.adapters);
+ assert.equal(await listed('ready'),true);assert.equal(await listed('needs_attention'),true);assert.equal(await listed('needs_attention',other),false);
+ j=await create();assert.equal(await listed('needs_attention'),false);
+ await service().cancel(owner,j.id,randomUUID(),{expectedRevision:1});
+ assert.equal(await listed('ready'),true);assert.equal(await listed('needs_attention'),false);
+ j=await create();await runGenerationJob(db,client,j.id,undefined,undefined,executionDouble().adapters);
+ assert.equal(await listed('ready'),true);assert.equal(await listed('needs_attention'),false);
+});
+
+test('queue expiration projects attention; repair restores old outcomes idempotently',async()=>{
+ const {repairGenerationProjectFlags}=await import('../src/jobs/repair-project-flags');
+ const s=await seed(),projects=projectService(db,client,config.secret),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data;
+ const future=()=>new Date(Date.now()+16*60000);
+ assert.equal((await generationService(db,client,future).get(owner,j.id)).errorCode,'QUEUE_EXPIRED');
+ assert.equal((await projects.get(owner,s.project.id)).flags.needsAttention,true);
+ assert.equal((await projects.get(owner,s.project.id)).flags.ready,false);
+ const success=await seed(),job=(await service().create(owner,success.project.id,randomUUID(),success.input)).data;
+ await runGenerationJob(db,client,job.id,undefined,undefined,executionDouble().adapters);
+ await db.collection('projects').updateOne({_id:s.project.id as never},{$set:{'flags.needsAttention':false}});
+ await db.collection('projects').updateOne({_id:success.project.id as never},{$set:{'flags.ready':false}});
+ await repairGenerationProjectFlags(db,client);
+ assert.equal((await projects.get(owner,s.project.id)).flags.needsAttention,true);
+ assert.equal((await projects.get(owner,success.project.id)).flags.ready,true);
+ assert.equal((await repairGenerationProjectFlags(db,client)).generationProjectFlagsRepaired,0);
+});
