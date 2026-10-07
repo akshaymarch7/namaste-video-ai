@@ -6,7 +6,7 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F16 is implemented locally and ready for QA after user acceptance of both P2 fixes.** Caption formatting edits, saved-narration rerendering, revision job progress and a return-to-storyboard path are available. Earlier exports and approvals are preserved. See the F16 checkpoint below for evidence and limits; hosted deployment remains deferred.
+**F16 independently tested at `fa97e9d`; one P2 remains before full approval.** Capitalization edits, saved-narration rendering, draft/reload recovery, lost-response recovery, cancellation and preservation of prior selection/approval passed. Spacing-only edits are discarded: the editor treats them as unchanged, and the compiler/renderer collapse whitespace. Independent checks passed 100 tests, both typechecks, production build, desktop/mobile browser checks and two real 72.2-second renders using synthetic silent audio. See the independent QA entry below. Hosted playback and subjective listening remain pending.
 
 **F15 multi-tab recovery P2 fixed; verification recorded below.** Video approval/selection recovery uses one localStorage record per command UUID. Tabs no longer overwrite a shared pending slot or delete another command on completion. Legacy pending receipts remain readable.
 
@@ -64,7 +64,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F13 | Durable generation job orchestration | Partial: local execution connected; hosted delivery deferred | 30 job/controller tests; frozen inputs, speech journal, leases, cancellation and atomic completion; browser reload/cancel and live local execution below. |
 | F14 | Hosted rendering integration | Partial: local pipeline implemented; library-filter P2 independently closed; listening and hosted execution pending | Filter recheck: 52 tests/web typecheck, desktop browser and stale-record repair passed. Prior 154-test/media/R2 evidence and limits below. |
 | F15 | Video review, approval and download UI | Implemented: independent local QA passed; hosted media/listening pending | 96 tests/both typechecks; browser preview/recovery, selection conflicts, exact approval and downloaded byte/hash checks below. |
-| F16 | Caption and video revision flow | Local implementation; QA checkpoint | Caption edits rerender; spoken changes return to storyboard; preserved previous output |
+| F16 | Caption and video revision flow | Local QA complete; spacing-edit P2 open | Capitalization/reuse/recovery/preservation passed; 100 tests, types/build and real silent renders; spacing-only edits do not work |
 | F17 | Personal preferences UI/API | Planned | Timezone and future-project voice persisted without changing existing projects |
 | F18 | Personal Instagram authorization | Planned | Official connect/callback, eligibility, reconnect/disconnect and owner isolation |
 | F19 | Reviewed Post now flow | Planned | Exact asset/account/caption; confirmed publication; duplicate/unknown-outcome protection |
@@ -1616,3 +1616,33 @@ Desktop at **1280px** (document1265) and mobile at **390px** (document375) showe
 **Files:** caption contracts/service/routes/OpenAPI, caption editor/progress/review/command controller, execution/speech-result/local-render/config, root PlanV2 compiler/render/composition/caption-edits, targeted tests, API/DB/system/README documentation and this status file.
 
 **Review checkpoint/limits:** ready for independent QA/code review before the next feature. Verify from a completed video: edit capitalization, reload the draft, confirm a new version with the local generation worker running, review/select/export the result, rerender it, and exercise lost-response recovery/cancel. Source narration must still be available. Hosted delivery/compute remains deferred, and no live Atlas/R2-to-render pass, new paid narration, listening review or full accessibility/device matrix is claimed. Missing cache requires deliberate recovery, never automatic speech charges. No deployment, Instagram connection or social publishing occurred.
+
+
+## F16 — independent QA at `fa97e9d` (October 7, 2026)
+
+**Result: core revision flow passed; one P2 prevents full approval.** No application code was changed during this QA. The earlier F15 per-command recovery regressions also passed in the eight video-controller tests; this entry does not claim a separate full F15 browser recheck.
+
+### Finding — P2: advertised spacing edits are discarded
+
+- In Review video → Edit captions, change `Water moves through our world in a` to `Water  moves through our world in a` (two spaces). **Render caption changes stays disabled**, with no validation explanation, although the page explicitly says spacing can change. A capitalization-only edit enables it immediately.
+- `apps/web/components/video/caption-editor.tsx:23–24` collapses whitespace both for the changed check and override filtering. The compiler at `src/plan-v2/compiler.ts:78` also collapses any whitespace submitted through the API, and `fitCaption` rejoins words with single spaces. Thus enabling the button alone would not fix the output.
+- Preserve supported display spacing through dirty detection, override persistence, VTT and layout while retaining normalized comparison for speech safety; alternatively obtain agreement to narrow the advertised feature. Add a spacing-only end-to-end regression. Full F16 approval is pending this fix/recheck.
+
+### Independent verification
+
+- Node 24: `npm run test:jobs` (38), `npm run test:projects` (14), `npm run test:video-ui --workspace apps/web` (8), and `npm run check` (both TypeScript checks plus 40 root tests): **100/100 passed**. `npm run build --workspace apps/web`: passed.
+- Isolated archive of `fa97e9d`, disposable MongoDB replica set/account, loopback Next.js on 3018 and the production private gateway handler on 3019. A verified local disk object store substituted for R2. No development Atlas records, real provider credentials or external media services were used.
+- The production local render adapter and worker rendered both the original and revised videos from real MP3 files containing **synthetic silence and synthetic alignment**. The seeded source was explicitly approved and selected to test preservation. Both videos are 72.213333 seconds. The renderer passed its technical checks; independent full video/audio decoding of the revised MP4 passed. This is technical render evidence, not speech quality or listening evidence.
+- Desktop: caption loading/timing, punctuation rejection and disabled submission, capitalization editing, draft restoration after reload, explicit new-version confirmation, queued/running reload, completed-version review, private playback and VTT browser download passed. Playback advanced beyond 13 seconds with readyState 4. Returning to storyboard is available for spoken changes.
+- A one-shot fault in the isolated PATCH route replaced a successfully committed response with HTTP 503. The pending revision survived reload; **Recover request reused the same queued job**, with one source job and one revision job total. No duplicate render or speech execution occurred.
+- Worker counters after completion: **3 synthetic speech calls for the source, still 3 after the revision; 2 real render calls**. The original video remained selected and approved, and the new child version was unapproved. Its VTT differs only in the first caption's requested uppercase text; every timing is identical. Extracted AAC tracks have identical SHA-256 `4b25bdcc754257b9ae3aacba27f5fdf74f21d29e798128e1dcf1c6f4a444c25e`.
+- Browser VTT download completed and matched the saved revised VTT exactly: 1,720 bytes, SHA-256 `a9ae983c5c0f84cb24bc302bec0aed41834eed64f376fe900e3d323b4ebee9a6`. Rendered uppercase text was inspected in a fresh decoded frame and fits within the caption box.
+- Render again with saved narration admitted a third job; cancelling it while queued produced the expected cancelled UI/state. The two saved videos, original selection/approval, and speech/render counts remained unchanged. Missing-cache/no-synthesis and override inheritance remain covered by the independently rerun worker tests.
+- Mobile with a 390×844 viewport override: caption input and controls stayed within the viewport. A second tab began with its own unedited caption draft; changing it did not overwrite the uppercase draft restored in the first tab.
+- Additional actual HTTP checks passed: no session → 401, foreign origin → 403, spoken-word change → 422 `CAPTION_MEANING_CHANGE`, wrong speech fingerprint → 422 `INVALID_SPAN`, unknown field → 422 `VALIDATION_FAILED`.
+
+### Evidence and remaining limits
+
+- Screenshots: [running revision](design/verification/f16-qa-rendering.jpg), [mobile editor](design/verification/f16-qa-mobile.jpg), [new version alongside approved/selected original](design/verification/f16-qa-version.jpg), [fresh rendered uppercase caption](design/verification/f16-qa-rendered-caption.png). All use labelled synthetic fixtures.
+- Local ignored render artifacts: `runs/f16-independent-qa-20261007/video-1.mp4`, `video-2.mp4`, and corresponding VTT files. Generated media, temporary credentials, database and QA-only adapter/fault code are excluded from Git.
+- **Open:** the spacing-edit P2 above. Hosted playback, deployed workers/gateway and subjective listening remain pending; no claim of fresh live TTS/R2 verification is made. No F17 work was started.
