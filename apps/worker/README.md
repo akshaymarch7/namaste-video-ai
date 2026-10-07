@@ -73,3 +73,23 @@ Cloud Run's writable filesystem consumes instance memory; this benchmark's memor
 Verified execution `namastevideo-render-benchmark-dwpkl` rendered the 72-second fixture and passed complete decoding with the explicit encoder. Render time was 157.3 seconds; benchmark time including decode was 162 seconds; cgroup peak was 1,347,624,960 bytes (about 1.26 GiB). This does not prove 2 GiB is sufficient for every narrated scene, so the 4 GiB allocation remains unchanged. The preceding diagnostic execution confirmed that its render passed and only the old decode command failed.
 
 Cloud Run reported startup times around three to four minutes in these tests (4m20.31s on the passing execution). The image is 1,132,826,786 bytes in Artifact Registry. The cause of startup delay is not established. Do not enable storyboard dispatch with its existing 180-second enqueue-relative deadline until startup behavior is resolved and verified. No runtime secrets, provider requests, dashboard triggers or media gateway have been enabled by this benchmark. Two of the three approved diagnostic retries were used; stopped on success, with no scheduled or automatic execution.
+
+### Startup investigation and regional comparison
+
+Read-only task/log inspection narrowed the successful execution's timing (UTC):
+
+| Event | Time |
+| --- | --- |
+| Task created | 19:09:12.183 |
+| Image imported | 19:09:17.350 |
+| Task scheduled annotation | 19:09:39.428 |
+| Task started | 19:13:37.827 |
+| Application render-start event (after imports) | 19:13:42.326 |
+
+Only **4.499 seconds** elapsed between the recorded task start and application render start. Most delay precedes that task start; the evidence does not support blaming a four-minute JavaScript import or render initialization. It does not identify Google's internal provisioning cause. Google's [known issues](https://docs.cloud.google.com/run/docs/known-issues) lists high deployment latency in regions including `us-central1` and recommends another region. This is a hypothesis to test, not proof that this incident has the same cause. General [Node startup guidance](https://docs.cloud.google.com/run/docs/tips/nodejs) recommends bundling/lazy loading; no image rebuild or dependency rewrite is justified by this timing alone.
+
+`cloud-run-startup-probe.yaml` prepares a manual regional comparison with the **same immutable image**, no-role benchmark identity and 2 CPU/4 GiB allocation. Replace `PROBE_REGION` and `WORKER_IMAGE_DIGEST`; create/replace without `--execute-now`. It emits a timestamp before tsx/application loading, then imports the bounded storyboard dependency graph in a credential-free child. It never calls the job entrypoint, opens a database or invokes providers. Child timeout is 90 seconds; task timeout is 120 seconds; retries are zero. No secret environment, schedules or media are configured.
+
+After explicit workload approval, run at most one startup probe in `us-central1` and one in `us-east1`. Record execution creation, scheduled/task-start timestamps and both probe events. If the alternative reaches `startup-probe-ready` within 60 seconds of execution creation, run one full silent render/decode there with the existing benchmark command (900-second limit, zero retries). If neither region improves, stop and reassess; do not silently extend the storyboard deadline, repeat workloads indefinitely or claim a fix. Even successful samples are not a startup SLA and do not establish live database/provider readiness. Keep dashboard dispatch disabled until the full hosted path and expiration behavior are verified.
+
+These three proposed executions total 1,140 seconds of configured task runtime. At the cited Tier 1 job rates and this allocation, compute is approximately US$0.05 if all reach their timeouts, before free allowance, startup overhead, currency conversion, taxes, logs and cross-region image transfer/storage. This is an estimate, not a monetary cap; no recurring compute or image rebuild is proposed. The earlier diagnostic authorization stopped when the render passed, so this new comparison awaits the user's workload approval.

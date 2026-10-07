@@ -1,0 +1,58 @@
+# Manual diagnostic only. Replace PROBE_REGION and WORKER_IMAGE_DIGEST.
+# Reuse the already-built image; no application secrets or provider calls.
+# Creating/replacing this job must not execute it. Obtain workload approval first.
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: namastevideo-startup-probe
+  labels:
+    cloud.googleapis.com/location: PROBE_REGION
+spec:
+  template:
+    spec:
+      taskCount: 1
+      parallelism: 1
+      template:
+        spec:
+          serviceAccountName: namastevideo-benchmark@namastevideo-dev-20261007.iam.gserviceaccount.com
+          maxRetries: 0
+          timeoutSeconds: '120'
+          containers:
+            - image: WORKER_IMAGE_DIGEST
+              command: ['/usr/bin/tini', '-g', '--', 'node']
+              args:
+                - --input-type=module
+                - -e
+                - |
+                  import {execFileSync} from 'node:child_process';
+                  const started=performance.now();
+                  const emit=(event,extra={})=>console.log(JSON.stringify({event,at:new Date().toISOString(),elapsedMs:Math.round(performance.now()-started),...extra}));
+                  // Emit before loading tsx or any application dependency. Compare this
+                  // timestamp with execution creation, task scheduling and task start.
+                  emit('startup-probe-boot',{nodeUptimeMs:Math.round(process.uptime()*1000)});
+                  try {
+                    // Load the bounded storyboard worker's dependency graph, but never
+                    // call cloud-job.ts, open a database or invoke a provider/queue.
+                    // The child receives no inherited application or cloud credentials.
+                    execFileSync(process.execPath,['--conditions=react-server','--import','tsx','--input-type=module','-e',`
+                      const modules=await Promise.all([
+                        import('./apps/web/src/db/client.ts'),
+                        import('./apps/web/src/db/config.ts'),
+                        import('./apps/web/src/jobs/contracts.ts'),
+                        import('./apps/web/src/storyboards/worker.ts'),
+                        import('./apps/web/src/storyboards/http.ts'),
+                        import('./apps/web/src/storyboards/queue-setup.ts'),
+                        import('./apps/web/src/storyboards/revision-setup.ts')
+                      ]);
+                      if(typeof modules[3].runStoryboardJob!=='function'||typeof modules[4].defaultProvider!=='function')throw Error('MODULE_EXPORTS_MISSING');
+                    `],{cwd:process.cwd(),env:{PATH:process.env.PATH,HOME:process.env.HOME,TMPDIR:process.env.TMPDIR,NODE_ENV:'production'},stdio:'pipe',timeout:90000,maxBuffer:1024*1024});
+                    emit('startup-probe-ready',{passed:true,mode:'dependency-imports-only',retainedMedia:false});
+                  } catch {
+                    // No raw child stderr, arguments, environment or provider bodies.
+                    emit('startup-probe-failed',{passed:false});
+                    process.exitCode=1;
+                  }
+              resources:
+                limits:
+                  cpu: '2'
+                  memory: 4Gi
