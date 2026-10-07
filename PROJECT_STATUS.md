@@ -1715,3 +1715,13 @@ Desktop at **1280px** (document1265) and mobile at **390px** (document375) showe
 **Verification:** preference controller/store suite **7/7** and web typecheck passed; `git diff --check` passed. Two new actual-controller regressions cover PATCH conflict → failed follow-up GET → another failed Reload preferences → successful retry. They assert the local timezone remains intact, no extra PATCH occurs during reads, comparison state returns, Save my changes uses the newly fetched revision, and Use saved preferences explicitly replaces the draft without writing.
 
 **Scope/limits:** controller, regression tests and Project Status only. Backend/persistence contracts unchanged. No new browser fault-injection run, production build, cloud calls or deployment are claimed for this targeted fix. Ready for independent recheck before F18.
+
+## F17 P2 fix — run the leave guard for logo navigation (October 7, 2026)
+
+**Cause:** Settings registered beforeunload, but its shared Brand used Next.js Link. Logo navigation stayed within the current document, bypassing the warning and discarding ordinary unsaved edits.
+
+**Change:** Brand now supports an explicit documentNavigation option. Settings opts in, rendering a native home anchor so logo clicks take the same full-document path as its other navigation links and trigger the existing unsaved/pending-save beforeunload protection. Other Brand consumers retain Next.js Link behavior. Appearance, destination and accessible label are unchanged.
+
+**Verification:** preference/controller/component suite **8/8** and web typecheck passed; `git diff --check` passed. The added regression checks that the opted-in Brand is a native anchor to `/` without a client click handler, with the existing accessible label, while the default still uses Next.js navigation. Existing conflict-refresh and save-recovery tests remain green. No new browser confirmation-dialog run or production build is claimed for this targeted navigation change.
+
+**Scope:** shared Brand, Settings opt-in, regression test and this status entry only. Existing unrelated QA screenshots remain untouched/uncommitted. No backend, schema, provider or deployment changes. Ready for independent logo-navigation recheck before F18.

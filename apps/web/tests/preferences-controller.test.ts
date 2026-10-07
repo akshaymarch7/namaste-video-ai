@@ -41,3 +41,10 @@ for(const choice of ['local','saved'] as const){
   else{c.useSaved();assert.equal(c.snapshot().draft?.timezone,'Europe/London');assert.equal(c.snapshot().error,'');assert.equal(sent.length,1);}
  });
 }
+
+test('settings-compatible brand navigation uses a native anchor so beforeunload can guard drafts',async()=>{
+ const {Brand}=await import('../components/ui');
+ const native=Brand({documentNavigation:true});
+ assert.equal(native.type,'a');assert.equal(native.props.href,'/');assert.equal(native.props.onClick,undefined);assert.equal(native.props['aria-label'],'NamasteVideo home');
+ assert.notEqual(Brand().type,'a'); // Other pages keep their existing Next.js navigation.
+});
