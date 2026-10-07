@@ -1,21 +1,19 @@
 'use client';
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Button } from './ui';
+import { Brand, Button } from './ui';
+import {sessionController,readSession,initialSessionState} from './session-controller';
+import {notifySessionChanged,subscribeSessionChanges} from './session-events';
 import { usePathname } from 'next/navigation';
 import { signInLocation } from '@/src/auth/navigation';
 
 export function PrivateSession({ expiresAt, userId, children }: { expiresAt: string; userId: string; children: ReactNode }) {
-  const [state, setState] = useState<'ready' | 'checking' | 'offline'>('checking');
+  const [state, setState] = useState(initialSessionState);
+  const session = useRef<ReturnType<typeof sessionController>|null>(null);
   const [revealVersion, setRevealVersion] = useState(0);
   const pathname = usePathname();
   const content = useRef<HTMLDivElement>(null);
   const dialogFocus = useRef<{ dialog: HTMLElement; control: HTMLElement; selection: [number | null, number | null, 'forward' | 'backward' | 'none' | null] | null } | null>(null);
-  const generation = useRef(0);
-  const pending = useRef<AbortController | null>(null);
-  const invalidate = useCallback(() => {
-    generation.current += 1;
-    pending.current?.abort();
-    pending.current = null;
+  const conceal = useCallback(() => {
     // Capture before hiding moves focus to BODY. Repeated checks must not overwrite it.
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && content.current?.contains(focused)) {
@@ -27,34 +25,8 @@ export function PrivateSession({ expiresAt, userId, children }: { expiresAt: str
     // Hide synchronously: React can retain this DOM/state across route restoration.
     if (content.current) content.current.hidden = true;
   }, []);
-  const check = useCallback(async () => {
-    invalidate();
-    const current = generation.current;
-    const controller = new AbortController();
-    pending.current = controller;
-    setState('checking');
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    try {
-      const result = await fetch('/api/session', { cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
-      const identity = result.ok ? (await result.json()).data.user.id : undefined;
-      // Aborting alone is insufficient if the response/body already resolved.
-      if (current !== generation.current) return;
-      if (result.status === 401) { window.location.replace(signInLocation('expired')); return; }
-      if (result.status === 403) { window.location.replace('/access-help?state=disabled'); return; }
-      if (result.ok && identity !== userId) { window.location.replace('/projects'); return; }
-      if (content.current) content.current.hidden = !result.ok;
-      setState(result.ok ? 'ready' : 'offline');
-      // Also trigger restoration when React batches checking → ready into one render.
-      if (result.ok) setRevealVersion(value => value + 1);
-    } catch {
-      if (current === generation.current) setState('offline');
-    } finally {
-      clearTimeout(timeout);
-      if (current === generation.current) pending.current = null;
-    }
-  }, [invalidate, userId]);
   useLayoutEffect(() => {
-    if (state !== 'ready') return;
+    if (!state.visible) return;
     const saved = dialogFocus.current;
     if (!saved) return;
     if (!saved.dialog.isConnected || !content.current?.contains(saved.dialog)) { dialogFocus.current = null; return; }
@@ -72,29 +44,48 @@ export function PrivateSession({ expiresAt, userId, children }: { expiresAt: str
     }
   }, [state, revealVersion]);
   useLayoutEffect(() => {
-    // Runs before paint on mount and on React reactivation, even with preserved state.
-    void check();
-    const expiry = setTimeout(() => { invalidate(); window.location.replace(signInLocation('expired')); }, Math.max(0, new Date(expiresAt).getTime() - Date.now()));
-    const interval = setInterval(check, 60000);
-    const hide = () => { invalidate(); setState('checking'); };
-    const show = (event: PageTransitionEvent) => { if (event.persisted) void check(); };
-    const visibility = () => { if (document.visibilityState === 'visible') void check(); else hide(); };
-    window.addEventListener('focus', check);
-    window.addEventListener('popstate', check);
-    window.addEventListener('pagehide', hide);
-    window.addEventListener('pageshow', show);
-    document.addEventListener('visibilitychange', visibility);
-    return () => {
-      invalidate();
-      clearTimeout(expiry); clearInterval(interval);
-      window.removeEventListener('focus', check);
-      window.removeEventListener('popstate', check);
-      window.removeEventListener('pagehide', hide);
-      window.removeEventListener('pageshow', show);
-      document.removeEventListener('visibilitychange', visibility);
+    const current=sessionController({userId,expiresAt,read:readSession,conceal,redirect:url=>window.location.replace(url),onChange:next=>{
+      const wasHidden=content.current?.hidden;
+      if(content.current)content.current.hidden=!next.visible;
+      setState(next);
+      if(next.visible&&wasHidden)setRevealVersion(value=>value+1);
+    }});
+    session.current=current;
+    // Initial entry, pathname changes and React reactivation must not trust cached identity.
+    void current.guard();
+    const background=()=>{if(document.visibilityState==='visible')void current.check();};
+    const guard=()=>{void current.guard();};
+    const hide=()=>current.suspend();
+    const show=(event:PageTransitionEvent)=>{if(event.persisted)guard();};
+    const interval=setInterval(background,60000);
+    const unsubscribe=subscribeSessionChanges(guard);
+    window.addEventListener('focus',background);
+    window.addEventListener('online',background);
+    window.addEventListener('popstate',guard);
+    window.addEventListener('pagehide',hide);
+    window.addEventListener('pageshow',show);
+    document.addEventListener('visibilitychange',background);
+    return()=>{
+      current.dispose();session.current=null;clearInterval(interval);unsubscribe();
+      window.removeEventListener('focus',background);
+      window.removeEventListener('online',background);
+      window.removeEventListener('popstate',guard);
+      window.removeEventListener('pagehide',hide);
+      window.removeEventListener('pageshow',show);
+      document.removeEventListener('visibilitychange',background);
     };
-  }, [check, invalidate, expiresAt, pathname]);
-  return <><div ref={content} hidden={state !== 'ready'}>{children}</div>{state !== 'ready' && <section className="session-check" role="status"><h1>{state === 'checking' ? 'Checking your session…' : 'Connection interrupted'}</h1>{state === 'offline' && <><p>We couldn’t verify your session. Check your connection to continue.</p><Button onClick={check}>Try again</Button></>}</section>}</>;
+  }, [conceal, expiresAt, pathname, userId]);
+  const retry=()=>void session.current?.check();
+  return <><div ref={content} hidden={!state.visible}>{children}</div>
+    {state.visible&&state.offline&&<aside className="session-banner" role="status"><span>Connection interrupted. Your work is still here. Retrying…</span><Button variant="secondary" onClick={retry} disabled={state.checking}>Retry now</Button></aside>}
+    {!state.visible&&<section className="library-base session-placeholder" role="status" aria-label={state.offline?'Connection interrupted':'Loading your workspace'}>
+      <aside className="library-sidebar" aria-hidden="true" inert><Brand/><div className="session-skeleton session-skeleton-nav"/></aside>
+      <div className="library-content"><div className="library-topbar" aria-hidden="true"><div className="session-skeleton session-skeleton-title"/></div>
+        <div className="library-main">{state.offline?<><h1>Connection interrupted</h1><p>We couldn’t verify your session. Your saved work is safe. Reconnecting automatically.</p><Button onClick={retry} disabled={state.checking}>Try again</Button></>:<div aria-hidden="true"><div className="session-skeleton session-skeleton-title"/><div className="session-skeleton session-skeleton-panel"/></div>}</div>
+      </div>
+    </section>}
+  </>;
+
 }
 
 export function SignOutButton({ beforeSignOut, onSignOutFailed }: { beforeSignOut?: () => boolean; onSignOutFailed?: () => void } = {}) {
@@ -105,6 +96,7 @@ export function SignOutButton({ beforeSignOut, onSignOutFailed }: { beforeSignOu
     try {
       const response = await fetch('/api/session/sign-out', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(10000) });
       if (response.status !== 204) throw new Error();
+      notifySessionChanged();
       window.location.replace(signInLocation('signed-out'));
     } catch { setFailed(true); setBusy(false); onSignOutFailed?.(); }
   }

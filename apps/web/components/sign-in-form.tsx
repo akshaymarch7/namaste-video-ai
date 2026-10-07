@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import {notifySessionChanged} from './session-events';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from './ui';
 import { safeReturnTo } from '@/src/auth/navigation';
@@ -33,7 +34,7 @@ export function SignInForm({ returnTo, reason }: { returnTo: string; reason?: st
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: values.get('email'), password: values.get('password') }), signal: AbortSignal.timeout(15000),
       });
-      if (response.ok) { window.location.replace(safeReturnTo(returnTo)); return; }
+      if (response.ok) { notifySessionChanged(); window.location.replace(safeReturnTo(returnTo)); return; }
       (form.elements.namedItem('password') as HTMLInputElement).value = '';
       if (response.status === 429) {
         const seconds = Math.min(3600, Math.max(1, Number(response.headers.get('Retry-After')) || 60));
