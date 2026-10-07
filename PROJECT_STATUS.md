@@ -1786,3 +1786,13 @@ Limits / next acceptance:
 - `publishingAvailable` is always false. F18 refuses changes when any future nonterminal publish intent exists. F19/F20 must add transactional pause/reconciliation and retained submission credentials before enabling posting/scheduling; no fake pause counts or claimed reconciliation implementation.
 - Disconnect removes this workspace’s saved token; it does not revoke Instagram-side app authorization or delete posts. Operator refresh is implemented, automatic hosted scheduling is not.
 - Existing hosted media/compute and subjective listening checks remain pending. Independent QA/code review of F18 is still needed before progression.
+
+
+## F18 — live setup started, browser prerequisite pending (October 7, 2026)
+
+- After the user completed Facebook login and explicitly authorized accepting Meta's creation terms, created the separate **NamasteVideo.ai** Meta app, ID `28596164173368598`. Existing NamasteDev app was not modified. The new app remains unpublished and has no business portfolio connected.
+- Selected the Instagram content-management use case. Added `instagram_business_basic` and verified its **Ready for testing** status. Clicked Add for `instagram_business_content_publish`; its final status still needs verification.
+- Current app navigation exposed only **API setup with Facebook login**; direct Instagram Login configuration still needs resolution. Did not substitute Facebook Login credentials or change the application adapter.
+- Official Instagram setup documentation became readable in the logged-in browser. No real authorization code exchange, token storage, account connection, or posting was completed.
+- Opened Vercel dashboard for HTTPS setup; browser is on Vercel's login page. No deployment or DNS changes were performed.
+- Browser control then returned “Please update the ChatGPT extension in Google Chrome to the latest version to continue.” Resume after the extension update and Vercel login. No secrets were collected or written to environment files. Live F18 remains pending.
