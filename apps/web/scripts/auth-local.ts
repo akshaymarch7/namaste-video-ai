@@ -1,3 +1,4 @@
+import {setupInstagram} from '../src/instagram/setup';
 import {setupJobs} from '../src/jobs/setup';
 import {setupStorage} from '../src/storage/setup';
 import {setupStoryboardApprovals} from '../src/storyboards/approval-setup';
@@ -51,7 +52,7 @@ try {
   await setupProjects(db);
   await setupDrafts(db);
   await setupIdeas(db);
-  await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db); await setupStoryboardRevisions(db);await setupStoryboardSnapshots(db);await setupStoryboardApprovals(db);await setupStorage(db);await setupJobs(db);
+  await setupStoryboards(db); await setupStoryboardQueue(db); await setupEditableDrafts(db); await setupStoryboardRevisions(db);await setupStoryboardSnapshots(db);await setupStoryboardApprovals(db);await setupStorage(db);await setupJobs(db);await setupInstagram(db);
   await setupAuth(db, client, config);
   await provisionUser(db, client, config, input);
   // Explicit environment wins over any web env file. Do not inherit provider or migration credentials.

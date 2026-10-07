@@ -1,3 +1,4 @@
+import {setupInstagram} from '../src/instagram/setup';
 import {setupVideos} from '../src/videos/setup';
 import {backfillVideos} from '../src/videos/materialize';
 import {repairGenerationProjectFlags} from '../src/jobs/repair-project-flags';
@@ -26,8 +27,9 @@ try {
   const ideas = await setupIdeas(db);
   const storyboards = await setupStoryboards(db); const queue = await setupStoryboardQueue(db); const editable = await setupEditableDrafts(db); const revisions = await setupStoryboardRevisions(db); const snapshots = await setupStoryboardSnapshots(db); const approvals = await setupStoryboardApprovals(db);const storage = await setupStorage(db); const jobs = await setupJobs(db);
   const videos = await setupVideos(db);
+  const instagram = await setupInstagram(db);
   const repairs = {...await repairGenerationProjectFlags(db,client),...await backfillVideos(db,client)};
-  console.log(JSON.stringify({ status: 'ok', repairs, migrations: [result, projects, drafts, ideas, storyboards, queue, editable, revisions, snapshots, approvals, storage, jobs, videos] }));
+  console.log(JSON.stringify({ status: 'ok', repairs, migrations: [result, projects, drafts, ideas, storyboards, queue, editable, revisions, snapshots, approvals, storage, jobs, videos, instagram] }));
 } catch (error) {
   // Driver diagnostics can include connection strings or document data. Do not print them.
   console.error(JSON.stringify({

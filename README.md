@@ -383,3 +383,32 @@ From a completed project's **Review video**, choose **Edit captions**, adjust ca
 ### Personal preferences (F17)
 
 Open **Settings** from My Videos to save your timezone and future-project voice default. Daniel is currently the only enabled test voice; the existing preview remains available when its provider is configured. Existing projects keep their narrator. Saves are explicit, revision-checked and recoverable in the same tab after a lost response. The timezone is stored for future scheduling; Instagram and scheduling remain separate milestones. No new migration is required beyond the existing database setup.
+
+## F18: personal Instagram connection (local implementation)
+
+Open **Settings → Manage Instagram connection**. The page supports account identity, reconnect, cancellation/error outcomes, explicit disconnect and same-tab disconnect recovery. No video is published by this feature. Live Meta authorization has not yet been tested; the local checks use labelled provider/account fixtures.
+
+Apply migration **015-instagram** with `npm run db:setup --workspace apps/web` before using an existing database. Fresh `auth:local` environments install it. No schema changes run automatically in request handlers. The runtime needs read/write access to `instagramConnections`, `oauthStates` and `instagramCommands`.
+
+Configure only the web environment (`apps/web/.env.local` or server secret store):
+
+- `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET`: credentials for **Instagram API with Instagram Login**.
+- `INSTAGRAM_REDIRECT_URI`: exact registered `https://<app-origin>/api/instagram/callback`, sharing `BETTER_AUTH_URL` origin. No HTTP callback, alternate host, arbitrary redirect or browser token field is supported.
+- `INSTAGRAM_GRAPH_VERSION`: explicit version supported by the configured Meta app. There is no implicit latest-version fallback.
+- `INSTAGRAM_TOKEN_KEY_ID` and `INSTAGRAM_TOKEN_KEYS`: active key ID and JSON key ring, for example `{"k1":"<32 random bytes encoded as standard base64>"}`. Generate the value locally; do not commit it or paste it into chat. Keep old keys while stored ciphertext still references them; changing the active ID affects new connections and successful refreshes. Lost keys require reconnecting affected accounts.
+
+Use a professional Creator/Business test account with the required Meta app role. The adapter requests `instagram_business_basic` and `instagram_business_content_publish` and rejects incomplete grants and unsupported account types. No Facebook Page linking flow is implemented. Register/configure the Meta application and HTTPS callback before the live checkpoint; this code change does not deploy an endpoint or approve scopes on anyone’s behalf.
+
+Reference entry points: [Meta Instagram Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login), [token exchange](https://developers.facebook.com/docs/instagram-platform/reference/access_token), [refresh](https://developers.facebook.com/docs/instagram-platform/reference/refresh_access_token), [Meta’s official Postman collection](https://www.postman.com/meta/instagram/folder/6raa77c/instagram-api-with-instagram-login). Direct Meta document fetches returned HTTP 429 during this implementation and Postman’s full documentation required its interactive viewer; live endpoint/response compatibility and app-version eligibility remain explicit acceptance items, not verified claims.
+
+The adapter uses a bounded, non-retrying code exchange → long-lived token → professional profile flow. Provider responses supply expiry; tokens are AES-256-GCM encrypted with fresh nonces and owner/connection-bound AAD. Client responses contain no tokens. Callback state is hashed, bound to the initiating session, single-use and valid for ten minutes. New connection attempts and disconnects invalidate older callbacks. Same-account reconnect retains destination epoch; switching increments it. Unique indexes prevent an Instagram account from being connected to multiple workspaces.
+
+Run `npm run instagram:refresh --workspace apps/web` as an operator to refresh unexpired tokens older than 24 hours that expire within seven days. This makes real provider calls when configured. Refresh has a lease and token-revision fence; failures require reconnecting. No recurring refresh deployment is installed. Before hosted use, arrange the reviewed scheduler and verify refresh against Meta. Expired connections are shown as requiring reconnection even if no operator job ran.
+
+Disconnect removes this application’s saved credential and account link; it does not delete posts or revoke authorization in Instagram itself. Revoke the app in Instagram separately if desired. The command uses a revision check and durable idempotency receipt; an uncertain response stays recoverable in the originating tab. A replay cannot disconnect a newer connection.
+
+**F19/F20 boundary:** `publishingAvailable` is always false. If future nonterminal publish intents are present, F18 conservatively rejects connection changes instead of erasing credentials. The publishing/scheduling milestones must replace that guard with atomic pause/reconciliation and credential retention before enabling delivery. No claimed schedule-pause implementation or reconciliation worker exists yet.
+
+Suppress callback query strings and outbound token-exchange URLs in production proxy/APM/access logs before enabling live OAuth. Next development incoming-request logging excludes the callback route. The callback redirects to a fixed relative settings route with an allowlisted outcome, never raw provider errors or authorization codes.
+
+Verification: `npm run test:instagram --workspace apps/web`, `npm run test:instagram-ui --workspace apps/web`, existing project/OpenAPI and preference tests, both typechecks and production build. Browser screenshots in `design/verification/f18-instagram-*.png` show synthetic account data only.

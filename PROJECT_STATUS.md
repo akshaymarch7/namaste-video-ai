@@ -6,7 +6,9 @@ This is the source of truth for development progress. Specifications describe in
 
 ## Current checkpoint
 
-**F17 local independent QA passed through `14ad96b`.** Desktop/mobile preference saves, validation/discard, both conflict choices, committed-response recovery, sign-out confirmation and future-project defaults passed. The conflict-refresh data-loss issue reproduced at `992557d` was independently closed after `f6d09e2`; the `14ad96b` logo guard retained unsaved input during a guarded navigation attempt. Existing project/draft documents remained unchanged. Relevant tests, typechecks and production build passed; evidence and native-dialog limits are below. No F18 work was started.
+**F18 is implemented locally; live Meta authorization remains pending.** The personal Instagram connection page, secure connect/callback, owner isolation, reconnect/disconnect recovery, encrypted tokens and operator refresh are implemented. 85 relevant tests, both typechecks and the production build passed. Desktop/mobile checks used labelled synthetic accounts; no live Instagram account was authorized or content published. Apply migration 015 before using an existing database. Meta app credentials, registered HTTPS callback, live contract verification and independent QA remain outstanding; hosted deployment is still deferred. See the F18 record below.
+
+**F17 local independent QA passed through `14ad96b`.** Desktop/mobile preference saves, validation/discard, both conflict choices, committed-response recovery, sign-out confirmation and future-project defaults passed. The conflict-refresh data-loss issue reproduced at `992557d` was independently closed after `f6d09e2`; the `14ad96b` logo guard retained unsaved input during a guarded navigation attempt. Existing project/draft documents remained unchanged. Relevant tests, typechecks and production build passed; evidence and native-dialog limits are below. F18 now has its separate local checkpoint above.
 
 **F16 local QA passed; spacing P2 independently closed at `491e685`.** Spacing-only edits now enable rendering and survive draft reload, saved-version reload, VTT download and real rendering. Independent recheck passed 91 tests, both typechecks, production build, desktop/mobile editing and a fresh 72.2-second revision using saved synthetic silent audio with no additional speech calls. Previous selection/approval and exact audio bytes were preserved. Earlier core revision/recovery QA is retained below. Hosted playback and subjective listening remain pending; F17 has its separate checkpoint below.
 
@@ -68,7 +70,7 @@ Repository contributors follow this workflow through AGENTS.md. No external auto
 | F15 | Video review, approval and download UI | Implemented: independent local QA passed; hosted media/listening pending | 96 tests/both typechecks; browser preview/recovery, selection conflicts, exact approval and downloaded byte/hash checks below. |
 | F16 | Caption and video revision flow | Local QA passed; spacing P2 independently closed | Prior core-flow QA plus 491e685 recheck: 91 tests, types/build, desktop/mobile spacing, saved/exported text and real silent revision; hosted/listening pending |
 | F17 | Personal preferences UI/API | Local independent QA passed through 14ad96b | Saves, conflicts, lost-response recovery, discard/sign-out, future-project defaults and unchanged old projects; 66 relevant tests, types/build; evidence below |
-| F18 | Personal Instagram authorization | Planned | Official connect/callback, eligibility, reconnect/disconnect and owner isolation |
+| F18 | Personal Instagram authorization | Implemented locally; live authorization and independent QA pending | 14 backend/provider + 5 controller tests; desktop/mobile fixture connection/disconnect; encryption/owner isolation; setup limits below |
 | F19 | Reviewed Post now flow | Planned | Exact asset/account/caption; confirmed publication; duplicate/unknown-outcome protection |
 | F20 | Scheduling and schedule management | Planned | Timezone/DST/lead-time validation; durable dispatch; cancel/replace/reconnect races |
 | F21 | Full Cinema homepage and cross-device polish | Planned | Complete approved homepage, deliberate hero motion, mobile/a11y review and real example playback |
@@ -1752,3 +1754,35 @@ Desktop at **1280px** (document1265) and mobile at **390px** (document375) showe
 - Disposable MongoDB replica set/account and loopback Next.js; no development Atlas data, provider credentials, R2 or external services. One-shot response/read faults existed only in the isolated API route. Normal backend authentication, validation, CAS and project creation were exercised. Temporary services/account were cleaned up, tabs closed and viewport reset.
 - Evidence: [normal conflict](design/verification/f17-qa-conflict.jpg), [interrupted save](design/verification/f17-qa-recovery.jpg), [mobile preferences](design/verification/f17-qa-mobile.jpg), [final saved Settings](design/verification/f17-qa-saved.jpg), plus the closed finding evidence above. Local ignored PATCH audit is in `runs/f17-independent-qa-20261007/patch-audit.jsonl`.
 - Daniel preview was not played in this recheck; the existing preview implementation/evidence is unchanged. Hosted playback and subjective listening remain pending from earlier milestones. No deployment, Instagram/F18 work or main-branch promotion occurred.
+
+
+## F18 — personal Instagram authorization, local implementation (October 7, 2026)
+
+The user accepted F17 QA/review and requested the next milestone. Delivered the F18 backend and Cinema UI together. Live provider acceptance is a separate infrastructure checkpoint because a configured Meta app and registered same-origin HTTPS callback are required; deployment remains explicitly deferred. F19 publishing was not started.
+
+Implemented:
+
+- `apps/web/src/instagram/{contracts,config,provider,service,http,setup,openapi}.ts`: strict requests, same-origin authenticated mutations, internal admission, session-bound single-use ten-minute hashed OAuth state, server-side code/token/profile adapter, eligibility checks, safe outcome redirects and no-store responses.
+- Migration **015-instagram** adds strict connection/state/command collections; unique owner/account indexes, hashed state TTL and durable owner/idempotency receipts. Included in `db-setup.ts` and the disposable `auth-local.ts` launcher. No migration was applied to Atlas in this milestone.
+- AES-256-GCM token encryption uses random nonces, versioned key ring and owner/connection authenticated data. Token values never appear in the public contract. Explicit HTTPS same-origin callback and Graph version are required; incomplete configuration disables connect.
+- OAuth epoch fences newer attempts/disconnects against delayed callbacks. Account switches advance destination epoch; same-account reconnect does not. Cross-owner account collisions return a generic unavailable outcome.
+- Disconnect uses revision CAS and atomic durable command receipts. Same-key replay cannot disconnect a newer connection. Matching browser receipts remain in owner-scoped sessionStorage after unknown outcomes; explicit conflicts require reload/review.
+- `scripts/instagram-refresh.ts`: operator-run refresh for eligible expiring tokens, with age check, lease and token-revision fence. Delayed refresh cannot restore disconnected credentials. Failure/expiry requires reconnect. No recurring job was deployed.
+- `/settings/instagram` and `components/instagram/{controller,connection}`: connected identity, availability/expiry, reconnect, confirmation/cancel/disconnect, pending recovery, callback feedback, private-session boundary, Settings entry and owned-project return link. Downloads remain independent. Native Settings link preserves existing unload protection for unsaved preferences.
+- Next development callback request logging suppressed. Production proxy/APM query redaction is an operator requirement before live authorization; no production environment was changed.
+- `.env.example`, README operator guidance, API/DB implementation notes and generated OpenAPI updated. No saved credentials, private media or real account data added.
+
+Verification:
+
+- `npm run test:instagram --workspace apps/web`: **14/14**, isolated MongoDB 8 replica set. Migration replay/strict schema; ciphertext tamper/owner binding/key rotation; session mismatch/replay/expiry/cancel; ownership; account epochs; disconnect vs delayed callback; same-key concurrent disconnect; refresh success/failure/expiry and disconnect race; HTTP auth/origin and safe redirects; provider fixture host/scope/error checks.
+- `npm run test:instagram-ui --workspace apps/web`: **5/5**, pending reload/exact replay, conflict review, storage failure, owner separation, malformed/disposed outcomes and redirect allowlist.
+- Existing project/OpenAPI tests **17/17**, preferences UI/controller **8/8**, root prototype/rendering tests **41/41**. Total distinct tests run: **85**.
+- Both TypeScript checks passed; production Next build passed. Final web typecheck rerun after refresh tests and local-launcher wiring. `git diff --check` passed.
+- Isolated local browser fixture on port 3108: sign-in; Settings → connection; labelled connected Creator identity; unavailable configuration disabled reconnect; explicit disconnect confirmation/cancel; confirmed disconnect; reload retained disconnected state. Mobile 390×844 had no horizontal overflow. Screenshots: [desktop](design/verification/f18-instagram-desktop.png), [mobile](design/verification/f18-instagram-mobile.png). Only synthetic fixture data, no Meta calls. Temporary test server/database/browser tab removed after checks.
+
+Limits / next acceptance:
+
+- Real Meta app ID/secret, professional test account role, exact registered HTTPS callback and live provider response/Graph-version compatibility remain unverified. Direct Meta docs were rate-limited (HTTP 429); Postman’s full document was not available through the text viewer. README records primary reference entry points and does not claim the adapter was live-verified. No external app setup, permissions grant or deployment was performed.
+- `publishingAvailable` is always false. F18 refuses changes when any future nonterminal publish intent exists. F19/F20 must add transactional pause/reconciliation and retained submission credentials before enabling posting/scheduling; no fake pause counts or claimed reconciliation implementation.
+- Disconnect removes this workspace’s saved token; it does not revoke Instagram-side app authorization or delete posts. Operator refresh is implemented, automatic hosted scheduling is not.
+- Existing hosted media/compute and subjective listening checks remain pending. Independent QA/code review of F18 is still needed before progression.

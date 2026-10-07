@@ -1,3 +1,4 @@
+import {instagramPaths} from '../instagram/openapi';
 import {preferencePaths} from '../preferences/openapi';
 import {videoPaths} from '../videos/openapi';
 import {jobPaths} from '../jobs/openapi';
@@ -57,6 +58,7 @@ export function projectsOpenApi() {
       ...jobPaths(),
       ...videoPaths(),
       ...preferencePaths(),
+      ...instagramPaths(),
       '/api/projects/{id}/draft/apply':{parameters:[{in:'path',name:'id',required:true,schema:schema(projectId)}],post:{operationId:'applyStoryboardToDraft',description:'Explicit immutable candidate copy into the working draft. Shared revision and exact content hash required. Same-key replay returns the original snapshot, even after subsequent edits; reread the draft for current state. No approval or provider call.',parameters:keyed,requestBody:body(applyStoryboard),responses:{...errors,200:draftResponse}}},
       '/api/projects/{id}/idea-suggestions': {
         parameters: [{ in: 'path', name: 'id', required: true, schema: schema(projectId) }],
