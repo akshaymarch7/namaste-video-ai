@@ -88,3 +88,5 @@
 .caption-edit-field { display: grid; gap: 8px; margin: 18px 0; }
 .caption-edit-field span,.caption-edit-field small { color: var(--muted); }
 .caption-edit-field textarea { width: 100%; resize: vertical; color: var(--text); background: var(--canvas); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+
+.preferences-main{max-width:850px;padding:48px 32px;margin:auto}.preferences-main h1{font-size:clamp(30px,4vw,48px);letter-spacing:-.04em}.preferences-form{margin-top:32px;padding:28px}.preferences-form label{display:grid;gap:10px;margin-top:28px;font-weight:600}.preferences-form input,.preferences-form select{width:100%;min-width:0;padding:13px;border:1px solid var(--border);border-radius:10px;background:var(--canvas);color:inherit;font:inherit}.preferences-form .actions{margin-top:28px}@media(max-width:600px){.preferences-main{padding:24px 16px}.preferences-form{padding:20px}}

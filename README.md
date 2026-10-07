@@ -379,3 +379,7 @@ Preview/export requires the F12 media gateway configuration; hosted deployment r
 ### Caption revisions (F16)
 
 From a completed project's **Review video**, choose **Edit captions**, adjust capitalization/spacing and confirm **Render caption changes**. Drafts survive reload in the same tab. Word/punctuation changes use **Revise narration or visuals** and the existing storyboard approval flow. **Render again with saved narration** retains saved caption edits. Both create a separate unapproved version and preserve earlier exports/selection. Run the existing generation worker; verified cached speech is required and missing speech stops without another ElevenLabs call. See PROJECT_STATUS.md for local verification and hosted-delivery limitations.
+
+### Personal preferences (F17)
+
+Open **Settings** from My Videos to save your timezone and future-project voice default. Daniel is currently the only enabled test voice; the existing preview remains available when its provider is configured. Existing projects keep their narrator. Saves are explicit, revision-checked and recoverable in the same tab after a lost response. The timezone is stored for future scheduling; Instagram and scheduling remain separate milestones. No new migration is required beyond the existing database setup.

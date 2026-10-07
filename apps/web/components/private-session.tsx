@@ -97,16 +97,16 @@ export function PrivateSession({ expiresAt, userId, children }: { expiresAt: str
   return <><div ref={content} hidden={state !== 'ready'}>{children}</div>{state !== 'ready' && <section className="session-check" role="status"><h1>{state === 'checking' ? 'Checking your session…' : 'Connection interrupted'}</h1>{state === 'offline' && <><p>We couldn’t verify your session. Check your connection to continue.</p><Button onClick={check}>Try again</Button></>}</section>}</>;
 }
 
-export function SignOutButton() {
+export function SignOutButton({ beforeSignOut, onSignOutFailed }: { beforeSignOut?: () => boolean; onSignOutFailed?: () => void } = {}) {
   const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false);
   async function signOut() {
-    if (busy) return;
+    if (busy || (beforeSignOut && !beforeSignOut())) return;
     setBusy(true); setFailed(false);
     try {
       const response = await fetch('/api/session/sign-out', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(10000) });
       if (response.status !== 204) throw new Error();
       window.location.replace(signInLocation('signed-out'));
-    } catch { setFailed(true); setBusy(false); }
+    } catch { setFailed(true); setBusy(false); onSignOutFailed?.(); }
   }
   return <div className="sign-out-control"><Button variant="secondary" onClick={signOut} disabled={busy}>{busy ? 'Signing out…' : 'Sign out'}</Button>{failed && <p role="alert">Couldn’t sign out. Please try again.</p>}</div>;
 }

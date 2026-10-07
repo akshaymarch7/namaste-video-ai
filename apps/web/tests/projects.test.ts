@@ -182,3 +182,38 @@ test('project migration refuses changed checksums without touching existing data
   await rejects(setupProjects(local), 'DB_MIGRATION_CHANGED');
   await rejects(assertProjectsReady(local), 'PROJECT_SETUP_REQUIRED');
 });
+
+test('preferences are owner isolated, validate timezone/voice and atomically reject concurrent initial writes',async()=>{
+ const {preferenceService}=await import('../src/preferences/service'),svc=preferenceService(db),user='preferences-fixture';
+ assert.deepEqual(await svc.get(user),{revision:0,timezone:'Asia/Kolkata',defaultVoicePreset:'daniel-test'});
+ await rejects(svc.save(user,{expectedRevision:0,timezone:'Mars/Olympus'}),'INVALID_TIMEZONE');
+ await rejects(svc.save(user,{expectedRevision:0,timezone:'GMT+05:30'}),'INVALID_TIMEZONE');
+ await rejects(svc.save(user,{expectedRevision:0,defaultVoicePreset:'invented'}),'VOICE_UNAVAILABLE');
+ const results=await Promise.allSettled(['UTC','America/New_York'].map(timezone=>svc.save(user,{expectedRevision:0,timezone})));
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(await db.collection('preferences').countDocuments({ownerId:user}),1);
+ const first=await svc.get(user);assert.equal(first.revision,1);await rejects(svc.save(user,{expectedRevision:0,timezone:'UTC'}),'REVISION_CONFLICT');
+ const next=await svc.save(user,{expectedRevision:1,timezone:'Asia/Kolkata'});assert.equal(next.revision,2);assert.equal((await svc.get('unrelated-fixture')).revision,0);
+});
+
+test('preference save applies only to future project snapshots',async()=>{
+ const {preferenceService}=await import('../src/preferences/service'),svc=preferenceService(db);
+ const old=await make('Before preferences',other),previous=await svc.get(other);
+ await svc.save(other,{expectedRevision:previous.revision,defaultVoicePreset:'daniel-test',timezone:'UTC'});
+ const next=await make('After preferences',other);
+ assert.equal((await db.collection('drafts').findOne({projectId:old.id}))!.voicePreset,'test-preset');
+ assert.equal((await db.collection('drafts').findOne({projectId:next.id}))!.voicePreset,'daniel-test');
+});
+
+test('preference HTTP enforces session, origin, strict body and revision checks',async()=>{
+ const {handlePreferences}=await import('../src/preferences/http');
+ const call=(body?:unknown,headers:Record<string,string>={},query='')=>handlePreferences(new Request(config.origin+'/api/preferences'+query,{method:body?'PATCH':'GET',headers:{Cookie:cookie,Origin:config.origin,'Content-Type':'application/json',...headers},...(body?{body:JSON.stringify(body)}:{})}),async()=>deps);
+ assert.equal((await call(undefined,{Cookie:''})).status,401);
+ assert.equal((await call(undefined,{},'?ownerId=someone')).status,422);
+ const read=await call();assert.equal(read.headers.get('cache-control'),'private, no-store');const prefs=(await read.json()).data;
+ assert.equal((await call({expectedRevision:prefs.revision,timezone:'UTC'},{Origin:'https://wrong.test'})).status,403);
+ assert.equal((await call({expectedRevision:prefs.revision,timezone:'UTC',ownerId:other})).status,422);
+ assert.equal((await call({expectedRevision:prefs.revision})).status,422);
+ assert.equal((await call({expectedRevision:prefs.revision,timezone:'Not/AZone'})).status,422);
+ const body={expectedRevision:prefs.revision,timezone:'UTC'};assert.equal((await call(body)).status,200);assert.equal((await call(body)).status,409);
+ const foreign=(await (await call(undefined,{Cookie:otherCookie})).json()).data;assert.notEqual(foreign.revision,0);
+});
