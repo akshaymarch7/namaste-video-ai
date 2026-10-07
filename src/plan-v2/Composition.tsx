@@ -1,14 +1,17 @@
 import React from 'react';
 import {AbsoluteFill,Audio,Sequence,staticFile,useCurrentFrame,interpolate} from 'remotion';
 import {motionAt,type RenderScene,type RenderTimeline} from './compiler';
-import {labelLines} from './text';
+import {fitLabel} from './text';
 import '@fontsource/dm-sans/400.css';
 import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/600.css';
 import '@fontsource/dm-sans/700.css';
 const ink='#153c3a',teal='#168779',orange='#e9a64d';
 const fade=(f:number)=>interpolate(f,[0,18],[0,1],{extrapolateLeft:'clamp',extrapolateRight:'clamp'});
-function Lines({text,x,y,size=32,max=22}:{text:string;x:number;y:number;size?:number;max?:number}){return <text x={x} y={y} fill={ink} fontSize={size}>{labelLines(text,max).map((line,i)=><tspan key={i} x={x} dy={i?size*1.2:0}>{line}</tspan>)}</text>}
+function Lines({text,x,top,height,size=32,max=22}:{text:string;x:number;top:number;height:number;size?:number;max?:number}){
+  const layout=fitLabel(text,max,size,top,height);
+  return <text x={x} y={layout.baseline} fill={ink} fontSize={layout.fontSize}>{layout.lines.map((line,i)=><tspan key={i} x={x} dy={i?layout.lineHeight:0}>{line}</tspan>)}</text>;
+}
 export function DiagramV2({scene}:{scene:RenderScene}){
   const frame=useCurrentFrame(),v=scene.visual;
   const motion=(id:string)=>motionAt(scene.events,id,frame);
@@ -17,7 +20,7 @@ export function DiagramV2({scene}:{scene:RenderScene}){
     return <g key={id} opacity={m.visibility} transform={`translate(${(1-m.visibility)*-16} 0)`}>
       <rect x="95" y={y} width="670" height="112" rx="25" fill={index%2?'#e0e8df':'#dbe9e6'} stroke={m.accent>0?orange:'#ced9d1'} strokeWidth={2+m.accent*5}/>
       <circle cx="150" cy={y+56} r="27" fill={teal}/><text x="150" y={y+65} fill="white" textAnchor="middle" fontSize="25">{index+1}</text>
-      <Lines text={label} x={205} y={y+50} max={16}/>
+      <Lines text={label} x={205} top={y+16} height={80} max={16}/>
     </g>;
   };
   return <svg viewBox="0 0 860 700" style={{width:'100%',height:700}}>
@@ -38,9 +41,9 @@ export function DiagramV2({scene}:{scene:RenderScene}){
       return <g key={id} opacity={m.visibility} transform={`translate(${25+index*425} 0)`}>
         <rect y="45" width="385" height="565" rx="32" fill={index?'#e8e5d9':'#dbe9e6'} stroke={m.accent>0?orange:'#bfd4cf'} strokeWidth={2+m.accent*5}/>
         <rect x="28" y="75" width="56" height="7" rx="3.5" fill={index?orange:teal}/>
-        <Lines text={panel.heading} x={28} y={140} size={32} max={10}/>
+        <Lines text={panel.heading} x={28} top={105} height={79} size={32} max={10}/>
         <line x1="28" x2="355" y1="200" y2="200" stroke="#bccfc8"/>
-        {panel.points.map((p,i)=><g key={i}><circle cx="39" cy={250+i*118-8} r="5" fill={teal}/><Lines text={p} x={62} y={250+i*118} size={27} max={10}/></g>)}
+        {panel.points.map((p,i)=><g key={i}><circle cx="39" cy={265+i*118} r="5" fill={teal}/><Lines text={p} x={62} top={218+i*118} height={100} size={27} max={10}/></g>)}
       </g>;
     })}
     {(v.component==='title'||v.component==='takeaway')&&v.data.labels.map((label,i)=>box(`label-${i+1}`,label,i,40+i*158))}

@@ -1,9 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {compileV2,spokenText,motionAt,captionsVtt} from '../src/plan-v2/compiler';
-import {renderFixture,fixtureSpeech,fixtureTimeline} from '../src/plan-v2/fixture';
+import {renderFixture,fixtureSpeech,fixtureTimeline,layoutStressFixture} from '../src/plan-v2/fixture';
 import {syntheticSpeech} from '../src/pipeline/timing';
-import {labelLines} from '../src/plan-v2/text';
+import {labelLines,fitLabel} from '../src/plan-v2/text';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -85,4 +85,27 @@ test('live render rejects synthetic speech without local measured MP3 files befo
   await assert.rejects(()=>renderPlanV2({plan:renderFixture,notes:'',speech:fixtureSpeech(),fixture:false,outputDirectory:dir}),/LOCAL_AUDIO_REQUIRED/);
   await assert.rejects(()=>fs.stat(path.join(dir,'output.mp4')),{code:'ENOENT'});
  }finally{await fs.rm(root,{recursive:true,force:true});}
+});
+
+test('reported three-line labels and headings fit their complete allocated slots',()=>{
+ for(const [text,limit,size,top,height] of [
+  ['Reliable distributed systems',16,32,56,80],
+  ['Cloud storage cost',10,32,105,79],
+  ['Retains data without power',10,27,218,100],
+ ] as const){
+  const layout=fitLabel(text,limit,size,top,height);
+  assert.ok(layout.lines.length>=3);
+  assert.ok(layout.baseline-layout.fontSize>=top-1e-8);
+  const bottom=layout.baseline+(layout.lines.length-1)*layout.lineHeight+layout.fontSize*.2;
+  assert.ok(bottom<=top+height+1e-8);
+  assert.equal(layout.lines.join(' '),text);
+ }
+});
+test('maximum-card and comparison stress fixture remains a valid storyboard',()=>{
+ const t=compileV2(layoutStressFixture(),context,fixtureSpeech(),true);
+ assert.equal(t.scenes.length,4);
+ for(let i=0;i<4;i++){
+  const layout=fitLabel('Reliable distributed systems',16,32,40+i*158+16,80);
+  assert.ok(layout.baseline+2*layout.lineHeight+layout.fontSize*.2<40+i*158+112);
+ }
 });

@@ -9,3 +9,13 @@ export function labelLines(text:string,limit:number){
   }
   if(line)lines.push(line);return lines;
 }
+
+// Reserve one full font-size above the first baseline and 0.2 below the last.
+// Fit the complete wrapped block into its slot, keeping card/edge geometry stable.
+export function fitLabel(text:string,limit:number,size:number,top:number,height:number){
+  const lines=labelLines(text,limit);
+  const fontSize=Math.min(size,height/(Math.max(1,lines.length)*1.2));
+  const lineHeight=fontSize*1.2;
+  const blockHeight=lines.length*lineHeight;
+  return {lines,fontSize,lineHeight,baseline:top+(height-blockHeight)/2+fontSize};
+}

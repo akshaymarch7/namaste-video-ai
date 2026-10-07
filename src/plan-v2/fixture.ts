@@ -26,3 +26,17 @@ export const renderFixture:Storyboard={schemaVersion:2,title:'RAM and storage',a
 ]};
 export const fixtureSpeech=()=>Object.fromEntries(renderFixture.scenes.map(s=>[s.id,syntheticSpeech(spokenText(s).text,17.7)]));
 export const fixtureTimeline=()=>compileV2(renderFixture,{notes:'',voicePreset:'daniel-test'},fixtureSpeech(),true);
+
+export function layoutStressFixture():Storyboard{
+  const plan=structuredClone(renderFixture);
+  for(const scene of plan.scenes){
+    const v=scene.visual;
+    if(v.component==='flow')v.data.steps.forEach(s=>{s.label='Reliable distributed systems';});
+    else if(v.component==='comparison')for(const side of [v.data.left,v.data.right]){
+      side.heading='Cloud storage cost';
+      side.points=Array(3).fill('Retains data without power');
+    }
+    else v.data.labels=Array(4).fill('Reliable distributed systems');
+  }
+  return plan;
+}
