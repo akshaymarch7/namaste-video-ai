@@ -1646,3 +1646,13 @@ Desktop at **1280px** (document1265) and mobile at **390px** (document375) showe
 - Screenshots: [running revision](design/verification/f16-qa-rendering.jpg), [mobile editor](design/verification/f16-qa-mobile.jpg), [new version alongside approved/selected original](design/verification/f16-qa-version.jpg), [fresh rendered uppercase caption](design/verification/f16-qa-rendered-caption.png). All use labelled synthetic fixtures.
 - Local ignored render artifacts: `runs/f16-independent-qa-20261007/video-1.mp4`, `video-2.mp4`, and corresponding VTT files. Generated media, temporary credentials, database and QA-only adapter/fault code are excluded from Git.
 - **Open:** the spacing-edit P2 above. Hosted playback, deployed workers/gateway and subjective listening remain pending; no claim of fresh live TTS/R2 verification is made. No F17 work was started.
+
+## F16 P2 fix — release recovery after unavailable saved narration (October 7, 2026)
+
+**Cause:** caption/regenerate admission returns explicit `SPEECH_RECOVERY_REQUIRED` for missing or corrupt saved narration before enqueueing. The video command controller treated that response as an unknown outcome, retaining the receipt and blocking other review actions indefinitely.
+
+**Change:** `apps/web/components/video/commands.ts` now treats this code as a definite rejection for caption and regenerate commands only. It clears the matching immutable receipt, reads any other pending command, retains the actionable error message and releases the busy state. Existing generic service failures, lost responses and invalid success responses remain unresolved for recovery. The same logic clears previously persisted affected commands when the user chooses Recover request after loading the updated app. Other tabs' commands are never discarded.
+
+**Verification:** `npm run test:video-ui --workspace apps/web` passed **12/12**; web typecheck and `git diff --check` passed. Four new regressions use the actual controller and command store with shared-storage semantics, covering both caption and regenerate actions: initial explicit rejection, reload without a stuck receipt, subsequent approval, generic unavailable outcome retained through reload, same-key/body recovery, and explicit recovery rejection clearing only its own record while preserving another command. Existing unknown-outcome and multi-tab tests remain green.
+
+**Scope/limits:** controller, controller/store tests and this status entry only. No API/database/rendering changes, provider calls or deployment. No new browser run or production build is claimed for this targeted controller fix. The separate spacing-edit finding in the independent F16 QA entry remains open; this fix does not claim full F16 approval.

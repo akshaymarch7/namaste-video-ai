@@ -56,3 +56,22 @@ test('oversized caption edits fail before persistence or dispatch',async()=>{
  await c.submit('captions',video,1,Array.from({length:101},(_,i)=>({sceneId:'scene-1',speechFingerprint:hash,sourceStart:i,sourceEnd:i+1,displayText:'A'})));
  assert.equal(c.snapshot().error,'VALIDATION_FAILED');assert.equal(s.read(),null);assert.equal(calls,0);
 });
+
+for(const action of ['captions','regenerate'] as const){
+ test(`${action}: explicit unavailable-speech rejection clears receipt and unlocks later actions`,async()=>{
+  const storage=sharedStorage(),s=commandStore(storage,'owner',project),sent:Attempt[]=[];
+  const c=createVideoCommands(project,s,async a=>{sent.push(a);if(a.action===action)throw {code:'SPEECH_RECOVERY_REQUIRED'};return response;},()=>{});c.load();
+  await c.submit(action,video,1);
+  assert.equal(c.snapshot().pending,null);assert.equal(c.snapshot().busy,false);assert.equal(c.snapshot().error,'SPEECH_RECOVERY_REQUIRED');assert.equal(storage.length,0);
+  c.dispose();const reloaded=createVideoCommands(project,s,async a=>{sent.push(a);return response;},()=>{});reloaded.load();assert.equal(reloaded.snapshot().pending,null);
+  await reloaded.submit('approve',video,1);assert.equal(sent.length,2);assert.equal(reloaded.snapshot().completed,1);
+ });
+ test(`${action}: unknown outcome survives reload; explicit recovery rejection removes only matching command`,async()=>{
+  const storage=sharedStorage(),s=commandStore(storage,'owner',project),sent:Attempt[]=[];
+  const c=createVideoCommands(project,s,async a=>{sent.push(a);throw {code:'SERVICE_UNAVAILABLE'};},()=>{});c.load();await c.submit(action,video,1);
+  const original=structuredClone(c.snapshot().pending!);assert.ok(original);c.dispose();
+  const recovered=createVideoCommands(project,s,async a=>{sent.push(a);throw {code:'SPEECH_RECOVERY_REQUIRED'};},()=>{});recovered.load();assert.deepEqual(recovered.snapshot().pending,original);
+  const other:Attempt={action:'select',videoId:id,key:crypto.randomUUID(),body:{expectedProjectRevision:1}};s.write(other);
+  await recovered.recover();assert.deepEqual(sent[1],original);assert.equal(storage.length,1);assert.deepEqual(s.read(),other);assert.deepEqual(recovered.snapshot().pending,other);
+ });
+}

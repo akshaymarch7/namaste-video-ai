@@ -54,7 +54,9 @@ export function createVideoCommands(project:string,store:ReturnType<typeof comma
   }
   if(disposed)return;store.clear(a);emit({pending:store.read(),completed:state.completed+1});
  }catch(e){if(disposed)return;const code=(e as {code?:string}).code??'UNCONFIRMED';
-  if(['NOT_FOUND','VIDEO_NOT_READY','HASH_MISMATCH','REVISION_CONFLICT','VALIDATION_FAILED','INVALID_ORIGIN','SOURCE_CHANGED','PROJECT_BUSY','CAPTION_MEANING_CHANGE','INVALID_SPAN','NO_CHANGES','CAPTION_TIMING_INVALID'].includes(code)){try{store.clear(a);emit({pending:store.read()});}catch{emit({error:'RECOVERY_STORAGE'});return;}}
+  // Revision admission rejects missing/corrupt saved speech before enqueueing.
+  const speechRejected=(a.action==='captions'||a.action==='regenerate')&&code==='SPEECH_RECOVERY_REQUIRED';
+  if(speechRejected||['NOT_FOUND','VIDEO_NOT_READY','HASH_MISMATCH','REVISION_CONFLICT','VALIDATION_FAILED','INVALID_ORIGIN','SOURCE_CHANGED','PROJECT_BUSY','CAPTION_MEANING_CHANGE','INVALID_SPAN','NO_CHANGES','CAPTION_TIMING_INVALID'].includes(code)){try{store.clear(a);emit({pending:store.read()});}catch{emit({error:'RECOVERY_STORAGE'});return;}}
   emit({error:code});
  }finally{emit({busy:false});}}
  return {load(){try{emit({ready:true,pending:store.read()});}catch{emit({error:'RECOVERY_STORAGE'});}},snapshot:()=>state,
