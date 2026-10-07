@@ -226,13 +226,13 @@ test('legacy outputs backfill once without approving or overriding a user select
  assert.equal((await videoService(db,client).get(owner,v.id)).approval,null);
 });
 
-test('caption revision uses exact stored speech and preserves original approval and output',async()=>{
+test('spacing-only caption revision uses exact stored speech and preserves original approval and output',async()=>{
  const {captionService}=await import('../src/videos/captions'),{videoService}=await import('../src/videos/service'),{compileV2,captionsVtt}=await import('../../../src/plan-v2/compiler');
  const s=await seed(),d=executionDouble(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data;await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
  const videos=videoService(db,client),source=(await videos.list(owner,s.project.id,20)).data[0];
  await videos.mutate(owner,source.id,'approve',randomUUID(),{expectedOutputHash:source.outputHash,expectedRenderSpecHash:source.renderSpecHash,approve:true});
  const captions=captionService(db,client,()=>d.adapters.store),view=await captions.get(owner,source.id),scene=view.scenes[0],c=scene.captions[0];
- const edit={sceneId:scene.sceneId,speechFingerprint:scene.speechFingerprint,sourceStart:c.sourceStart,sourceEnd:c.sourceEnd,displayText:c.text.toUpperCase()},body={expectedRenderSpecHash:source.renderSpecHash,overrides:[edit]};
+ const edit={sceneId:scene.sceneId,speechFingerprint:scene.speechFingerprint,sourceStart:c.sourceStart,sourceEnd:c.sourceEnd,displayText:c.text.replace(' ','   ')},body={expectedRenderSpecHash:source.renderSpecHash,overrides:[edit]};
  await fail(captions.get(other,source.id),'NOT_FOUND');await fail(captions.revise(owner,source.id,randomUUID(),{...body,overrides:[{...edit,displayText:'Different facts.'}]}),'CAPTION_MEANING_CHANGE');
  await fail(captions.revise(owner,source.id,randomUUID(),{...body,overrides:[{...edit,speechFingerprint:'0'.repeat(64)}]}),'INVALID_SPAN');
  const key=randomUUID(),accepted=await captions.revise(owner,source.id,key,body);

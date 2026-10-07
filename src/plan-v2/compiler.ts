@@ -1,4 +1,4 @@
-import {captionOverrides,validateCaptionDisplay,type CaptionOverride} from './caption-edits';
+import {captionOverrides,captionDisplayText,validateCaptionDisplay,type CaptionOverride} from './caption-edits';
 import {validateStoryboard, type Storyboard} from '../../apps/web/src/storyboards/contracts';
 import {FPS, cueOffset, type Alignment, type Caption} from '../contracts';
 import {makeCaptions, validateAlignment} from '../pipeline/timing';
@@ -75,7 +75,7 @@ export function compileV2(raw:unknown, context:{notes:string;voicePreset:string}
       const matches=edits.filter(e=>e.sceneId===scene.id&&e.sourceStart===sourceStart&&e.sourceEnd===sourceEnd);
       if(matches.length>1)throw Error('INVALID_SPAN');
       const edit=matches[0];if(edit){validateCaptionDisplay(c.text,edit.displayText);used.add(edit);}
-      return {...c,originalText:c.text,sourceStart,sourceEnd,text:edit?edit.displayText.trim().replace(/\s+/gu,' '):c.text};
+      return {...c,originalText:c.text,sourceStart,sourceEnd,text:edit?captionDisplayText(edit.displayText):c.text};
     });
     if(captions.some(c=>c.start<0||c.end<=c.start||c.end>frames))throw Error('CAPTION_OUT_OF_BOUNDS');
     const result={id:scene.id,title:scene.title,kicker:scene.kicker,visual:scene.visual,start:cursor,frames,events,captions};

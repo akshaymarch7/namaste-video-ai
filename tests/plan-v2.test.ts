@@ -128,8 +128,23 @@ test('caption display edits preserve source spans, timing and Unicode code point
 test('caption fitting preserves text within two measured lines and rejects impossible fits',async()=>{
  const {fitCaption,validateCaptionDisplay}=await import('../src/plan-v2/caption-edits');
  const text='W'.repeat(24)+' '+'W'.repeat(24),layout=fitCaption(text,(s,size)=>s.length*size);
- assert.ok(layout.lines.length<=2);assert.ok(layout.size<40);assert.equal(layout.lines.join(' '),text);
+ assert.ok(layout.lines.length<=2);assert.ok(layout.size<40);assert.equal(layout.lines.join(''),text);
  assert.throws(()=>fitCaption('unfit',()=>900),/CAPTION_LAYOUT_INVALID/);
  assert.throws(()=>validateCaptionDisplay('1.5 metres','15 metres'),/CAPTION_MEANING_CHANGE/);
  assert.throws(()=>validateCaptionDisplay('do not change','do change'),/CAPTION_MEANING_CHANGE/);
+});
+
+
+test('spacing-only edits survive display comparison, compilation, VTT and fitted lines',async()=>{
+ const {captionDisplayText,fitCaption}=await import('../src/plan-v2/caption-edits');
+ const base=fixtureTimeline(),scene=base.scenes[0],c=scene.captions[0],display=c.text.replace(' ','   ');
+ assert.notEqual(captionDisplayText(display),c.text);
+ const edits=[{sceneId:scene.id,speechFingerprint:'a'.repeat(64),sourceStart:c.sourceStart,sourceEnd:c.sourceEnd,displayText:display}];
+ const revised=compileV2(renderFixture,context,fixtureSpeech(),true,edits);
+ assert.equal(revised.scenes[0].captions[0].text,display);assert.ok(captionsVtt(revised).includes(display));
+ assert.equal(fitCaption(display,(s,size)=>s.length*size/2).lines.join(''),display);
+ assert.equal(revised.scenes[0].captions[0].start,c.start);assert.equal(revised.scenes[0].captions[0].end,c.end);
+ const wrapped='Wide   '.repeat(8).trim(),layout=fitCaption(wrapped,(s,size)=>s.length*size);
+ assert.equal(layout.lines.length,2);assert.equal(layout.lines.join(''),wrapped);assert.ok(layout.lines.every(l=>l.length*layout.size<=782));
+ assert.equal(captionDisplayText('a\n\nb\tc'),'a  b c');
 });
