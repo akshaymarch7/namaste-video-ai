@@ -1,0 +1,88 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {compileV2,spokenText,motionAt,captionsVtt} from '../src/plan-v2/compiler';
+import {renderFixture,fixtureSpeech,fixtureTimeline} from '../src/plan-v2/fixture';
+import {syntheticSpeech} from '../src/pipeline/timing';
+import {labelLines} from '../src/plan-v2/text';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {renderPlanV2} from '../src/plan-v2/render';
+const context={notes:'',voicePreset:'daniel-test'};
+test('SVG text wraps long tokens without splitting Unicode code points',()=>{
+ assert.deepEqual(labelLines('ABCDEFGHIJKLMNOPQRST',14),['ABCDEFGHIJKLMN','OPQRST']);
+ assert.deepEqual(labelLines('🙂🙂🙂 test',2),['🙂🙂','🙂','te','st']);
+});
+test('all four components compile without discarding directed edges or motion events',()=>{
+ const t=fixtureTimeline();assert.equal(t.frames,2160);assert.equal(t.fixture,true);
+ assert.deepEqual(t.scenes.map(s=>s.visual.component),['title','flow','comparison','takeaway']);
+ assert.deepEqual(t.scenes[1].visual,renderFixture.scenes[1].visual);
+ assert.equal(t.scenes.reduce((n,s)=>n+s.events.length,0),11);
+ for(let i=0;i<t.scenes.length;i++)assert.equal(t.scenes[i].start,i*540);
+});
+test('pronunciation maps repeated occurrences and retains original caption spelling',()=>{
+ const s={narration:'RAM and RAM',pronunciation:[{phrase:'RAM',occurrence:2,spokenAs:'random access memory'}]};
+ const spoken=spokenText(s);assert.equal(spoken.text,'RAM and random access memory');assert.equal(spoken.boundaries[8],8);assert.equal(spoken.boundaries[11],28);
+ const t=fixtureTimeline();assert.match(t.scenes[0].captions.map(c=>c.text).join(' '),/RAM/);
+});
+test('cue inside a pronunciation replacement maps to measured spoken time',()=>{
+ const p=structuredClone(renderFixture);p.scenes[0].pronunciation[0].spokenAs='random access memory';
+ p.scenes[0].events[0].cue.phrase='AM';
+ const speech=fixtureSpeech();speech.intro=syntheticSpeech(spokenText(p.scenes[0]).text,17.7);
+ const t=compileV2(p,context,speech,true);assert.ok(t.scenes[0].events[0].start>0);
+ assert.equal(t.scenes[0].captions.map(c=>c.text).join(' '),p.scenes[0].narration);
+});
+test('code-point alignment supports emoji and repeated cue occurrence',()=>{
+ const p=structuredClone(renderFixture);p.scenes[0].narration='🙂 '+p.scenes[0].narration+' RAM.';
+ p.scenes[0].events[0].cue={phrase:'RAM',occurrence:2,offsetMs:0};p.scenes[0].events[0].durationMs=0;
+ const speech=fixtureSpeech();speech.intro=syntheticSpeech(spokenText(p.scenes[0]).text,17.7);
+ const t=compileV2(p,context,speech,true);assert.ok(t.scenes[0].events[0].start>490);assert.match(t.scenes[0].captions[0].text,/🙂/);
+});
+test('rejects unknown registry, missing speech, mismatched text and malformed alignment',()=>{
+ const p=structuredClone(renderFixture) as any;p.scenes[0].visual.component='arbitrary-code';assert.throws(()=>compileV2(p,context,fixtureSpeech(),true));
+ const s=fixtureSpeech();delete s.intro;assert.throws(()=>compileV2(renderFixture,context,s,true),/SPEECH_SCENE_MISMATCH/);
+ const mismatch=fixtureSpeech();mismatch.intro.alignment.characters[0]='?';assert.throws(()=>compileV2(renderFixture,context,mismatch,true),/ALIGNMENT_TEXT_MISMATCH/);
+ const malformed=fixtureSpeech();malformed.intro.alignment.character_start_times_seconds[3]=NaN;assert.throws(()=>compileV2(renderFixture,context,malformed,true),/Invalid alignment/);
+});
+test('rejects measured duration outside 60–90 seconds',()=>{
+ const speech=Object.fromEntries(renderFixture.scenes.map(s=>[s.id,syntheticSpeech(spokenText(s).text,8)]));
+ assert.throws(()=>compileV2(renderFixture,context,speech,true),/MEASURED_DURATION_OUT_OF_RANGE/);
+});
+test('rejects collapsed caption timing instead of silently dropping spoken words',()=>{
+ const speech=fixtureSpeech();speech.intro.alignment.character_start_times_seconds.fill(0);speech.intro.alignment.character_end_times_seconds.fill(0);
+ assert.throws(()=>compileV2(renderFixture,context,speech,true),/CAPTION_OUT_OF_BOUNDS/);
+});
+test('rejects negative cue times and events extending past scene end',()=>{
+ const p=structuredClone(renderFixture);p.scenes[0].events[0].cue={phrase:'Your',occurrence:1,offsetMs:-500};
+ assert.throws(()=>compileV2(p,context,fixtureSpeech(),true),/MOTION_OUT_OF_BOUNDS/);
+ p.scenes[0].events[0].cue={phrase:'both.',occurrence:1,offsetMs:0};p.scenes[0].events[0].durationMs=3000;
+ assert.throws(()=>compileV2(p,context,fixtureSpeech(),true),/MOTION_OUT_OF_BOUNDS/);
+});
+test('reveal duration, zero-duration connect, compare and emphasis have explicit timing',()=>{
+ const events=[{id:'a',targetId:'node',action:'reveal' as const,start:10,frames:20},{id:'b',targetId:'node',action:'emphasize' as const,start:35,frames:10}];
+ assert.equal(motionAt(events,'node',9).visibility,0);assert.equal(motionAt(events,'node',20).visibility,.5);assert.equal(motionAt(events,'node',30).visibility,1);
+ assert.ok(motionAt(events,'node',40).accent>.9);assert.equal(motionAt(events,'node',45).accent,0);
+ assert.equal(motionAt(events,'other',0).visibility,1);
+ assert.equal(motionAt([{id:'a',targetId:'edge',action:'connect',start:10,frames:0}],'edge',10).visibility,1);
+ assert.equal(motionAt([{id:'a',targetId:'left',action:'compare',start:10,frames:0}],'left',10).accent,1);
+});
+test('VTT uses global offsets, preserves original captions and escapes markup',()=>{
+ const t=fixtureTimeline();t.scenes[0].captions[0].text='<RAM> & storage';const vtt=captionsVtt(t);
+ assert.match(vtt,/^WEBVTT\n/);assert.match(vtt,/&lt;RAM&gt; &amp; storage/);assert.match(vtt,/00:00:18\./);
+});
+test('renderer refuses an existing output directory and preserves earlier media',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'v2-preservation-'));
+ try{
+  await fs.writeFile(path.join(dir,'output.mp4'),'earlier output');
+  await assert.rejects(()=>renderPlanV2({plan:renderFixture,notes:'',speech:fixtureSpeech(),fixture:true,outputDirectory:dir}),{code:'EEXIST'});
+  assert.equal(await fs.readFile(path.join(dir,'output.mp4'),'utf8'),'earlier output');
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+test('live render rejects synthetic speech without local measured MP3 files before bundling',async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'v2-audio-boundary-'));
+ try{
+  const dir=path.join(root,'attempt');
+  await assert.rejects(()=>renderPlanV2({plan:renderFixture,notes:'',speech:fixtureSpeech(),fixture:false,outputDirectory:dir}),/LOCAL_AUDIO_REQUIRED/);
+  await assert.rejects(()=>fs.stat(path.join(dir,'output.mp4')),{code:'ENOENT'});
+ }finally{await fs.rm(root,{recursive:true,force:true});}
+});
