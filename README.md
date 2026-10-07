@@ -386,7 +386,7 @@ Open **Settings** from My Videos to save your timezone and future-project voice 
 
 ## F18: personal Instagram connection
 
-Open **Settings → Manage Instagram connection**. The page supports account identity, reconnect, cancellation/error outcomes, explicit disconnect and same-tab disconnect recovery. No video is published by this feature. Facebook Login has passed live Meta authorization and read-only account checks. See PROJECT_STATUS.md for the latest dashboard/deployment verification; automated checks use labelled fixtures.
+Open **Settings → Manage Instagram connection**. The page supports account identity, reconnect, cancellation/error outcomes, explicit disconnect and same-tab disconnect recovery. No video is published by this feature. Facebook Login has passed the hosted dashboard OAuth callback, encrypted persistence, clean-URL reload and a read-only API check using the saved Page token. See PROJECT_STATUS.md for evidence and remaining development-mode/publication limits; automated checks use labelled fixtures.
 
 Apply migrations **015-instagram** and **016-instagram-facebook** with `npm run db:setup --workspace apps/web` before using an existing database. Fresh `auth:local` environments install it. No schema changes run automatically in request handlers. The runtime needs read/write access to `instagramConnections`, `oauthStates` and `instagramCommands`.
 
