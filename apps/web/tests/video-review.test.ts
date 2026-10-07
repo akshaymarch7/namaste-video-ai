@@ -42,3 +42,17 @@ test('legacy receipts remain recoverable; collision and mismatched cleanup canno
  s.clear(b);assert.deepEqual(s.read(),a);s.clear(a);assert.equal(s.read(),null);
  s.write(a);assert.throws(()=>s.write({...a,body:{expectedProjectRevision:2}}));assert.throws(()=>s.clear({...a,body:{expectedProjectRevision:2}}));assert.deepEqual(s.read(),a);
 });
+
+test('caption revision recovery retains source hash and exact edit spans',async()=>{
+ const s=store(),sent:Attempt[]=[],source={...video,renderSpecHash:hash};let succeed=false;
+ const result={sourceVideoId:id,sourceRenderSpecHash:hash,job:{id:'job_'+'a'.repeat(32),projectId:project,storyboardId:'stb_'+'b'.repeat(32),state:'queued',stage:'queued',revision:1,attempt:0,errorCode:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),finishedAt:null,actions:{cancel:true}}};
+ const send=async(a:Attempt)=>{sent.push(a);if(!succeed)throw Error('lost');return result;};const c=createVideoCommands(project,s,send,()=>{});c.load();
+ const overrides=[{sceneId:'scene-1',speechFingerprint:hash,sourceStart:0,sourceEnd:3,displayText:'RAM'}];await c.submit('captions',source,1,overrides);assert.ok(c.snapshot().pending);c.dispose();succeed=true;
+ const recovered=createVideoCommands(project,s,send,()=>{});recovered.load();await recovered.recover();assert.deepEqual(sent[0],sent[1]);assert.equal(recovered.snapshot().pending,null);
+});
+
+test('oversized caption edits fail before persistence or dispatch',async()=>{
+ const s=store();let calls=0;const c=createVideoCommands(project,s,async()=>{calls++;return {};},()=>{});c.load();
+ await c.submit('captions',video,1,Array.from({length:101},(_,i)=>({sceneId:'scene-1',speechFingerprint:hash,sourceStart:i,sourceEnd:i+1,displayText:'A'})));
+ assert.equal(c.snapshot().error,'VALIDATION_FAILED');assert.equal(s.read(),null);assert.equal(calls,0);
+});

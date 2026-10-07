@@ -1,3 +1,4 @@
+import {captionOverrides,validateCaptionDisplay,type CaptionOverride} from './caption-edits';
 import {validateStoryboard, type Storyboard} from '../../apps/web/src/storyboards/contracts';
 import {FPS, cueOffset, type Alignment, type Caption} from '../contracts';
 import {makeCaptions, validateAlignment} from '../pipeline/timing';
@@ -5,8 +6,8 @@ import {makeCaptions, validateAlignment} from '../pipeline/timing';
 export type SceneV2 = Storyboard['scenes'][number];
 export type MeasuredSpeech = {alignment: Alignment; duration: number};
 export type MotionEvent = {id: string; targetId: string; action: SceneV2['events'][number]['action']; start: number; frames: number};
-export type RenderScene = {id: string; title: string; kicker: string; visual: SceneV2['visual']; start: number; frames: number; events: MotionEvent[]; captions: Caption[]};
-export type RenderTimeline = {schemaVersion: 2; rendererVersion: 'plan-v2-1'; title: string; fps: 30; frames: number; fixture: boolean; scenes: RenderScene[]};
+export type RenderScene = {id: string; title: string; kicker: string; visual: SceneV2['visual']; start: number; frames: number; events: MotionEvent[]; captions: (Caption & {sourceStart:number;sourceEnd:number;originalText:string})[]};
+export type RenderTimeline = {schemaVersion: 2; rendererVersion: 'plan-v2-2'; title: string; fps: 30; frames: number; fixture: boolean; scenes: RenderScene[]};
 
 // Maps approved UTF-16 boundaries to spoken UTF-16 boundaries. Inside a
 // pronunciation replacement the mapping is proportional, not forced alignment.
@@ -42,9 +43,10 @@ function speechClock(a:Alignment) {
   };
 }
 
-export function compileV2(raw:unknown, context:{notes:string;voicePreset:string}, speech:Record<string,MeasuredSpeech>, fixture=false):RenderTimeline {
+export function compileV2(raw:unknown, context:{notes:string;voicePreset:string}, speech:Record<string,MeasuredSpeech>, fixture=false,overrides:CaptionOverride[]=[]):RenderTimeline {
   const plan=validateStoryboard(raw,context).content;
   if(Object.keys(speech).length!==plan.scenes.length)throw Error('SPEECH_SCENE_MISMATCH');
+  const edits=captionOverrides.parse(overrides);const used=new Set<CaptionOverride>();
   let cursor=0;
   const scenes=plan.scenes.map(scene=>{
     const measured=speech[scene.id];if(!measured)throw Error('SPEECH_MISSING');
@@ -66,13 +68,22 @@ export function compileV2(raw:unknown, context:{notes:string;voicePreset:string}
       captionAlignment.character_start_times_seconds.push(clock(spoken.boundaries[offset]));offset+=character.length;
       captionAlignment.character_end_times_seconds.push(clock(spoken.boundaries[offset],true));
     }
-    const captions=makeCaptions(captionAlignment);
+    const words=[...scene.narration.matchAll(/\S+/gu)];let wordIndex=0;
+    const captions=makeCaptions(captionAlignment).map(c=>{
+      const count=c.text.split(/\s+/u).length,first=words[wordIndex],last=words[wordIndex+count-1];wordIndex+=count;
+      const sourceStart=Array.from(scene.narration.slice(0,first.index)).length,sourceEnd=Array.from(scene.narration.slice(0,last.index!+last[0].length)).length;
+      const matches=edits.filter(e=>e.sceneId===scene.id&&e.sourceStart===sourceStart&&e.sourceEnd===sourceEnd);
+      if(matches.length>1)throw Error('INVALID_SPAN');
+      const edit=matches[0];if(edit){validateCaptionDisplay(c.text,edit.displayText);used.add(edit);}
+      return {...c,originalText:c.text,sourceStart,sourceEnd,text:edit?edit.displayText.trim().replace(/\s+/gu,' '):c.text};
+    });
     if(captions.some(c=>c.start<0||c.end<=c.start||c.end>frames))throw Error('CAPTION_OUT_OF_BOUNDS');
     const result={id:scene.id,title:scene.title,kicker:scene.kicker,visual:scene.visual,start:cursor,frames,events,captions};
     cursor+=frames;return result;
   });
+  if(used.size!==edits.length)throw Error('INVALID_SPAN');
   if(cursor<1800||cursor>2700)throw Error('MEASURED_DURATION_OUT_OF_RANGE');
-  return {schemaVersion:2,rendererVersion:'plan-v2-1',title:plan.title,fps:30,frames:cursor,fixture,scenes};
+  return {schemaVersion:2,rendererVersion:'plan-v2-2',title:plan.title,fps:30,frames:cursor,fixture,scenes};
 }
 
 // Reveal/connect establish visibility; emphasize/compare add a temporary accent.

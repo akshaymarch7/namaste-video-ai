@@ -1,3 +1,4 @@
+import type {CaptionOverride} from './caption-edits';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -8,11 +9,11 @@ import {probe} from '../pipeline/media';
 import {compileV2,captionsVtt,type MeasuredSpeech} from './compiler';
 
 export type SpeechInput=MeasuredSpeech & {audioPath?:string};
-// Local compute adapter. Never called from a Next.js request or the F13 worker.
+// Local compute adapter, called only by CLI or the isolated generation child process.
 // Public assets are a private temporary directory containing only validated MP3s.
-export async function renderPlanV2(input:{plan:unknown;notes:string;speech:Record<string,SpeechInput>;fixture:boolean;outputDirectory:string;stillsOnly?:boolean}){
+export async function renderPlanV2(input:{plan:unknown;notes:string;speech:Record<string,SpeechInput>;fixture:boolean;outputDirectory:string;stillsOnly?:boolean;captionOverrides?:CaptionOverride[]}){
   const started=performance.now();
-  const timeline=compileV2(input.plan,{notes:input.notes,voicePreset:'daniel-test'},input.speech,input.fixture);
+  const timeline=compileV2(input.plan,{notes:input.notes,voicePreset:'daniel-test'},input.speech,input.fixture,input.captionOverrides);
   const dir=path.resolve(input.outputDirectory);
   // A new directory per attempt protects previous outputs, including failed attempts.
   await fs.mkdir(dir,{mode:0o700});

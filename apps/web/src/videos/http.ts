@@ -1,3 +1,4 @@
+import {captionService} from './captions';
 import 'server-only';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
@@ -7,7 +8,7 @@ import {HttpError,readBody} from '../auth/http';
 import {ProjectError,projectId,idempotencyKey} from '../projects/contracts';
 import {videoId,listQuery} from './contracts';
 import {videoService} from './service';
-export async function handleVideos(request:Request,action:'list'|'read'|'approve'|'select',id:string,deps=dependencies){
+export async function handleVideos(request:Request,action:'list'|'read'|'approve'|'select'|'captions'|'edit-captions'|'regenerate',id:string,deps=dependencies){
  const requestId=`req_${randomUUID().replaceAll('-','')}`,headers=new Headers({'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Request-Id':requestId});
  const reply=(body:unknown)=>Response.json({...body as object,meta:{requestId}},{headers});
  try{
@@ -21,9 +22,10 @@ export async function handleVideos(request:Request,action:'list'|'read'|'approve
    const q=listQuery.parse(Object.fromEntries(url.searchParams));return reply(await service.list(owner,id,q.limit,q.cursor));
   }
   if(url.search)throw new ProjectError(422,'VALIDATION_FAILED','Unsupported query fields.');
+  if(action==='captions')return reply({data:await captionService(db,client).get(owner,id)});
   if(action==='read')return reply({data:await service.get(owner,id)});
   if(request.headers.get('origin')!==config.origin)throw new ProjectError(403,'INVALID_ORIGIN','Invalid origin.');
   const key=idempotencyKey.parse(request.headers.get('idempotency-key'));
-  const result=await service.mutate(owner,id,action,key,await readBody(request));if(result.replayed)headers.set('Idempotency-Replayed','true');return reply({data:result.data});
+  const result=action==='edit-captions'||action==='regenerate'?await captionService(db,client).revise(owner,id,key,await readBody(request),action==='regenerate'?'regenerate':'captions'):await service.mutate(owner,id,action,key,await readBody(request));if(result.replayed)headers.set('Idempotency-Replayed','true');if(action==='edit-captions'||action==='regenerate')return Response.json({data:result.data,meta:{requestId}},{status:202,headers});return reply({data:result.data});
  }catch(e){let status=503,code='SERVICE_UNAVAILABLE',message='The result is unconfirmed. Recover the same request.';if(e instanceof ProjectError||e instanceof HttpError)({status,code,message}=e);else if(e instanceof z.ZodError){status=422;code='VALIDATION_FAILED';message='Check the request fields.';}return Response.json({error:{code,message,requestId,retryable:false},meta:{requestId}},{status,headers});}
 }

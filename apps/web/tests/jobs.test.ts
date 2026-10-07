@@ -225,3 +225,44 @@ test('legacy outputs backfill once without approving or overriding a user select
  assert.equal((await backfillVideos(db,client)).videosBackfilled,1);assert.equal((await backfillVideos(db,client)).videosBackfilled,0);
  assert.equal((await videoService(db,client).get(owner,v.id)).approval,null);
 });
+
+test('caption revision uses exact stored speech and preserves original approval and output',async()=>{
+ const {captionService}=await import('../src/videos/captions'),{videoService}=await import('../src/videos/service'),{compileV2,captionsVtt}=await import('../../../src/plan-v2/compiler');
+ const s=await seed(),d=executionDouble(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data;await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
+ const videos=videoService(db,client),source=(await videos.list(owner,s.project.id,20)).data[0];
+ await videos.mutate(owner,source.id,'approve',randomUUID(),{expectedOutputHash:source.outputHash,expectedRenderSpecHash:source.renderSpecHash,approve:true});
+ const captions=captionService(db,client,()=>d.adapters.store),view=await captions.get(owner,source.id),scene=view.scenes[0],c=scene.captions[0];
+ const edit={sceneId:scene.sceneId,speechFingerprint:scene.speechFingerprint,sourceStart:c.sourceStart,sourceEnd:c.sourceEnd,displayText:c.text.toUpperCase()},body={expectedRenderSpecHash:source.renderSpecHash,overrides:[edit]};
+ await fail(captions.get(other,source.id),'NOT_FOUND');await fail(captions.revise(owner,source.id,randomUUID(),{...body,overrides:[{...edit,displayText:'Different facts.'}]}),'CAPTION_MEANING_CHANGE');
+ await fail(captions.revise(owner,source.id,randomUUID(),{...body,overrides:[{...edit,speechFingerprint:'0'.repeat(64)}]}),'INVALID_SPAN');
+ const key=randomUUID(),accepted=await captions.revise(owner,source.id,key,body);
+ assert.equal((await captions.revise(owner,source.id,key,body)).replayed,true);
+ await fail(captions.revise(owner,source.id,key,{...body,overrides:[]}),'IDEMPOTENCY_KEY_REUSED');
+ const before=d.calls().speechCalls;d.adapters.speech=async()=>{throw Error('Must not synthesize');};
+ let rendered='';d.adapters.render=async(plan,notes,speech,_signal,overrides)=>{const timeline=compileV2(plan,{notes,voicePreset:plan.voicePreset},speech,false,overrides);rendered=captionsVtt(timeline);return {video:Buffer.from('labelled caption render'),captions:Buffer.from(rendered),duration:timeline.frames/30};};
+ await runGenerationJob(db,client,accepted.data.job.id,undefined,undefined,d.adapters);
+ assert.equal((await service().get(owner,accepted.data.job.id)).state,'succeeded');assert.equal(d.calls().speechCalls,before);assert.ok(rendered.includes(edit.displayText));
+ const versions=await videos.list(owner,s.project.id,20),revised=versions.data[0];assert.equal(versions.data.length,2);assert.equal(revised.parentVideoId,source.id);assert.equal(revised.approval,null);assert.ok((await videos.get(owner,source.id)).approval);assert.equal(versions.project.selectedVideoId,source.id);
+ const revisedCaptions=await captions.get(owner,revised.id);assert.equal(revisedCaptions.scenes[0].captions[0].text,edit.displayText);
+ const again=await captions.revise(owner,revised.id,randomUUID(),{expectedRenderSpecHash:revised.renderSpecHash},'regenerate');await runGenerationJob(db,client,again.data.job.id,undefined,undefined,d.adapters);assert.equal((await service().get(owner,again.data.job.id)).state,'succeeded');assert.ok(rendered.includes(edit.displayText));
+});
+
+test('missing saved speech stops a caption job without synthesis and preserves previous media',async()=>{
+ const {captionService}=await import('../src/videos/captions'),{videoService}=await import('../src/videos/service');
+ const s=await seed(),d=executionDouble(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data;await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
+ const v=(await videoService(db,client).list(owner,s.project.id,20)).data[0],captions=captionService(db,client,()=>d.adapters.store);
+ const accepted=await captions.revise(owner,v.id,randomUUID(),{expectedRenderSpecHash:v.renderSpecHash},'regenerate');
+ const stage=await db.collection('speechStages').findOne({jobId:j.id});d.objects.delete(stage!.objectKey);let calls=0;d.adapters.speech=async()=>{calls++;throw Error();};
+ await runGenerationJob(db,client,accepted.data.job.id,undefined,undefined,d.adapters);assert.equal(calls,0);assert.equal((await service().get(owner,accepted.data.job.id)).errorCode,'SPEECH_RECOVERY_REQUIRED');assert.equal(await db.collection('videos').countDocuments({projectId:s.project.id}),1);assert.equal(await db.collection('assets').countDocuments({projectId:s.project.id,state:'ready'}),2);
+ await fail(captions.get(owner,v.id),'SPEECH_RECOVERY_REQUIRED');
+});
+
+test('older queued renderer snapshots stop before speech rather than silently changing build',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble();
+ const row=await db.collection('generationJobs').findOne({_id:j.id as never});
+ row!.inputSnapshot.renderConfig.renderer='plan-v2-1';
+ const {videoHash}=await import('../src/videos/materialize');
+ await db.collection('generationJobs').updateOne({_id:j.id as never},{$set:{inputSnapshot:row!.inputSnapshot,inputHash:videoHash(row!.inputSnapshot)}});
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
+ assert.equal((await service().get(owner,j.id)).errorCode,'RENDER_CONFIG_CHANGED');assert.equal(d.calls().speechCalls,0);
+});

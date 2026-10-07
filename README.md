@@ -375,3 +375,7 @@ This compatibility checkpoint is now used by the local job worker described abov
 After `npm run db:setup` (including migration 014 and legacy output backfill), completed jobs create immutable video versions. Open **Review video** from My Videos or generation completion, or visit `/projects/{id}/video`. Browse versions, open a private preview, export MP4/VTT, save a selected version and explicitly approve the exact reviewed output. Another render retains earlier exports and needs its own approval. Unknown approval/selection requests can be recovered without creating another operation.
 
 Preview/export requires the F12 media gateway configuration; hosted deployment remains pending. The page reports missing configuration without regenerating or losing the saved video. Run `npm run test:jobs` for version/API coverage and `npm run test:video-ui --workspace apps/web` for command recovery tests.
+
+### Caption revisions (F16)
+
+From a completed project's **Review video**, choose **Edit captions**, adjust capitalization/spacing and confirm **Render caption changes**. Drafts survive reload in the same tab. Word/punctuation changes use **Revise narration or visuals** and the existing storyboard approval flow. **Render again with saved narration** retains saved caption edits. Both create a separate unapproved version and preserve earlier exports/selection. Run the existing generation worker; verified cached speech is required and missing speech stops without another ElevenLabs call. See PROJECT_STATUS.md for local verification and hosted-delivery limitations.

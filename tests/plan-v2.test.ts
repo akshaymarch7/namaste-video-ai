@@ -109,3 +109,27 @@ test('maximum-card and comparison stress fixture remains a valid storyboard',()=
   assert.ok(layout.baseline+2*layout.lineHeight+layout.fontSize*.2<40+i*158+112);
  }
 });
+
+test('caption display edits preserve source spans, timing and Unicode code points',async()=>{
+ const {captionOverrides}=await import('../src/plan-v2/caption-edits');
+ const plan=structuredClone(renderFixture),speech=fixtureSpeech();
+ plan.scenes[0].narration='🧠 '+plan.scenes[0].narration;
+ speech[plan.scenes[0].id]=syntheticSpeech(spokenText(plan.scenes[0]).text,speech[plan.scenes[0].id].duration);
+ const base=compileV2(plan,{notes:'',voicePreset:'daniel-test'},speech,true),scene=base.scenes[0],caption=scene.captions[0];
+ const overrides=captionOverrides.parse([{sceneId:scene.id,speechFingerprint:'a'.repeat(64),sourceStart:caption.sourceStart,sourceEnd:caption.sourceEnd,displayText:caption.text.toUpperCase()}]);
+ const changed=compileV2(plan,{notes:'',voicePreset:'daniel-test'},speech,true,overrides);
+ assert.equal(changed.scenes[0].captions[0].text,caption.text.toUpperCase());assert.equal(changed.scenes[0].captions[0].start,caption.start);assert.equal(changed.frames,base.frames);
+ assert.throws(()=>compileV2(plan,{notes:'',voicePreset:'daniel-test'},speech,true,[{...overrides[0],displayText:'A different statement.'}]),/CAPTION_MEANING_CHANGE/);
+ assert.throws(()=>compileV2(plan,{notes:'',voicePreset:'daniel-test'},speech,true,[overrides[0],overrides[0]]),/INVALID_SPAN/);
+ assert.throws(()=>compileV2(plan,{notes:'',voicePreset:'daniel-test'},speech,true,[{...overrides[0],sourceStart:caption.sourceStart+1}]),/INVALID_SPAN/);
+ for(const s of base.scenes){const original=plan.scenes.find(p=>p.id===s.id)!;for(const c of s.captions)assert.equal(Array.from(original.narration).slice(c.sourceStart,c.sourceEnd).join('').replace(/\s+/gu,' '),c.originalText);}
+});
+
+test('caption fitting preserves text within two measured lines and rejects impossible fits',async()=>{
+ const {fitCaption,validateCaptionDisplay}=await import('../src/plan-v2/caption-edits');
+ const text='W'.repeat(24)+' '+'W'.repeat(24),layout=fitCaption(text,(s,size)=>s.length*size);
+ assert.ok(layout.lines.length<=2);assert.ok(layout.size<40);assert.equal(layout.lines.join(' '),text);
+ assert.throws(()=>fitCaption('unfit',()=>900),/CAPTION_LAYOUT_INVALID/);
+ assert.throws(()=>validateCaptionDisplay('1.5 metres','15 metres'),/CAPTION_MEANING_CHANGE/);
+ assert.throws(()=>validateCaptionDisplay('do not change','do change'),/CAPTION_MEANING_CHANGE/);
+});

@@ -1,7 +1,8 @@
 import 'server-only';
 import {createHash} from 'node:crypto';
 import {Long,type Db,type MongoClient,type Document,type ClientSession} from 'mongodb';
-import {z} from 'zod';
+import {speechResult,type SpeechResult} from './speech-result';
+import type {CaptionOverride} from '../../../../src/plan-v2/caption-edits';
 import {inTransaction} from '../db/client';
 import {isAdmitted} from '../auth/engine';
 import {canonical} from '../projects/service';
@@ -14,9 +15,8 @@ import {MAX_ASSET_BYTES} from '../storage/contracts';
 type Doc=Document&{_id:string};
 const digest=(v:Uint8Array|string)=>createHash('sha256').update(v).digest('hex');
 export class ExecutionError extends Error {constructor(public code:string){super(code);}}
-const speechResult=z.object({audio:z.string().min(1).max(12*1024*1024),duration:z.number().positive().max(90),alignment:z.object({characters:z.array(z.string().min(1).max(8)).min(1).max(5000),character_start_times_seconds:z.array(z.number().nonnegative()).max(5000),character_end_times_seconds:z.array(z.number().nonnegative()).max(5000)}).strict()}).strict();
-export type SpeechResult=z.infer<typeof speechResult>;
-export type ExecutionAdapters={store:ReadableObjectStore;speech(text:string,config:RenderConfig,signal:AbortSignal):Promise<SpeechResult>;render(plan:Storyboard,notes:string,speech:Record<string,SpeechResult>,signal:AbortSignal):Promise<{video:Uint8Array;captions:Uint8Array;duration:number}>};
+export type {SpeechResult} from './speech-result';
+export type ExecutionAdapters={store:ReadableObjectStore;speech(text:string,config:RenderConfig,signal:AbortSignal):Promise<SpeechResult>;render(plan:Storyboard,notes:string,speech:Record<string,SpeechResult>,signal:AbortSignal,overrides?:CaptionOverride[]):Promise<{video:Uint8Array;captions:Uint8Array;duration:number}>};
 export type RenderCompletion={assets:Doc[];output:Doc};
 
 // Every external stage passes through the current fence/lease and live parent.
@@ -24,6 +24,7 @@ export type RenderCompletion={assets:Doc[];output:Doc};
 export async function executeGeneration(db:Db,client:MongoClient,job:Doc,adapters:ExecutionAdapters,now=()=>new Date()):Promise<RenderCompletion>{
  await assertRenderingReady(db);
  const config=renderConfigSchema.parse(job.inputSnapshot.renderConfig);
+ if(job.inputSnapshot.captionRevision?job.inputSnapshot.captionRevision.rendererVersion!=='plan-v2-2':config.renderer!=='plan-v2-2')throw new ExecutionError('RENDER_CONFIG_CHANGED');
  const plan=validateStoryboard(job.inputSnapshot.plan,{notes:job.inputSnapshot.notes,voicePreset:job.inputSnapshot.voicePreset}).content;
  const jobs=db.collection<Doc>('generationJobs'),stages=db.collection<Doc>('speechStages');
  const abort=new AbortController();let heartbeat:ReturnType<typeof setTimeout>|undefined;let stopped=false;
@@ -45,11 +46,18 @@ export async function executeGeneration(db:Db,client:MongoClient,job:Doc,adapter
   const speech:Record<string,SpeechResult>={};
   for(const scene of plan.scenes){
    const text=spokenText(scene).text;
-   const fingerprint=digest(canonical({text,config})),id=`${job._id}:${scene.id}`;
+   const fingerprint=digest(canonical({text,config}));
+   if(job.inputSnapshot.captionRevision?.overrides.some((e:CaptionOverride)=>e.sceneId===scene.id&&e.speechFingerprint!==fingerprint))throw new ExecutionError('INPUT_INVALID');
+   const id=`${job._id}:${scene.id}`;
    const key=`owners/${digest(job.ownerId)}/speech/${job._id}/${scene.id}.json`;
    const claim=await guard(async session=>{
     const old=await stages.findOne({_id:id},{session});
     if(old){if(old.fingerprint!==fingerprint)throw new ExecutionError('INPUT_INVALID');return {fresh:false,row:old};}
+    if(job.inputSnapshot.captionRevision){
+     const source=await stages.findOne({jobId:job.inputSnapshot.captionRevision.speechSourceJobId,ownerId:job.ownerId,projectId:job.projectId,sceneId:scene.id,state:'stored',fingerprint},{session});
+     if(!source?.result)throw new ExecutionError('SPEECH_RECOVERY_REQUIRED');
+     const row:Doc={...source,_id:id,jobId:job._id,createdAt:now(),updatedAt:now()};await stages.insertOne(row,{session});return {fresh:false,row};
+    }
     const row:Doc={_id:id,ownerId:job.ownerId,projectId:job.projectId,jobId:job._id,sceneId:scene.id,fingerprint,objectKey:key,state:'request_started',result:null,createdAt:now(),updatedAt:now()};
     await stages.insertOne(row,{session});return {fresh:true,row};
    });
@@ -57,7 +65,7 @@ export async function executeGeneration(db:Db,client:MongoClient,job:Doc,adapter
    if(!claim.fresh){
     if(!claim.row.result)throw new ExecutionError('PROVIDER_OUTCOME_UNKNOWN');
     try{
-     const r=claim.row.result;const bytes=await adapters.store.read(key,r.bytes,r.sha256,'application/json');
+     const r=claim.row.result;const bytes=await adapters.store.read(claim.row.objectKey,r.bytes,r.sha256,'application/json');
      speech[scene.id]=speechResult.parse(JSON.parse(Buffer.from(bytes).toString('utf8')));
      await guard(async session=>{await stages.updateOne({_id:id},{$set:{state:'stored',updatedAt:now()}},{session});});
     }catch(e){if(e instanceof ExecutionError)throw e;throw new ExecutionError('SPEECH_RECOVERY_REQUIRED');}
@@ -81,9 +89,9 @@ export async function executeGeneration(db:Db,client:MongoClient,job:Doc,adapter
   }
   await guard(undefined,'rendering');
   let duration:number;
-  try{duration=compileV2(plan,{notes:job.inputSnapshot.notes,voicePreset:plan.voicePreset},speech as Record<string,MeasuredSpeech>).frames/30;}
+  try{duration=compileV2(plan,{notes:job.inputSnapshot.notes,voicePreset:plan.voicePreset},speech as Record<string,MeasuredSpeech>,false,job.inputSnapshot.captionRevision?.overrides).frames/30;}
   catch{throw new ExecutionError('SPEECH_TIMING_INVALID');}
-  const rendered=await adapters.render(plan,job.inputSnapshot.notes,speech,abort.signal);
+  const rendered=await adapters.render(plan,job.inputSnapshot.notes,speech,abort.signal,job.inputSnapshot.captionRevision?.overrides);
   if(Math.abs(rendered.duration-duration)>0.1)throw new ExecutionError('RENDER_INVALID');
   await guard(undefined,'uploading');
   const assets:Doc[]=[];

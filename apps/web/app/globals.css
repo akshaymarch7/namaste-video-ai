@@ -82,3 +82,9 @@
 .video-review .actions { flex-wrap: wrap; }
 @media (max-width: 760px) { .video-review-grid { grid-template-columns: minmax(0, 1fr); } .video-review-player { min-height: 240px; } }
 .video-review { padding: 60px 24px; }
+.caption-editor { margin: 28px 0; }
+.caption-editor details { border-top: 1px solid var(--border); padding: 20px 0; }
+.caption-editor summary { cursor: pointer; font-weight: 600; margin-bottom: 16px; }
+.caption-edit-field { display: grid; gap: 8px; margin: 18px 0; }
+.caption-edit-field span,.caption-edit-field small { color: var(--muted); }
+.caption-edit-field textarea { width: 100%; resize: vertical; color: var(--text); background: var(--canvas); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }

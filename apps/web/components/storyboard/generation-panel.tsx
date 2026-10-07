@@ -25,6 +25,7 @@ export function GenerationPanel({projectId,userId,input,blocked}:{projectId:stri
 
 function generationError(code:string){
  const messages:Record<string,string>={
+  RENDER_CONFIG_CHANGED:'The renderer was updated before this job ran. Start a fresh generation to use the current renderer.',
   QUEUE_EXPIRED:'The job expired before the worker started. Your storyboard is saved.',
   PROVIDER_OUTCOME_UNKNOWN:'The speech provider may have processed the request, but its result could not be confirmed. We did not automatically repeat it. Generating again may use credits again.',
   SPEECH_RECOVERY_REQUIRED:'The narration could not be recovered from private storage. We did not repeat the speech request. Check storage before generating again.',

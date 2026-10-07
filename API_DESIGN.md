@@ -648,3 +648,13 @@ The Cinema review screen at `/projects/{id}/video` supports native playback, exp
 
 
 F15 recovery storage amendment: the browser persists each approval/selection receipt under an owner/project/command-UUID key. Concurrent tabs cannot overwrite another command's record. Completion removes only its exact receipt, then exposes another unresolved receipt for explicit recovery if present. Previous single-record receipts remain readable and are cleared only when matching the completed request. No mutation is sent merely by loading or discovering another tab's pending record; existing tabs must reload to use the updated client.
+
+## F16 implemented addendum — caption revisions
+
+`GET /api/videos/{id}/captions` returns owner-scoped saved caption groups, scene-local start/end frames (30 fps), original/display text, half-open Unicode-codepoint source spans and the saved speech fingerprint. It verifies the stored narration object before reconstructing timing. It never synthesizes speech. The generated `design/projects.openapi.json` is the exact request/response schema.
+
+`PATCH /api/videos/{id}/captions` accepts `{expectedRenderSpecHash, overrides}`. Each override contains `sceneId`, `speechFingerprint`, `sourceStart`, `sourceEnd`, `displayText` (1–200 characters). At most 100 overrides; this is a complete replacement list, so an empty list restores the originals. Spans must match whole original caption groups, with no duplicates. Only capitalization and whitespace differences are accepted; changed words, punctuation or word boundaries require storyboard revision and narration approval. Whitespace is normalized for rendering.
+
+`POST /api/videos/{id}/regenerate` accepts `{expectedRenderSpecHash}` and retains the source version's caption overrides. Both mutation routes require the existing same-origin authenticated JSON request and Idempotency-Key. Both return 202 with `{data:{sourceVideoId,sourceRenderSpecHash,job},meta:...}` through the standard response envelope. Replaying the exact key/body returns the same receipt; different bodies conflict. These requests enqueue a new video version and do not change the selected video or copy its approval. Existing job progress/cancel/recovery APIs apply.
+
+Errors use the normal sanitized envelope: missing/foreign/deleted source 404; stale source, busy project, duplicate key with different body or no changes 409; invalid spans/meaning/timing 422; unavailable or unverifiable saved speech 503 `SPEECH_RECOVERY_REQUIRED`. No missing-cache fallback invokes ElevenLabs. Clients preserve unresolved immutable commands using the F15 per-command records. Caption drafts themselves use tab-scoped sessionStorage keyed by owner/project/video and source hash. No endpoint returns storage keys or speech bytes.

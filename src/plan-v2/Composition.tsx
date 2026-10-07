@@ -1,5 +1,6 @@
-import React from 'react';
-import {AbsoluteFill,Audio,Sequence,staticFile,useCurrentFrame,interpolate} from 'remotion';
+import React,{useEffect,useState} from 'react';
+import {fitCaption} from './caption-edits';
+import {AbsoluteFill,Audio,Sequence,staticFile,useCurrentFrame,interpolate,delayRender,continueRender,cancelRender} from 'remotion';
 import {motionAt,type RenderScene,type RenderTimeline} from './compiler';
 import {fitLabel} from './text';
 import '@fontsource/dm-sans/400.css';
@@ -49,7 +50,7 @@ export function DiagramV2({scene}:{scene:RenderScene}){
     {(v.component==='title'||v.component==='takeaway')&&v.data.labels.map((label,i)=>box(`label-${i+1}`,label,i,40+i*158))}
   </svg>;
 }
-function Scene({scene,index,total,fixture,audio}:{scene:RenderScene;index:number;total:number;fixture:boolean;audio:boolean}){
+function Scene({scene,index,total,fixture,audio,layouts}:{layouts:Map<string,ReturnType<typeof fitCaption>>;scene:RenderScene;index:number;total:number;fixture:boolean;audio:boolean}){
   const frame=useCurrentFrame(),caption=scene.captions.find(c=>frame>=c.start&&frame<c.end);
   return <AbsoluteFill style={{background:'#f5f3ec',color:ink,fontFamily:'DM Sans',padding:'125px 85px 100px'}}>
     {audio&&<Audio src={staticFile(`${scene.id}.mp3`)}/>}
@@ -59,8 +60,19 @@ function Scene({scene,index,total,fixture,audio}:{scene:RenderScene;index:number
     </div>
     <div style={{marginTop:27,height:260,opacity:fade(frame),transform:`translateY(${(1-fade(frame))*20}px)`}}><h1 style={{fontSize:scene.title.length>40?52:scene.title.length>28?62:80,lineHeight:1.05,letterSpacing:-3,margin:0,fontWeight:600,overflowWrap:'anywhere'}}>{scene.title}</h1></div>
     <div style={{marginTop:5,opacity:fade(frame)}}><DiagramV2 scene={scene}/></div>
-    <div style={{position:'absolute',bottom:225,left:90,right:90,height:170,display:'flex',alignItems:'center',justifyContent:'center'}}>{caption&&<div style={{background:ink,color:'#fff',borderRadius:22,padding:'23px 34px',fontSize:40,lineHeight:1.3,textAlign:'center',maxWidth:850,overflowWrap:'anywhere'}}>{caption.text}</div>}</div>
+    <div style={{position:'absolute',bottom:225,left:90,right:90,height:170,display:'flex',alignItems:'center',justifyContent:'center'}}>{caption&&<div style={{background:ink,color:'#fff',borderRadius:22,padding:'23px 34px',fontSize:layouts.get(caption.text)!.size,lineHeight:1.3,textAlign:'center',maxWidth:850,whiteSpace:'pre'}}>{layouts.get(caption.text)!.lines.join('\n')}</div>}</div>
     <div style={{position:'absolute',bottom:105,left:90,right:90,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:20,color:'#6c827b'}}><span>{fixture?'SILENT FIXTURE · SYNTHETIC TIMING':'AI-GENERATED NARRATION'}</span><div style={{display:'flex',gap:8}}>{Array.from({length:total},(_,i)=><div key={i} style={{width:i===index?38:10,height:7,borderRadius:5,background:i<=index?teal:'#d4ded5'}}/>)}</div></div>
   </AbsoluteFill>;
 }
-export function PlanV2Video({timeline,audio=false}:{timeline:RenderTimeline;audio?:boolean}){return <AbsoluteFill>{timeline.scenes.map((s,i)=><Sequence key={s.id} from={s.start} durationInFrames={s.frames}><Scene scene={s} index={i} total={timeline.scenes.length} fixture={timeline.fixture} audio={audio}/></Sequence>)}</AbsoluteFill>}
+export function PlanV2Video({timeline,audio=false}:{timeline:RenderTimeline;audio?:boolean}){
+ const [handle]=useState(()=>delayRender('Measure caption font'));
+ const [layouts,setLayouts]=useState<Map<string,ReturnType<typeof fitCaption>>|null>(null);
+ useEffect(()=>{let active=true;void document.fonts.load('400 40px "DM Sans"').then(()=>{
+  const canvas=document.createElement('canvas'),context=canvas.getContext('2d');if(!context)throw Error('CAPTION_LAYOUT_INVALID');
+  const measure=(text:string,size:number)=>{context.font=`400 ${size}px "DM Sans"`;return context.measureText(text).width;};
+  const result=new Map<string,ReturnType<typeof fitCaption>>();for(const scene of timeline.scenes)for(const caption of scene.captions)result.set(caption.text,fitCaption(caption.text,measure));
+  if(active){setLayouts(result);continueRender(handle);}
+ }).catch(cancelRender);return()=>{active=false;};},[timeline,handle]);
+ if(!layouts)return null;
+ return <AbsoluteFill>{timeline.scenes.map((s,i)=><Sequence key={s.id} from={s.start} durationInFrames={s.frames}><Scene scene={s} index={i} total={timeline.scenes.length} fixture={timeline.fixture} audio={audio} layouts={layouts}/></Sequence>)}</AbsoluteFill>;
+}

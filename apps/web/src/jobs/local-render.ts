@@ -36,13 +36,13 @@ export async function localExecutionAdapters():Promise<ExecutionAdapters>{
     return {audio:payload.audio_base64,alignment:payload.alignment,duration};
    }finally{await fs.rm(temp,{recursive:true,force:true});}
   },
-  async render(plan,notes,speech,signal){
+  async render(plan,notes,speech,signal,captionOverrides){
    const temp=await fs.mkdtemp(path.join(os.tmpdir(),'namaste-job-render-'));
    try{
     const measured:Record<string,unknown>={};
     for(const scene of plan.scenes){const s=speech[scene.id],audioPath=path.join(temp,`${scene.id}.mp3`);await fs.writeFile(audioPath,Buffer.from(s.audio,'base64'),{mode:0o600});measured[scene.id]={alignment:s.alignment,duration:s.duration,audioPath};}
     const outputDirectory=path.join(temp,'output'),manifest=path.join(temp,'input.json');
-    await fs.writeFile(manifest,JSON.stringify({plan,notes,speech:measured,fixture:false,outputDirectory}),{mode:0o600});
+    await fs.writeFile(manifest,JSON.stringify({plan,notes,speech:measured,fixture:false,outputDirectory,captionOverrides}),{mode:0o600});
     // Run outside react-server conditions; never pass provider or storage credentials to Chromium.
     await exec(process.execPath,['--import','tsx',path.join(root,'scripts/render-v2-job.ts'),manifest],{cwd:root,signal,timeout:12*60000,maxBuffer:1024*1024,env:{NODE_ENV:'production',PATH:process.env.PATH,HOME:process.env.HOME,TMPDIR:process.env.TMPDIR,...(process.env.BROWSER_EXECUTABLE?{BROWSER_EXECUTABLE:process.env.BROWSER_EXECUTABLE}:{})}});
     const qa=JSON.parse(await fs.readFile(path.join(outputDirectory,'qa.json'),'utf8'));
