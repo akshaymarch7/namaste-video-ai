@@ -19,7 +19,7 @@ export async function repairGenerationProjectFlags(db:Db,client:MongoClient){
    const latest=active??await jobs.findOne(scope,{session,sort:{createdAt:-1,_id:-1}});
    if(!latest)return false;
    const output=await db.collection('renderOutputs').findOne(scope,{session});
-   const ready=!!output,needsAttention=['failed','needs_input'].includes(latest.state);
+   const ready=!!output,needsAttention=['failed','needs_input'].includes(latest.state)||!!await db.collection('publishIntents').findOne({...scope,state:{$in:['paused_auth','failed_safe','outcome_unknown','needs_attention']}},{session});
    if(project.flags.ready===ready&&project.flags.needsAttention===needsAttention)return false;
    await projects.updateOne({_id:project._id,deletedAt:null},{$set:{'flags.ready':ready,'flags.needsAttention':needsAttention},$inc:{contentRevision:Long.ONE}},{session});
    return true;

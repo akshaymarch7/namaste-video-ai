@@ -56,7 +56,7 @@ test('disconnect invalidates an in-flight callback; receipt replay cannot discon
 });
 test('unconfigured connect fails; return project cannot be cross-owner; future active publishing fails closed',async()=>{
  await rejects(instagramService(db,client,null,null).connect('owner','s',{}),'INSTAGRAM_NOT_CONFIGURED');await rejects(service.connect('owner','s',{returnProjectId:'prj_abcdefghijklmnop'}),'NOT_FOUND');
- await db.collection('publishIntents').insertOne({ownerId:'owner',state:'outcome_unknown'});const before=(await service.get('owner'))!;assert.equal(before.pendingIntentCount,1);await rejects(service.disconnect('owner',randomUUID(),{expectedRevision:before.revision,confirmPausePending:true}),'CONNECTION_RECONCILIATION_PENDING');await db.collection('publishIntents').deleteMany({});
+ await db.collection('publishIntents').insertOne({ownerId:'owner',state:'legacy_unknown'});const before=(await service.get('owner'))!;assert.equal(before.pendingIntentCount,1);await rejects(service.disconnect('owner',randomUUID(),{expectedRevision:before.revision,confirmPausePending:true}),'CONNECTION_RECONCILIATION_PENDING');await db.collection('publishIntents').deleteMany({});
 });
 test('refresh is leased and fenced against disconnect and respects token age/expiry',async()=>{
  assert.equal(await service.refresh('owner'),'skipped');await db.collection('instagramConnections').updateOne({ownerId:'owner'},{$set:{expiresAt:new Date(Date.now()+86400000),tokenIssuedAt:new Date(Date.now()-2*86400000)}});

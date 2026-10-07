@@ -56,8 +56,12 @@ export function storageService(db:Db,client:MongoClient,now=()=>new Date()){
   async authorize(raw:z.infer<typeof mediaAuthRequest>){
    await assertStorageReady(db);const input=mediaAuthRequest.parse(raw);
    return inTransaction(client,async session=>{
-    const grant=await grants.findOne({tokenHash:digest(input.token),revokedAt:null,expiresAt:{$gt:now()}},{session});if(!grant||!await isAdmitted(db,grant.ownerId))throw missing();
-    const a=await owned(grant.ownerId,grant.assetId,session);if(a.projectId!==grant.projectId||a.state!=='ready')throw missing();
+    let grant=await grants.findOne({tokenHash:digest(input.token),revokedAt:null,expiresAt:{$gt:now()}},{session});
+    if(!grant){const ingest=await db.collection<Doc>('publishMediaGrants').findOne({tokenHash:digest(input.token),expiresAt:{$gt:now()}},{session});
+     if(ingest&&await db.collection('publishIntents').findOne({_id:ingest.intentId,ownerId:ingest.ownerId,projectId:ingest.projectId,assetId:ingest.assetId,assetHash:ingest.assetHash,attempt:ingest.attempt,state:{$in:['preparing','processing','submitting','outcome_unknown']}},{session}))grant=ingest;
+    }
+    if(!grant||!await isAdmitted(db,grant.ownerId))throw missing();
+    const a=await owned(grant.ownerId,grant.assetId,session);if(a.projectId!==grant.projectId||a.state!=='ready'||grant.assetHash&&a.sha256!==grant.assetHash)throw missing();
     return {objectKey:a.objectKey as string,contentType:a.contentType as string,bytes:a.bytes as number,sha256:a.sha256 as string,disposition:`${grant.purpose==='download'?'attachment':'inline'}; filename="namastevideo-${a._id}.${kinds[a.kind as keyof typeof kinds].ext}"`};
    });
   },

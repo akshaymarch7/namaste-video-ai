@@ -1,4 +1,5 @@
 import 'server-only';
+import {publishingEnabled,publishFlags} from '../publishing/service';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {MongoServerError,type Db,type Document,type MongoClient,type ClientSession} from 'mongodb';
 import {inTransaction} from '../db/client';
@@ -13,17 +14,24 @@ const fail=(code:string,message:string,status=409)=>new ProjectError(status,code
 export function instagramService(db:Db,client:MongoClient,config:InstagramConfig|null,provider:InstagramProvider|null){
  const rows=db.collection<Row>('instagramConnections'),states=db.collection<Row>('oauthStates'),commands=db.collection<Row>('instagramCommands');
  const configured=()=>{if(!config||!provider)throw fail('INSTAGRAM_NOT_CONFIGURED','Instagram connection is not configured yet.',503);return {config,provider};};
- // F19/F20 must replace this conservative guard with transactional pause/reconciliation.
- async function guardIntents(ownerId:string,session:ClientSession){if(await db.collection('publishIntents').findOne({ownerId,state:{$nin:['published','cancelled','failed']}},{session}))throw fail('CONNECTION_RECONCILIATION_PENDING','Resolve pending publication before changing this connection.');}
+ async function guardIntents(ownerId:string,session:ClientSession){
+  const intents=db.collection<Row>('publishIntents');
+  // Unknown legacy states cannot be safely reclassified during a connection change.
+  if(await intents.findOne({ownerId,state:{$nin:['queued','preparing','processing','paused_auth','failed_safe','submitting','outcome_unknown','needs_attention','published','cancelled','failed']}},{session}))throw fail('CONNECTION_RECONCILIATION_PENDING','Resolve pending publication before changing this connection.');
+  const affected=await intents.find({ownerId,state:{$in:['queued','preparing','processing']}},{session}).toArray();
+  for(const intent of affected){await intents.updateOne({_id:intent._id},{$set:{state:'paused_auth',errorCode:'CONNECTION_CHANGED',leaseUntil:null,updatedAt:new Date()},$inc:{revision:1},$unset:{encryptedToken:'',ingestToken:''}},{session});await db.collection('publishMediaGrants').deleteMany({intentId:intent._id},{session});await publishFlags(db,intent.projectId,session);}
+  const pending=await intents.countDocuments({ownerId,state:{$in:['submitting','outcome_unknown','needs_attention']}},{session});
+  return {pausedIntentCount:affected.length,reconciliationPending:pending>0};
+ }
  function view(r:Row|null){
   if(!r)return null;
   const mode=r.provider??'instagram';
   const expired=r.expiresAt?r.expiresAt.getTime()<=Date.now():mode!=='facebook';
   const configChanged=!!config&&r.state==='connected'&&(mode!==(config.provider??'instagram')||r.providerAppId!==config.appId);
-  return connectionView.parse({id:r._id,revision:r.revision,state:r.state==='connected'?(expired||configChanged?'reconnect_required':r.expiresAt&&r.expiresAt.getTime()<Date.now()+7*86400000?'expiring':'connected'):r.state,account:r.instagramUserId?{id:r.instagramUserId,username:r.username,type:r.accountType}:null,provider:mode,page:r.pageId?{id:r.pageId,name:r.pageName}:null,destinationEpoch:r.destinationEpoch,expiresAt:r.expiresAt?.toISOString()??null,publishingAvailable:false,pendingIntentCount:0});
+  return connectionView.parse({id:r._id,revision:r.revision,state:r.state==='connected'?(expired||configChanged?'reconnect_required':r.expiresAt&&r.expiresAt.getTime()<Date.now()+7*86400000?'expiring':'connected'):r.state,account:r.instagramUserId?{id:r.instagramUserId,username:r.username,type:r.accountType}:null,provider:mode,page:r.pageId?{id:r.pageId,name:r.pageName}:null,destinationEpoch:r.destinationEpoch,expiresAt:r.expiresAt?.toISOString()??null,publishingAvailable:!!config&&publishingEnabled()&&r.state==='connected'&&!expired&&!configChanged,pendingIntentCount:0});
  }
  return {
-  async get(ownerId:string){const r=await rows.findOne({ownerId});const result=view(r);if(result)result.pendingIntentCount=await db.collection('publishIntents').countDocuments({ownerId,state:{$nin:['published','cancelled','failed']}});return result;},
+  async get(ownerId:string){const r=await rows.findOne({ownerId});const result=view(r);if(result)result.pendingIntentCount=await db.collection('publishIntents').countDocuments({ownerId,state:{$nin:['published','cancelled','failed','failed_safe']}});return result;},
   async connect(ownerId:string,sessionId:string,raw:unknown){
    const {config}=configured(),input=connectInput.parse(raw),state=randomBytes(32).toString('base64url'),now=new Date(),expiresAt=new Date(now.getTime()+600000),mode=config.provider??'instagram';
    if(mode==='facebook'&&!input.pageId)throw fail('INSTAGRAM_PAGE_REQUIRED','Enter the Facebook Page ID linked to your Instagram account.',422);
@@ -79,11 +87,11 @@ export function instagramService(db:Db,client:MongoClient,config:InstagramConfig
    idempotencyKey.parse(key);const input=disconnectInput.parse(raw),keyHash=hash(key),requestHash=hash(JSON.stringify(input));
    const work=()=>inTransaction(client,async session=>{
     const previous=await commands.findOne({ownerId,keyHash},{session});if(previous){if(previous.requestHash!==requestHash)throw fail('IDEMPOTENCY_KEY_REUSED','Use the original disconnect request.');return previous.response;}
-    await guardIntents(ownerId,session);
+    const reconciliation=await guardIntents(ownerId,session);
     const current=await rows.findOne({ownerId,revision:input.expectedRevision},{session});if(!current)throw fail('REVISION_CONFLICT','Connection changed. Reload and review the current account.');
     const now=new Date();
     const next=await rows.findOneAndUpdate({_id:current._id,revision:current.revision},{$set:{state:'disconnected',scopes:[],updatedAt:now},$inc:{revision:1,tokenRevision:1,oauthEpoch:1,destinationEpoch:1},$unset:{encryptedToken:'',instagramUserId:'',username:'',accountType:'',expiresAt:'',tokenIssuedAt:'',refreshLeaseUntil:'',provider:'',providerAppId:'',tokenKind:'',pageId:'',pageName:''}},{session,returnDocument:'after'});
-    const response={connection:view(next),pausedIntentCount:0,reconciliationPending:false};
+    const response={connection:view(next),...reconciliation};
     await commands.insertOne({_id:id('igcmd'),ownerId,keyHash,requestHash,response,createdAt:now,updatedAt:now},{session});return response;
    });
    try{return await work();}catch(e){if(e instanceof MongoServerError&&e.code===11000)return work();throw e;}

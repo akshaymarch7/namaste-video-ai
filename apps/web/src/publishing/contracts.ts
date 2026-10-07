@@ -1,0 +1,15 @@
+import {z} from 'zod';
+import {projectId} from '../projects/contracts';
+import {videoId} from '../videos/contracts';
+import {sha256} from '../storage/contracts';
+export const intentId=z.string().regex(/^pub_[a-f0-9]{32}$/);
+export const states=['queued','preparing','processing','submitting','published','paused_auth','failed_safe','outcome_unknown','needs_attention','cancelled'] as const;
+export const terminal=['published','failed_safe','cancelled'] as const;
+export const caption=z.string().refine(v=>[...v].length<=2200,'Caption must be at most 2,200 characters.');
+export const destination=z.object({connectionId:z.string().regex(/^igc_[a-f0-9]{32}$/),instagramUserId:z.string().regex(/^\d{1,100}$/),destinationEpoch:z.number().int().positive()}).strict();
+export const publishInput=z.object({projectId,payload:z.object({videoId,videoApprovalId:z.string().regex(/^apr_[a-f0-9]{32}$/),expectedOutputHash:sha256,destination,caption}).strict(),mode:z.literal('now'),confirm:z.literal(true)}).strict();
+export const actionInput=z.object({expectedRevision:z.number().int().positive(),confirm:z.literal(true)}).strict();
+export const intentView=z.object({id:intentId,projectId,revision:z.number().int().positive(),state:z.enum(states),videoId,videoTitle:z.string(),assetHash:sha256,destination:destination.extend({usernameAtApproval:z.string()}),caption:z.string(),createdAt:z.string(),updatedAt:z.string(),publishedAt:z.string().nullable(),providerMediaId:z.string().nullable(),permalink:z.string().url().nullable(),errorCode:z.string().nullable(),actions:z.object({cancel:z.boolean(),retry:z.boolean()})});
+export type PublishIntent=z.infer<typeof intentView>;
+export type PublishInput=z.infer<typeof publishInput>;
+export const query=z.object({limit:z.string().regex(/^(?:[1-9]|[1-4][0-9]|50)$/).default('20').transform(Number),cursor:intentId.optional()}).strict();

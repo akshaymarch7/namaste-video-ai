@@ -1,0 +1,8 @@
+import {handlePublishing} from '@/src/publishing/http';
+import {readInstagramConfig} from '@/src/instagram/config';
+import {publishingEnabled} from '@/src/publishing/service';
+import {kickPublishing} from '@/src/publishing/runtime';
+export const runtime='nodejs';
+export const dynamic='force-dynamic';
+export const maxDuration=60;
+export async function POST(request:Request){const id='';return handlePublishing(request,'create',id,undefined,{config:readInstagramConfig(),enabled:publishingEnabled(),kick:kickPublishing});}
