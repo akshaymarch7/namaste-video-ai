@@ -1,0 +1,54 @@
+# Replace WORKER_IMAGE_DIGEST with the verified immutable image reference.
+# Creating this job must not execute it. Obtain workload approval before execution.
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: namastevideo-render-benchmark
+  labels:
+    cloud.googleapis.com/location: us-central1
+spec:
+  template:
+    spec:
+      taskCount: 1
+      parallelism: 1
+      template:
+        spec:
+          serviceAccountName: namastevideo-benchmark@namastevideo-dev-20261007.iam.gserviceaccount.com
+          maxRetries: 0
+          timeoutSeconds: '900'
+          containers:
+            - image: WORKER_IMAGE_DIGEST
+              command: ['/usr/bin/tini', '-g', '--', 'node']
+              args:
+                - --import
+                - tsx
+                - --input-type=module
+                - -e
+                - |
+                  import fs from 'node:fs/promises';
+                  import path from 'node:path';
+                  import {execFileSync} from 'node:child_process';
+                  import {renderFixture,fixtureSpeech} from './src/plan-v2/fixture.ts';
+                  import {renderPlanV2} from './src/plan-v2/render.ts';
+                  import {mediaProbePath} from './src/pipeline/media-binaries.ts';
+                  const directory='/tmp/namaste-benchmark';
+                  const started=performance.now();
+                  try {
+                    await renderPlanV2({plan:renderFixture,notes:'',speech:fixtureSpeech(),fixture:true,outputDirectory:directory});
+                    const qa=JSON.parse(await fs.readFile(path.join(directory,'qa.json'),'utf8'));
+                    if(!qa.passed)throw Error('BENCHMARK_QA_FAILED');
+                    const ffmpeg=path.join(path.dirname(mediaProbePath()),'ffmpeg');
+                    execFileSync(ffmpeg,['-v','error','-i',path.join(directory,'output.mp4'),'-f','null','-'],{cwd:path.dirname(ffmpeg),stdio:'pipe',timeout:60000,maxBuffer:1024*1024});
+                    let containerPeakBytes=null;
+                    for(const file of ['/sys/fs/cgroup/memory.peak','/sys/fs/cgroup/memory/memory.max_usage_in_bytes']) {
+                      try {const value=Number((await fs.readFile(file,'utf8')).trim());if(Number.isFinite(value)&&value>0){containerPeakBytes=value;break;}}catch{}
+                    }
+                    console.log(JSON.stringify({event:'silent-render-benchmark',passed:true,decoded:true,qa,elapsedSeconds:Math.round((performance.now()-started)/1000),containerPeakBytes,containerMemoryMeasurement:containerPeakBytes===null?'unavailable':'cgroup peak includes child processes and charged filesystem memory',outputBytes:(await fs.stat(path.join(directory,'output.mp4'))).size,retainedMedia:false}));
+                  }catch {
+                    console.error('Silent render benchmark failed. No providers or database were used.');
+                    process.exitCode=1;
+                  }
+              resources:
+                limits:
+                  cpu: '2'
+                  memory: 4Gi
