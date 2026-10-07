@@ -1,0 +1,27 @@
+# Only explicitly required source is eligible to enter the build context.
+**
+!package.json
+!package-lock.json
+!tsconfig.json
+!src/
+!src/**
+!scripts/
+!scripts/render-v2-job.ts
+!apps/
+!apps/web/
+!apps/web/package.json
+!apps/web/tsconfig.json
+!apps/web/src/
+!apps/web/src/**
+!apps/web/scripts/
+!apps/web/scripts/storyboards-worker.ts
+!apps/web/scripts/generations-worker.ts
+!apps/worker/
+!apps/worker/**
+# Final exclusions also protect against accidental future source-adjacent secrets.
+**/.env*
+**/runs/**
+**/node_modules/**
+**/.git/**
+**/*.pem
+**/*.key

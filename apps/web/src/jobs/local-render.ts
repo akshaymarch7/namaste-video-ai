@@ -5,10 +5,11 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {mediaProbePath} from '../../../../src/pipeline/media-binaries';
 import {r2Store} from '../storage/r2';
 import {ExecutionError,type ExecutionAdapters} from './execution';
 const exec=promisify(execFile),root=fileURLToPath(new URL('../../../../',import.meta.url));
-const probe=path.join(root,`node_modules/@remotion/compositor-${process.platform}-${process.arch}/ffprobe`);
+const probe=mediaProbePath();
 export async function localExecutionAdapters():Promise<ExecutionAdapters>{
  const apiKey=process.env.ELEVENLABS_API_KEY;
  if(!apiKey)throw new ExecutionError('SPEECH_NOT_CONFIGURED');

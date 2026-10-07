@@ -5,7 +5,7 @@ import {inTransaction} from '../db/client';
 import {liveProject} from '../generation/live-project';
 import {assertJobsReady} from './setup';
 type Doc=Document&{_id:string};
-export async function dispatchJobs(db:Db,client:MongoClient,send:(event:{id:string;name:'namaste/generation.requested';data:{jobId:string}})=>Promise<unknown>,now=()=>new Date()){
+export async function dispatchJobs(db:Db,client:MongoClient,send:(event:{id:string;name:'namaste/generation.requested';data:{jobId:string}})=>Promise<unknown>,now=()=>new Date(),shouldStop=()=>false){
  await assertJobsReady(db);
  const jobs=db.collection<Doc>('generationJobs'),outbox=db.collection<Doc>('generationOutbox');
  // Bounded reconciliation runs independently of browsers. A sent event can be lost or execution interrupted.
@@ -17,7 +17,7 @@ export async function dispatchJobs(db:Db,client:MongoClient,send:(event:{id:stri
   });
  }
  let delivered=0;
- for(let n=0;n<20;n++){
+ for(let n=0;n<20&&!shouldStop();n++){
   const token=randomUUID(),date=now();const event=await outbox.findOneAndUpdate({availableAt:{$lte:date},$or:[{state:'pending'},{state:'leased',leaseUntil:{$lte:date}}]},{$set:{state:'leased',leaseToken:token,leaseUntil:new Date(date.getTime()+30000)}},{sort:{availableAt:1},returnDocument:'after'});
   if(!event)break;
   const job=await jobs.findOne({_id:event.jobId});

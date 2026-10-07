@@ -266,3 +266,5 @@ test('older queued renderer snapshots stop before speech rather than silently ch
  await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
  assert.equal((await service().get(owner,j.id)).errorCode,'RENDER_CONFIG_CHANGED');assert.equal(d.calls().speechCalls,0);
 });
+
+test('worker shutdown stops dispatch before claiming queued work',async()=>{const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data;let calls=0;const result=await dispatchJobs(db,client,async()=>{calls++;},()=>new Date(),()=>true);assert.equal(calls,0);assert.equal(result.delivered,0);assert.equal((await db.collection('generationOutbox').findOne({jobId:j.id}))!.state,'pending');assert.equal((await service().get(owner,j.id)).state,'queued');});
