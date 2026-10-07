@@ -49,7 +49,9 @@ spec:
                     phase='decode';
                     console.log(JSON.stringify({event:'silent-render-completed',qa}));
                     const ffmpeg=path.join(path.dirname(mediaProbePath()),'ffmpeg');
-                    execFileSync(ffmpeg,['-v','error','-i',path.join(directory,'output.mp4'),'-f','null','-'],{cwd:path.dirname(ffmpeg),stdio:'pipe',timeout:60000,maxBuffer:1024*1024});
+                    // Remotion's minimal FFmpeg omits the null muxer's default
+                    // wrapped_avframe encoder. rawvideo still fully decodes frames.
+                    execFileSync(ffmpeg,['-v','error','-xerror','-i',path.join(directory,'output.mp4'),'-map','0:v:0','-an','-c:v','rawvideo','-f','null','-'],{cwd:path.dirname(ffmpeg),stdio:'pipe',timeout:60000,maxBuffer:1024*1024});
                     const containerPeakBytes=await memoryPeak();
                     console.log(JSON.stringify({event:'silent-render-benchmark',passed:true,decoded:true,qa,elapsedSeconds:Math.round((performance.now()-started)/1000),containerPeakBytes,containerMemoryMeasurement:containerPeakBytes===null?'unavailable':'cgroup peak includes child processes and charged filesystem memory',outputBytes:(await fs.stat(path.join(directory,'output.mp4'))).size,retainedMedia:false}));
                   }catch(error) {
