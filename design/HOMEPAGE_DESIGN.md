@@ -1,6 +1,6 @@
 # Homepage — Cinema
 
-Status: Stitch design for review. Brand direction approved; page not yet approved or implemented.
+Status: Cinema composition accepted in the subsequent design review and implemented in F21. See HOMEPAGE_IMPLEMENTATION.md for functional behavior, public demo provenance and implementation adaptations.
 
 Project: https://stitch.withgoogle.com/projects/7744432091837998456
 

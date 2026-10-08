@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:03.000
+Start with sorted values.
+
+00:00:03.000 --> 00:00:06.000
+Check the middle value.
+
+00:00:06.000 --> 00:00:09.000
+Discard the smaller half.
+
+00:00:09.000 --> 00:00:12.000
+14 found. Keep halving.

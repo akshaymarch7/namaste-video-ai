@@ -1,0 +1,4 @@
+'use client';
+import {useState} from 'react';
+import {Brand} from '../ui';
+export function HomeNavigation(){const [open,setOpen]=useState(false);return <header className="home-header"><div className="home-header-inner"><Brand/><button className="home-menu" type="button" aria-expanded={open} aria-controls="home-navigation" onClick={()=>setOpen(!open)} onKeyDown={e=>{if(e.key==='Escape')setOpen(false);}}>{open?'Close menu':'Menu'}</button><nav id="home-navigation" className={open?'is-open':''} aria-label="Main navigation" onKeyDown={e=>{if(e.key==='Escape'){setOpen(false);document.querySelector<HTMLButtonElement>('.home-menu')?.focus();}}}>{[['How it works','#how-it-works'],['Examples','#examples'],['FAQ','#faq'],['Sign in','/sign-in']].map(([label,href])=><a key={href} href={href} onClick={()=>setOpen(false)}>{label}</a>)}</nav></div></header>}
