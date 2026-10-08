@@ -5,7 +5,7 @@ workers_dev = true
 # HTTPS endpoint authorizes every media request; the R2 bucket stays private.
 # Supply MEDIA_SERVICE_SECRET using Worker secrets; never commit it here.
 [vars]
-APP_ORIGIN = "https://namaste-video-ai-dev.vercel.app"
+APP_ORIGIN = "https://namastevideo.ai"
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "namastevideo-dev"
