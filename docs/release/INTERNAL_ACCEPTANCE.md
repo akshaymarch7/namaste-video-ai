@@ -1,6 +1,6 @@
 # F22 — Internal release acceptance
 
-Status: in progress. Real Post now acceptance passed on October 8; scheduled delivery and the remaining matrix below are still pending. This is not a claim that all live flows passed.
+Status: in progress. Real Post now and scheduled delivery acceptance passed on October 8. The remaining matrix below, including intermittent hosted response-timeout investigation, is still open; this is not full release approval.
 `PROJECT_STATUS.md` remains the authoritative implementation/evidence record.
 
 ## Repeatable local gate
@@ -37,8 +37,8 @@ Do not publish the raw local test output without reviewing it.
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
 | Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; prior real reload/lost-response QA | Controlled hosted outage/recovery drill before continuous operation |
 | Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Rebuild renderer with F19 projections before resuming alongside publication; no ongoing activation yet |
-| Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery remains separate |
-| Schedule | F20 local DST, replacement, cancellation and due/expiry QA | Approved timed real post with browser closed and independent scheduler |
+| Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery has separate live evidence below |
+| Schedule | October 8 real scheduled @namastevideoai Reel, project tabs closed before due; scheduler processing at due+7.610s, published at due+137.757s; one attempt, exact caption and no duplicate | Passed pilot timed-delivery check; no general timing SLA claimed |
 | Accessibility | F21 responsive, keyboard and reduced-motion QA; earlier feature checks | Screen reader, Safari and end-to-end keyboard review |
 | Voice offering | Daniel test voice accepted for pilot | Indian male/female voices unavailable/unverified; do not advertise them as enabled |
 | Operating permission | Internal-only admission; Akshay confirmed personal operation and is the pilot owner; ElevenLabs Free plan observed | Retain provider/license restrictions; free allowances only, no unapproved paid evaluation or continuous workloads |
@@ -207,3 +207,12 @@ any documented prerequisite missing from these steps. We have not established a
 root cause or confirmed a platform bug. We can provide a screenshot of the
 console without secrets. No passwords, access tokens, app secrets, private media
 or customer data are included in this report.
+
+### October 8 scheduled-publication evidence
+
+- Source worker image built from verified `9374a53`, build `75d899ac-cc7b-4fa6-b29f-cc7258399638`, digest `d71189980fa2d79571758533bafd666b8b1598fb63764f6de975da75fc39d490`. One approved caption-only cloud render succeeded, reusing all six saved narration segments. Both MP4 downloads/VTT matched stored hashes, extracted AAC bytes were identical, full decode and private browser playback passed. Prior selected/approved/published version was preserved.
+- Scheduled intent `pub_0247a46450fe41ac91c7fbf92b35b8cc`, video `vid_1a2f33946fc7540ea097f4adb5074e79`, due **2026-10-08T13:36:00Z / 19:06 Asia/Kolkata**. Both project tabs closed at13:30:07UTC and were not reopened until independent published evidence. Processing observed13:36:07.610UTC, published13:38:17.757UTC, attempt1. No manual publishing tick.
+- Real Reel: https://www.instagram.com/reel/DePDj89lXPk/ ; media ID `18074031323754720`. Instagram displayed the correct account and exact caption including narration attribution and personal-pilot label. Dashboard history subsequently displayed both Published versions. Atlas confirmed two intents/two published/one attempt each, no unresolved states, both approvals, temporary credential cleanup and correct project flags.
+- Intermittent preview/read/approval/schedule response timeouts occurred. Original approval and schedule commands recovered successfully without duplicates. This is recovery evidence, **not** a latency fix. A follow-up should capture sanitized per-stage request timings and distinguish browser/network, Vercel and Atlas latency before expanding the pilot.
+- Publisher paused19:08:53IST; bounded window began18:51:06IST. Vercel shutdown deployment `X8nhGCT1ttegERyzPNuA4gaXqDFG` reached Ready; cloud-dispatch and publish-tick both returned503. Rendering already paused after its single execution. No ongoing execution authorized.
+- Cost authorization: up toUS$1 additional Google Cloud for one build/one saved-narration render; no new speech synthesis. Recorded build332seconds and execution208.326seconds correspond to aboutUS$0.043 list compute before free allowances/ancillary usage/taxes. This is an estimate, not a final invoice or account-wide spend cap; image storage persists. Remaining narrated evaluation was not run or waived.

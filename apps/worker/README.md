@@ -148,3 +148,9 @@ The real-post checkpoint must identify the approved video, exact caption and Ins
 ### F20 scheduling readiness
 
 F20 uses the same bounded web publisher tick, not another renderer or scheduler. Before approved activation, deploy the reviewed source and apply migrations **018 and 019**. Keep the publishing flag off while migrating. The minute tick must run independently of an open browser; one due intent is processed per tick. Monitor pilot queue size against the 15-minute delivery window; this is not high-volume capacity or exact-time delivery. Pre-submit expiry requires a fresh explicit time/now approval; submitted unknown outcomes continue read-only reconciliation. No scheduler, deployment or real post was activated by F20 local implementation. Refresh the rendering image with the F19 projection changes before resuming generation alongside publication.
+
+### F22 renderer refresh — October 8, 2026
+
+The runtime YAML now pins `sha256:d71189980fa2d79571758533bafd666b8b1598fb63764f6de975da75fc39d490`, built from `9374a53f77dcdfbdae3666db4211f7face129d38`. Cloud Build `75d899ac-cc7b-4fa6-b29f-cc7258399638` passed its audio/Chromium smoke checks, and both existing us-east1 runtime jobs were updated without changing identities, secrets or resource limits.
+
+The one user-approved saved-narration revision succeeded as `namastevideo-generation-r2vjr`. All six narration objects were reused; extracted AAC bytes match the original and the revised 77-second output fully decodes. Published project state and the original approved version were preserved. Rendering was paused again after completion. This verifies the previously pending worker refresh needed for generation alongside publishing; it is not authorization for ongoing execution or new speech calls. Exact activation, delivery and shutdown evidence remains in Project Status.
