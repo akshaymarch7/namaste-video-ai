@@ -19,7 +19,7 @@ spec:
           timeoutSeconds: '180'
           containers:
             - name: worker
-              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:7993102d998c197b77b97849a583413c7ea06dccd612699ec992c781b1e06277
+              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:d71189980fa2d79571758533bafd666b8b1598fb63764f6de975da75fc39d490
               args: ['storyboard', '--job', 'required']
               resources:
                 limits: {cpu: '2', memory: 4Gi}
@@ -53,7 +53,7 @@ spec:
           timeoutSeconds: '900'
           containers:
             - name: worker
-              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:7993102d998c197b77b97849a583413c7ea06dccd612699ec992c781b1e06277
+              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:d71189980fa2d79571758533bafd666b8b1598fb63764f6de975da75fc39d490
               args: ['generation', '--job', 'required']
               resources:
                 limits: {cpu: '2', memory: 4Gi}
