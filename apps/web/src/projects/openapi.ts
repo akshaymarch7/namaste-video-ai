@@ -17,6 +17,7 @@ const project = { type: 'object', additionalProperties: false,
   properties: { id: schema(projectId), title: { type: 'string', minLength: 1, maxLength: 100 }, revision: { type: 'integer', minimum: 1 }, draftRevision: { type: 'integer', minimum: 1 }, conversationId: { type: 'string' },
     ...Object.fromEntries(['currentStoryboardId','latestReadyVideoId','selectedVideoId','activeJobId'].map(key => [key, nullableId])),
     flags: { type: 'object', additionalProperties: false, required: ['drafts','ready','scheduled','published','needsAttention'], properties: Object.fromEntries(['drafts','ready','scheduled','published','needsAttention'].map(key => [key, { type: 'boolean' }])) },
+    nextSchedule: {anyOf:[{type:'null'},{type:'object',required:['intentId','videoId','localTime','timezone','utcOffset','utc'],properties:Object.fromEntries(['intentId','videoId','localTime','timezone','utcOffset','utc'].map(key=>[key,{type:'string'}]))}]},
     createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
   } };
 const meta = { type: 'object', required: ['requestId'], properties: { requestId: { type: 'string' } } };

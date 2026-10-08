@@ -8,7 +8,7 @@ import {projectId,ProjectError} from '../projects/contracts';
 import {readInstagramConfig} from '../instagram/config';
 import {intentId,query} from './contracts';
 import {publishingService,publishingEnabled} from './service';
-export async function handlePublishing(request:Request,action:'create'|'list'|'read'|'cancel'|'retry',id='',deps=dependencies,options?:{config:ReturnType<typeof readInstagramConfig>;enabled:boolean;kick?:(owner:string)=>void}){
+export async function handlePublishing(request:Request,action:'create'|'list'|'read'|'cancel'|'retry'|'replace',id='',deps=dependencies,options?:{config:ReturnType<typeof readInstagramConfig>;enabled:boolean;kick?:(owner:string)=>void}){
  const requestId=`req_${randomUUID().replaceAll('-','')}`,headers=new Headers({'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Request-Id':requestId});
  try{
   const cookie=request.headers.get('cookie');if(!cookie)throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
@@ -24,7 +24,7 @@ export async function handlePublishing(request:Request,action:'create'|'list'|'r
    else{
     if(request.headers.get('origin')!==config.origin)throw new ProjectError(403,'INVALID_ORIGIN','Invalid origin.');
     const raw=await readBody(request),key=request.headers.get('idempotency-key')??'';
-    const result=action==='create'?await service.create(owner,key,raw):await service.action(owner,id,key,action,raw);
+    const result=action==='create'?await service.create(owner,key,raw):action==='replace'?await service.replace(owner,id,key,raw):await service.action(owner,id,key,action,raw);
     if(result.replayed)headers.set('Idempotency-Replayed','true');status=action==='create'?201:200;headers.set('Location',`/api/publish-intents/${result.data.id}`);body={data:result.data};
    }
   }

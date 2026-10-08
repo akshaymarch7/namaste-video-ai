@@ -124,6 +124,44 @@
               }
             }
           },
+          "nextSchedule": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "intentId",
+                  "videoId",
+                  "localTime",
+                  "timezone",
+                  "utcOffset",
+                  "utc"
+                ],
+                "properties": {
+                  "intentId": {
+                    "type": "string"
+                  },
+                  "videoId": {
+                    "type": "string"
+                  },
+                  "localTime": {
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "type": "string"
+                  },
+                  "utcOffset": {
+                    "type": "string"
+                  },
+                  "utc": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -6142,7 +6180,7 @@
     "/api/publish-intents": {
       "post": {
         "operationId": "createReviewedPublication",
-        "description": "Requires exact origin, current session/admission and Idempotency-Key. No scheduling or arbitrary media URLs. Publication POST is never automatically repeated after an uncertain outcome.",
+        "description": "Requires exact origin, current session/admission and Idempotency-Key. Scheduling requires an explicit IANA timezone and valid UTC offset, with five minutes lead time. No arbitrary media URLs. Publication POST is never automatically repeated after an uncertain outcome.",
         "parameters": [
           {
             "in": "header",
@@ -6230,7 +6268,33 @@
                   },
                   "mode": {
                     "type": "string",
-                    "const": "now"
+                    "enum": [
+                      "now",
+                      "schedule"
+                    ]
+                  },
+                  "schedule": {
+                    "type": "object",
+                    "properties": {
+                      "localTime": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                      },
+                      "timezone": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "utcOffset": {
+                        "type": "string",
+                        "pattern": "^[+-]\\d{2}:\\d{2}$"
+                      }
+                    },
+                    "required": [
+                      "localTime",
+                      "timezone",
+                      "utcOffset"
+                    ],
+                    "additionalProperties": false
                   },
                   "confirm": {
                     "type": "boolean",
@@ -6280,6 +6344,7 @@
                         "state": {
                           "type": "string",
                           "enum": [
+                            "scheduled",
                             "queued",
                             "preparing",
                             "processing",
@@ -6381,6 +6446,60 @@
                             }
                           ]
                         },
+                        "mode": {
+                          "default": "now",
+                          "type": "string",
+                          "enum": [
+                            "now",
+                            "schedule"
+                          ]
+                        },
+                        "schedule": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "localTime": {
+                                  "type": "string",
+                                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                                },
+                                "timezone": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "utcOffset": {
+                                  "type": "string",
+                                  "pattern": "^[+-]\\d{2}:\\d{2}$"
+                                },
+                                "utc": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "localTime",
+                                "timezone",
+                                "utcOffset",
+                                "utc"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "retryDeadlineAt": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "actions": {
                           "type": "object",
                           "properties": {
@@ -6389,11 +6508,16 @@
                             },
                             "retry": {
                               "type": "boolean"
+                            },
+                            "edit": {
+                              "default": false,
+                              "type": "boolean"
                             }
                           },
                           "required": [
                             "cancel",
-                            "retry"
+                            "retry",
+                            "edit"
                           ],
                           "additionalProperties": false
                         }
@@ -6414,6 +6538,9 @@
                         "providerMediaId",
                         "permalink",
                         "errorCode",
+                        "mode",
+                        "schedule",
+                        "retryDeadlineAt",
                         "actions"
                       ],
                       "additionalProperties": false
@@ -6474,8 +6601,145 @@
           }
         }
       ],
-      "get": {
-        "operationId": "getPublication",
+      "patch": {
+        "operationId": "replacePublication",
+        "description": "Requires exact origin, current session/admission and Idempotency-Key. Scheduling requires an explicit IANA timezone and valid UTC offset, with five minutes lead time. No arbitrary media URLs. Publication POST is never automatically repeated after an uncertain outcome.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "string",
+              "pattern": "^[\\x21-\\x7e]{16,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "projectId": {
+                    "type": "string",
+                    "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+                  },
+                  "payload": {
+                    "type": "object",
+                    "properties": {
+                      "videoId": {
+                        "type": "string",
+                        "pattern": "^vid_[a-f0-9]{32}$"
+                      },
+                      "videoApprovalId": {
+                        "type": "string",
+                        "pattern": "^apr_[a-f0-9]{32}$"
+                      },
+                      "expectedOutputHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "destination": {
+                        "type": "object",
+                        "properties": {
+                          "connectionId": {
+                            "type": "string",
+                            "pattern": "^igc_[a-f0-9]{32}$"
+                          },
+                          "instagramUserId": {
+                            "type": "string",
+                            "pattern": "^\\d{1,100}$"
+                          },
+                          "destinationEpoch": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "connectionId",
+                          "instagramUserId",
+                          "destinationEpoch"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "caption": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "videoId",
+                      "videoApprovalId",
+                      "expectedOutputHash",
+                      "destination",
+                      "caption"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "now",
+                      "schedule"
+                    ]
+                  },
+                  "schedule": {
+                    "type": "object",
+                    "properties": {
+                      "localTime": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                      },
+                      "timezone": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "utcOffset": {
+                        "type": "string",
+                        "pattern": "^[+-]\\d{2}:\\d{2}$"
+                      }
+                    },
+                    "required": [
+                      "localTime",
+                      "timezone",
+                      "utcOffset"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "confirm": {
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "projectId",
+                  "payload",
+                  "mode",
+                  "confirm",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Owner-scoped publication snapshot; private/no-store. Same-key recovery returns current state of the same intent.",
@@ -6508,6 +6772,7 @@
                         "state": {
                           "type": "string",
                           "enum": [
+                            "scheduled",
                             "queued",
                             "preparing",
                             "processing",
@@ -6609,6 +6874,60 @@
                             }
                           ]
                         },
+                        "mode": {
+                          "default": "now",
+                          "type": "string",
+                          "enum": [
+                            "now",
+                            "schedule"
+                          ]
+                        },
+                        "schedule": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "localTime": {
+                                  "type": "string",
+                                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                                },
+                                "timezone": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "utcOffset": {
+                                  "type": "string",
+                                  "pattern": "^[+-]\\d{2}:\\d{2}$"
+                                },
+                                "utc": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "localTime",
+                                "timezone",
+                                "utcOffset",
+                                "utc"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "retryDeadlineAt": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "actions": {
                           "type": "object",
                           "properties": {
@@ -6617,11 +6936,16 @@
                             },
                             "retry": {
                               "type": "boolean"
+                            },
+                            "edit": {
+                              "default": false,
+                              "type": "boolean"
                             }
                           },
                           "required": [
                             "cancel",
-                            "retry"
+                            "retry",
+                            "edit"
                           ],
                           "additionalProperties": false
                         }
@@ -6642,6 +6966,286 @@
                         "providerMediaId",
                         "permalink",
                         "errorCode",
+                        "mode",
+                        "schedule",
+                        "retryDeadlineAt",
+                        "actions"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "get": {
+        "operationId": "getPublication",
+        "responses": {
+          "200": {
+            "description": "Owner-scoped publication snapshot; private/no-store. Same-key recovery returns current state of the same intent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^pub_[a-f0-9]{32}$"
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "pattern": "^prj_[A-Za-z0-9_-]{16,64}$"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "scheduled",
+                            "queued",
+                            "preparing",
+                            "processing",
+                            "submitting",
+                            "published",
+                            "paused_auth",
+                            "failed_safe",
+                            "outcome_unknown",
+                            "needs_attention",
+                            "cancelled"
+                          ]
+                        },
+                        "videoId": {
+                          "type": "string",
+                          "pattern": "^vid_[a-f0-9]{32}$"
+                        },
+                        "videoTitle": {
+                          "type": "string"
+                        },
+                        "assetHash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "destination": {
+                          "type": "object",
+                          "properties": {
+                            "connectionId": {
+                              "type": "string",
+                              "pattern": "^igc_[a-f0-9]{32}$"
+                            },
+                            "instagramUserId": {
+                              "type": "string",
+                              "pattern": "^\\d{1,100}$"
+                            },
+                            "destinationEpoch": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "usernameAtApproval": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "connectionId",
+                            "instagramUserId",
+                            "destinationEpoch",
+                            "usernameAtApproval"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "caption": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "publishedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "providerMediaId": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "permalink": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "errorCode": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "mode": {
+                          "default": "now",
+                          "type": "string",
+                          "enum": [
+                            "now",
+                            "schedule"
+                          ]
+                        },
+                        "schedule": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "localTime": {
+                                  "type": "string",
+                                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                                },
+                                "timezone": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "utcOffset": {
+                                  "type": "string",
+                                  "pattern": "^[+-]\\d{2}:\\d{2}$"
+                                },
+                                "utc": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "localTime",
+                                "timezone",
+                                "utcOffset",
+                                "utc"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "retryDeadlineAt": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "type": "object",
+                          "properties": {
+                            "cancel": {
+                              "type": "boolean"
+                            },
+                            "retry": {
+                              "type": "boolean"
+                            },
+                            "edit": {
+                              "default": false,
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "cancel",
+                            "retry",
+                            "edit"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "projectId",
+                        "revision",
+                        "state",
+                        "videoId",
+                        "videoTitle",
+                        "assetHash",
+                        "destination",
+                        "caption",
+                        "createdAt",
+                        "updatedAt",
+                        "publishedAt",
+                        "providerMediaId",
+                        "permalink",
+                        "errorCode",
+                        "mode",
+                        "schedule",
+                        "retryDeadlineAt",
                         "actions"
                       ],
                       "additionalProperties": false
@@ -6704,7 +7308,7 @@
       ],
       "post": {
         "operationId": "cancelPublication",
-        "description": "Requires exact origin, current session/admission and Idempotency-Key. No scheduling or arbitrary media URLs. Publication POST is never automatically repeated after an uncertain outcome.",
+        "description": "Requires exact origin, current session/admission and Idempotency-Key. Scheduling requires an explicit IANA timezone and valid UTC offset, with five minutes lead time. No arbitrary media URLs. Publication POST is never automatically repeated after an uncertain outcome.",
         "parameters": [
           {
             "in": "header",
@@ -6784,6 +7388,7 @@
                         "state": {
                           "type": "string",
                           "enum": [
+                            "scheduled",
                             "queued",
                             "preparing",
                             "processing",
@@ -6885,6 +7490,60 @@
                             }
                           ]
                         },
+                        "mode": {
+                          "default": "now",
+                          "type": "string",
+                          "enum": [
+                            "now",
+                            "schedule"
+                          ]
+                        },
+                        "schedule": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "localTime": {
+                                  "type": "string",
+                                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                                },
+                                "timezone": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "utcOffset": {
+                                  "type": "string",
+                                  "pattern": "^[+-]\\d{2}:\\d{2}$"
+                                },
+                                "utc": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "localTime",
+                                "timezone",
+                                "utcOffset",
+                                "utc"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "retryDeadlineAt": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "actions": {
                           "type": "object",
                           "properties": {
@@ -6893,11 +7552,16 @@
                             },
                             "retry": {
                               "type": "boolean"
+                            },
+                            "edit": {
+                              "default": false,
+                              "type": "boolean"
                             }
                           },
                           "required": [
                             "cancel",
-                            "retry"
+                            "retry",
+                            "edit"
                           ],
                           "additionalProperties": false
                         }
@@ -6918,6 +7582,9 @@
                         "providerMediaId",
                         "permalink",
                         "errorCode",
+                        "mode",
+                        "schedule",
+                        "retryDeadlineAt",
                         "actions"
                       ],
                       "additionalProperties": false
@@ -6980,7 +7647,7 @@
       ],
       "post": {
         "operationId": "retrySafePublication",
-        "description": "Requires exact origin, current session/admission and Idempotency-Key. No scheduling or arbitrary media URLs. Publication POST is never automatically repeated after an uncertain outcome.",
+        "description": "Requires exact origin, current session/admission and Idempotency-Key. Scheduling requires an explicit IANA timezone and valid UTC offset, with five minutes lead time. No arbitrary media URLs. Publication POST is never automatically repeated after an uncertain outcome.",
         "parameters": [
           {
             "in": "header",
@@ -7060,6 +7727,7 @@
                         "state": {
                           "type": "string",
                           "enum": [
+                            "scheduled",
                             "queued",
                             "preparing",
                             "processing",
@@ -7161,6 +7829,60 @@
                             }
                           ]
                         },
+                        "mode": {
+                          "default": "now",
+                          "type": "string",
+                          "enum": [
+                            "now",
+                            "schedule"
+                          ]
+                        },
+                        "schedule": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "localTime": {
+                                  "type": "string",
+                                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                                },
+                                "timezone": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "utcOffset": {
+                                  "type": "string",
+                                  "pattern": "^[+-]\\d{2}:\\d{2}$"
+                                },
+                                "utc": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "localTime",
+                                "timezone",
+                                "utcOffset",
+                                "utc"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "retryDeadlineAt": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "actions": {
                           "type": "object",
                           "properties": {
@@ -7169,11 +7891,16 @@
                             },
                             "retry": {
                               "type": "boolean"
+                            },
+                            "edit": {
+                              "default": false,
+                              "type": "boolean"
                             }
                           },
                           "required": [
                             "cancel",
-                            "retry"
+                            "retry",
+                            "edit"
                           ],
                           "additionalProperties": false
                         }
@@ -7194,6 +7921,9 @@
                         "providerMediaId",
                         "permalink",
                         "errorCode",
+                        "mode",
+                        "schedule",
+                        "retryDeadlineAt",
                         "actions"
                       ],
                       "additionalProperties": false
@@ -7313,6 +8043,7 @@
                           "state": {
                             "type": "string",
                             "enum": [
+                              "scheduled",
                               "queued",
                               "preparing",
                               "processing",
@@ -7414,6 +8145,60 @@
                               }
                             ]
                           },
+                          "mode": {
+                            "default": "now",
+                            "type": "string",
+                            "enum": [
+                              "now",
+                              "schedule"
+                            ]
+                          },
+                          "schedule": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "localTime": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                                  },
+                                  "timezone": {
+                                    "type": "string",
+                                    "maxLength": 100
+                                  },
+                                  "utcOffset": {
+                                    "type": "string",
+                                    "pattern": "^[+-]\\d{2}:\\d{2}$"
+                                  },
+                                  "utc": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "localTime",
+                                  "timezone",
+                                  "utcOffset",
+                                  "utc"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "retryDeadlineAt": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "actions": {
                             "type": "object",
                             "properties": {
@@ -7422,11 +8207,16 @@
                               },
                               "retry": {
                                 "type": "boolean"
+                              },
+                              "edit": {
+                                "default": false,
+                                "type": "boolean"
                               }
                             },
                             "required": [
                               "cancel",
-                              "retry"
+                              "retry",
+                              "edit"
                             ],
                             "additionalProperties": false
                           }
@@ -7447,6 +8237,9 @@
                           "providerMediaId",
                           "permalink",
                           "errorCode",
+                          "mode",
+                          "schedule",
+                          "retryDeadlineAt",
                           "actions"
                         ],
                         "additionalProperties": false

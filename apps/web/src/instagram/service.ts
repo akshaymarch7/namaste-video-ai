@@ -17,8 +17,8 @@ export function instagramService(db:Db,client:MongoClient,config:InstagramConfig
  async function guardIntents(ownerId:string,session:ClientSession){
   const intents=db.collection<Row>('publishIntents');
   // Unknown legacy states cannot be safely reclassified during a connection change.
-  if(await intents.findOne({ownerId,state:{$nin:['queued','preparing','processing','paused_auth','failed_safe','submitting','outcome_unknown','needs_attention','published','cancelled','failed']}},{session}))throw fail('CONNECTION_RECONCILIATION_PENDING','Resolve pending publication before changing this connection.');
-  const affected=await intents.find({ownerId,state:{$in:['queued','preparing','processing']}},{session}).toArray();
+  if(await intents.findOne({ownerId,state:{$nin:['scheduled','queued','preparing','processing','paused_auth','failed_safe','submitting','outcome_unknown','needs_attention','published','cancelled','failed']}},{session}))throw fail('CONNECTION_RECONCILIATION_PENDING','Resolve pending publication before changing this connection.');
+  const affected=await intents.find({ownerId,state:{$in:['scheduled','queued','preparing','processing']}},{session}).toArray();
   for(const intent of affected){await intents.updateOne({_id:intent._id},{$set:{state:'paused_auth',errorCode:'CONNECTION_CHANGED',leaseUntil:null,updatedAt:new Date()},$inc:{revision:1},$unset:{encryptedToken:'',ingestToken:''}},{session});await db.collection('publishMediaGrants').deleteMany({intentId:intent._id},{session});await publishFlags(db,intent.projectId,session);}
   const pending=await intents.countDocuments({ownerId,state:{$in:['submitting','outcome_unknown','needs_attention']}},{session});
   return {pausedIntentCount:affected.length,reconciliationPending:pending>0};

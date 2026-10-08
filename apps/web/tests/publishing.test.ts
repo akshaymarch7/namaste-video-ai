@@ -1,3 +1,4 @@
+import {setupScheduling} from '../src/publishing/schedule-setup';
 import {videoHash} from '../src/videos/materialize';
 import {setupProjects} from '../src/projects/setup';
 import {setupDrafts} from '../src/drafts/setup';
@@ -28,7 +29,7 @@ import {handlePublishing,handlePublishTick} from '../src/publishing/http';
 const cfg:InstagramConfig={appId:'123',appSecret:'fixture',redirectUri:'https://app.test/api/instagram/callback',version:'v26.0',activeKey:'one',keys:{one:randomBytes(32).toString('base64')}};
 let replica:MongoMemoryReplSet,client:MongoClient,db:ReturnType<MongoClient['db']>;let serial=100;
 const fail=(p:Promise<unknown>,code:string)=>assert.rejects(p,e=>(e as {code:string}).code===code);
-before(async()=>{replica=await MongoMemoryReplSet.create({binary:{version:'8.0.17'},replSet:{count:1,ip:'127.0.0.1',storageEngine:'wiredTiger'}});client=await new MongoClient(replica.getUri(),{promoteLongs:false}).connect();db=client.db('publish_test');for(const setup of [setupDatabase,setupProjects,setupDrafts,setupIdeas,setupStoryboards,setupStoryboardQueue,setupEditableDrafts,setupStoryboardRevisions,setupStoryboardSnapshots,setupStoryboardApprovals,setupInstagram,setupVideos,setupStorage,setupPublishing])await setup(db);},{timeout:180000});
+before(async()=>{replica=await MongoMemoryReplSet.create({binary:{version:'8.0.17'},replSet:{count:1,ip:'127.0.0.1',storageEngine:'wiredTiger'}});client=await new MongoClient(replica.getUri(),{promoteLongs:false}).connect();db=client.db('publish_test');for(const setup of [setupDatabase,setupProjects,setupDrafts,setupIdeas,setupStoryboards,setupStoryboardQueue,setupEditableDrafts,setupStoryboardRevisions,setupStoryboardSnapshots,setupStoryboardApprovals,setupInstagram,setupVideos,setupStorage,setupPublishing,setupScheduling])await setup(db);},{timeout:180000});
 after(async()=>{await client?.close();await replica?.stop();});
 async function fixture(){
  const owner=uid('user'),project=uid('prj'),video=uid('vid'),approval=uid('apr'),connection=uid('igc'),asset=uid('ast'),account=String(++serial),now=new Date(),hash='a'.repeat(64),renderHash=videoHash({});
@@ -71,3 +72,58 @@ test('concurrent distinct command keys admit only one intent and disabled rollou
 test('cancelled intent can explicitly retry frozen caption; stale grants and revisions cannot return',async()=>{const f=await fixture();const {data}=await f.service.create(f.owner,randomUUID(),f.input);const cancelled=(await f.service.action(f.owner,data.id,randomUUID(),'cancel',{expectedRevision:data.revision,confirm:true})).data;const retry=(await f.service.action(f.owner,data.id,randomUUID(),'retry',{expectedRevision:cancelled.revision,confirm:true})).data;assert.equal(retry.state,'queued');assert.equal(retry.caption,f.input.payload.caption);assert.equal((await db.collection('publishIntents').findOne({_id:data.id as never}))?.attempt,2);f.advance();await f.worker().tick(f.owner);f.advance();await f.worker().tick(f.owner);assert.equal((await f.service.get(f.owner,data.id)).state,'published');});
 test('disconnect while status lookup is in flight prevents final submit',async()=>{const f=await fixture();const {data}=await f.service.create(f.owner,randomUUID(),f.input);await f.worker().tick(f.owner);let release!:(s:'FINISHED')=>void,entered!:()=>void;const started=new Promise<void>(r=>entered=r);f.provider.status=async()=>{entered();return new Promise(r=>release=r);};f.advance();const work=f.worker().tick(f.owner);await started;await instagramService(db,client,cfg,null).disconnect(f.owner,randomUUID(),{expectedRevision:1,confirmPausePending:true});release('FINISHED');await work;assert.equal((await f.service.get(f.owner,data.id)).state,'paused_auth');assert.equal(f.counts().publishes,0);});
 test('confirmed media ID stays published when optional permalink read fails',async()=>{const f=await fixture();const {data}=await f.service.create(f.owner,randomUUID(),f.input);f.provider.permalink=async()=>{throw Error('unavailable');};await f.worker().tick(f.owner);f.advance();await f.worker().tick(f.owner);const r=await f.service.get(f.owner,data.id);assert.equal(r.state,'published');assert.equal(r.providerMediaId,'200001');assert.equal(r.permalink,null);assert.equal(r.actions.retry,false);});
+const later=(minutes=10)=>({localTime:new Date(Date.now()+minutes*60000).toISOString().slice(0,16),timezone:'UTC',utcOffset:'+00:00'});
+test('scheduled intent survives reread, cannot run early, and appears in library schedule filter',async()=>{
+ const f=await fixture(),input={...f.input,mode:'schedule',schedule:later()};const {data}=await f.service.create(f.owner,randomUUID(),input);
+ assert.equal(data.state,'scheduled');assert.equal(data.schedule?.localTime,input.schedule.localTime);assert.equal((await f.worker().tick(f.owner)).worked,false);assert.deepEqual(f.counts(),{creates:0,publishes:0});
+ assert.equal((await db.collection('projects').findOne({_id:f.project as never}))?.flags.scheduled,true);
+ const {projectService}=await import('../src/projects/service');const list=await projectService(db,client,'fixture-secret').list(f.owner,{filter:'scheduled',limit:20});assert.equal(list.data[0].nextSchedule?.videoId,f.video);
+ for(let i=0;i<10;i++)f.advance();await f.worker().tick(f.owner);f.advance();await f.worker().tick(f.owner);assert.equal((await f.service.get(f.owner,data.id)).state,'published');assert.equal((await db.collection('projects').findOne({_id:f.project as never}))?.flags.scheduled,false);
+});
+test('rescheduling is revision checked, replayable and snapshots the exact new payload',async()=>{
+ const f=await fixture(),createKey=randomUUID(),created=await f.service.create(f.owner,createKey,{...f.input,mode:'schedule',schedule:later()}),key=randomUUID();
+ const input={...f.input,mode:'schedule',schedule:later(20),payload:{...f.input.payload,caption:'Changed caption'},expectedRevision:created.data.revision};
+ const edited=await f.service.replace(f.owner,created.data.id,key,input);assert.equal(edited.data.caption,'Changed caption');assert.equal(edited.data.revision,2);
+ assert.equal((await f.service.replace(f.owner,created.data.id,key,input)).data.id,created.data.id);
+ assert.equal(await db.collection('publishRevisions').countDocuments({intentId:created.data.id}),2);
+ await fail(f.service.replace(f.owner,created.data.id,randomUUID(),input),'REVISION_CONFLICT');await fail(f.service.replace('other',created.data.id,randomUUID(),input),'NOT_FOUND');
+ assert.equal((await f.service.create(f.owner,createKey,{...f.input,mode:'schedule',schedule:created.data.schedule&&{localTime:created.data.schedule.localTime,timezone:'UTC',utcOffset:'+00:00'}})).data.caption,'Changed caption');
+});
+test('late delivery makes zero provider calls and requires new explicit time',async()=>{
+ const f=await fixture(),created=await f.service.create(f.owner,randomUUID(),{...f.input,mode:'schedule',schedule:later()});for(let i=0;i<26;i++)f.advance();await f.worker().tick(f.owner);const expired=await f.service.get(f.owner,created.data.id);assert.equal(expired.errorCode,'DELIVERY_WINDOW_EXPIRED');assert.deepEqual(f.counts(),{creates:0,publishes:0});
+ const futureService=publishingService(db,client,cfg,true,()=>new Date(Date.now()+26*61000));await fail(futureService.action(f.owner,expired.id,randomUUID(),'retry',{expectedRevision:expired.revision,confirm:true}),'RETRY_WINDOW_EXPIRED');
+ const replaced=await futureService.replace(f.owner,expired.id,randomUUID(),{...f.input,expectedRevision:expired.revision});assert.equal(replaced.data.state,'queued');
+});
+test('claim fences edits, and cancellation/rescheduling race cannot overwrite claimed work',async()=>{
+ const f=await fixture(),{data}=await f.service.create(f.owner,randomUUID(),f.input);await f.worker().tick(f.owner);const processing=await f.service.get(f.owner,data.id);
+ await fail(f.service.replace(f.owner,data.id,randomUUID(),{...f.input,expectedRevision:processing.revision}),'INTENT_ALREADY_CLAIMED');
+ const g=await fixture(),scheduled=await g.service.create(g.owner,randomUUID(),{...g.input,mode:'schedule',schedule:later()});const results=await Promise.allSettled([g.service.replace(g.owner,scheduled.data.id,randomUUID(),{...g.input,expectedRevision:1}),g.service.action(g.owner,scheduled.data.id,randomUUID(),'cancel',{expectedRevision:1,confirm:true})]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+});
+test('disconnect pauses future schedules, explicit retry keeps original date and epoch fence',async()=>{
+ const f=await fixture(),{data}=await f.service.create(f.owner,randomUUID(),{...f.input,mode:'schedule',schedule:later()});await instagramService(db,client,cfg,null).disconnect(f.owner,randomUUID(),{expectedRevision:1,confirmPausePending:true});const paused=await f.service.get(f.owner,data.id);assert.equal(paused.state,'paused_auth');assert.equal(paused.schedule?.utc,data.schedule?.utc);assert.equal((await db.collection('projects').findOne({_id:f.project as never}))?.flags.scheduled,false);assert.equal(f.counts().creates,0);
+});
+test('deadline checked again after provider processing, but uncertain submitted outcomes reconcile beyond window',async()=>{
+ const f=await fixture(),{data}=await f.service.create(f.owner,randomUUID(),f.input);await f.worker().tick(f.owner);f.provider.status=async()=>{for(let i=0;i<16;i++)f.advance();return 'FINISHED';};f.advance();await f.worker().tick(f.owner);assert.equal((await f.service.get(f.owner,data.id)).errorCode,'DELIVERY_WINDOW_EXPIRED');assert.equal(f.counts().publishes,0);
+ const g=await fixture(),created=await g.service.create(g.owner,randomUUID(),g.input);g.provider.publish=async()=>{throw Error('lost');};await g.worker().tick(g.owner);g.advance();await g.worker().tick(g.owner);for(let i=0;i<20;i++)g.advance();g.setStatus('PUBLISHED');await g.worker().tick(g.owner);assert.equal((await g.service.get(g.owner,created.data.id)).state,'published');
+});
+test('replacement pins a newly approved version and preserves old snapshot',async()=>{
+ const f=await fixture(),{data}=await f.service.create(f.owner,randomUUID(),{...f.input,mode:'schedule',schedule:later()}),old=await db.collection('videos').findOne({_id:f.video as never}),video=uid('vid'),approval=uid('apr');
+ await db.collection('videos').insertOne({...old,_id:video as never,jobId:uid('job'),title:'New approved version'});
+ const a=await db.collection('videoApprovals').findOne({_id:f.approval as never});await db.collection('videoApprovals').insertOne({...a,_id:approval as never,subjectId:video});
+ const replaced=await f.service.replace(f.owner,data.id,randomUUID(),{...f.input,mode:'schedule',schedule:later(30),expectedRevision:data.revision,payload:{...f.input.payload,videoId:video,videoApprovalId:approval}});assert.equal(replaced.data.videoId,video);
+ const snapshots=await db.collection('publishRevisions').find({intentId:data.id}).sort({revision:1}).toArray();assert.deepEqual(snapshots.map(r=>r.videoId),[f.video,video]);
+});
+test('legacy queued records also expire safely after upgrade',async()=>{
+ const f=await fixture(),{data}=await f.service.create(f.owner,randomUUID(),f.input);await db.collection('publishIntents').updateOne({_id:data.id as never},{$unset:{mode:'',schedule:'',retryDeadlineAt:''},$set:{createdAt:new Date(Date.now()-3600000)}});await f.worker().tick(f.owner);assert.equal((await f.service.get(f.owner,data.id)).errorCode,'DELIVERY_WINDOW_EXPIRED');assert.equal(f.counts().creates,0);
+});
+test('reconnected retry preserves future due time and cannot publish early',async()=>{
+ const f=await fixture(),{data}=await f.service.create(f.owner,randomUUID(),{...f.input,mode:'schedule',schedule:later()});const cancelled=(await f.service.action(f.owner,data.id,randomUUID(),'cancel',{expectedRevision:1,confirm:true})).data;
+ const retry=(await f.service.action(f.owner,data.id,randomUUID(),'retry',{expectedRevision:cancelled.revision,confirm:true})).data;assert.equal(retry.state,'scheduled');assert.equal(retry.schedule?.utc,data.schedule?.utc);assert.equal((await f.worker().tick(f.owner)).worked,false);assert.equal(f.counts().creates,0);
+});
+test('PATCH boundary validates origin, approved replacement and same-key recovery',async()=>{
+ const f=await fixture(),{data}=await f.service.create(f.owner,randomUUID(),{...f.input,mode:'schedule',schedule:later()}),key=randomUUID(),deps=async()=>({db,client,auth:{api:{getSession:async()=>({user:{id:f.owner}})}},config:{origin:'https://app.test'}} as any),body={...f.input,mode:'schedule',schedule:later(20),expectedRevision:1};
+ const request=(origin:string)=>new Request(`https://app.test/api/publish-intents/${data.id}`,{method:'PATCH',headers:{cookie:'fixture',origin,'content-type':'application/json','idempotency-key':key},body:JSON.stringify(body)});
+ assert.equal((await handlePublishing(request('https://other.test'),'replace',data.id,deps,{config:cfg,enabled:true})).status,403);
+ assert.equal((await handlePublishing(request('https://app.test'),'replace',data.id,deps,{config:cfg,enabled:true})).status,200);
+ const replay=await handlePublishing(request('https://app.test'),'replace',data.id,deps,{config:cfg,enabled:false});assert.equal(replay.status,200);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');assert.equal(await db.collection('publishRevisions').countDocuments({intentId:data.id}),2);
+});

@@ -16,6 +16,7 @@ export type ProjectView = {
   currentStoryboardId: string | null; latestReadyVideoId: string | null;
   selectedVideoId: string | null; activeJobId: string | null;
   flags: { drafts: boolean; ready: boolean; scheduled: boolean; published: boolean; needsAttention: boolean };
+  nextSchedule?: {intentId:string;videoId:string;localTime:string;timezone:string;utcOffset:string;utc:string} | null;
   createdAt: string; updatedAt: string;
 };
 export class ProjectError extends Error {

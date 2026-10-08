@@ -86,7 +86,8 @@ export function projectService(db: Db, client: MongoClient, secret: string) {
           at: last.updatedAt.toISOString(), id: last._id, expires: Date.now() + 86400000 })).toString('base64url');
         nextCursor = `${payload}.${sign(payload)}`;
       }
-      return { data: items.map(view), page: { hasMore, nextCursor } };
+      const schedules=await db.collection<RecordDoc>('publishIntents').find({ownerId,projectId:{$in:items.map(p=>p._id)},state:'scheduled'}).sort({nextRunAt:1,_id:1}).toArray();
+      return { data: items.map(p=>{const r=schedules.find(r=>r.projectId===p._id);return {...view(p),nextSchedule:r?.schedule?{intentId:r._id,videoId:r.videoId,...r.schedule,utc:r.schedule.utc.toISOString()}:null};}), page: { hasMore, nextCursor } };
     },
     async create(ownerId: string, key: string, input: { title: string }) {
       return command(ownerId, 'POST', '/api/projects', key, input, async session => {

@@ -4,9 +4,9 @@ import type {Db,MongoClient,ClientSession} from 'mongodb';
 import {inTransaction} from '../db/client';
 import {decryptToken,encryptToken,type InstagramConfig} from '../instagram/config';
 import {digest} from '../storage/service';
-import {publishFlags,uid,validatePublication,type PublishRow} from './service';
+import {publishFlags,uid,validatePublication,deliveryDeadline,type PublishRow} from './service';
 import {PublishProviderError,type PublishProvider} from './provider';
-import {assertPublishingReady} from './setup';
+import {assertSchedulingReady as assertPublishingReady} from './schedule-setup';
 export function publishWorker(db:Db,client:MongoClient,config:InstagramConfig,provider:PublishProvider,mediaOrigin:string,now=()=>new Date()){
  const rows=db.collection<PublishRow>('publishIntents');
  const input=(r:PublishRow)=>({projectId:r.projectId,mode:'now' as const,confirm:true as const,payload:{videoId:r.videoId,videoApprovalId:r.videoApprovalId,expectedOutputHash:r.assetHash,caption:r.caption,destination:{connectionId:r.connectionId,instagramUserId:r.instagramUserId,destinationEpoch:r.destinationEpoch}}});
@@ -19,9 +19,10 @@ export function publishWorker(db:Db,client:MongoClient,config:InstagramConfig,pr
  return {async tick(ownerId?:string){
   await assertPublishingReady(db);
   // Each call performs at most one provider operation, or a publish plus permalink read.
-  const candidate=await rows.find({...(ownerId?{ownerId}:{}),state:{$in:['queued','preparing','processing','submitting','outcome_unknown']},nextRunAt:{$lte:now()},$or:[{leaseUntil:null},{leaseUntil:{$lte:now()}}]}).sort({nextRunAt:1,_id:1}).limit(1).next();if(!candidate)return {worked:false};
+  const candidate=await rows.find({...(ownerId?{ownerId}:{}),state:{$in:['scheduled','queued','preparing','processing','submitting','outcome_unknown']},nextRunAt:{$lte:now()},$or:[{leaseUntil:null},{leaseUntil:{$lte:now()}}]}).sort({nextRunAt:1,_id:1}).limit(1).next();if(!candidate)return {worked:false};
   const r=await inTransaction(client,async session=>{
    const current=await rows.findOne({_id:candidate._id,revision:candidate.revision},{session});if(!current)return null;
+   if(!['submitting','outcome_unknown'].includes(current.state)&&deliveryDeadline(current)<=now())return write(current,{state:'failed_safe',errorCode:'DELIVERY_WINDOW_EXPIRED',leaseUntil:null},session,true).then(()=>null);
    if(current.state==='preparing')return write(current,{state:'failed_safe',errorCode:'CONTAINER_UNCONFIRMED',leaseUntil:null},session,true).then(()=>null);
    if(current.state==='submitting')return write(current,{state:'outcome_unknown',errorCode:'PUBLISH_OUTCOME_UNKNOWN',leaseUntil:null,nextRunAt:now()},session).then(()=>null);
    if(current.state==='outcome_unknown'){
@@ -29,7 +30,7 @@ export function publishWorker(db:Db,client:MongoClient,config:InstagramConfig,pr
     return write(current,{leaseUntil:new Date(now().getTime()+60000),nextRunAt:new Date(now().getTime()+60000),polls:current.polls+1},session);
    }
    try{await eligible(current,session);}catch{return write(current,{state:'paused_auth',errorCode:'PUBLICATION_REVALIDATION_REQUIRED',leaseUntil:null},session,true).then(()=>null);}
-   if(current.state==='queued'){
+   if(current.state==='queued'||current.state==='scheduled'){
     const token=randomBytes(32).toString('base64url'),expiresAt=new Date(now().getTime()+3600000);
     await db.collection('publishMediaGrants').insertOne({_id:uid('pgr') as never,ownerId:current.ownerId,projectId:current.projectId,intentId:current._id,assetId:current.assetId,assetHash:current.assetHash,attempt:current.attempt,tokenHash:digest(token),expiresAt},{session});
     return write(current,{state:'preparing',ingestToken:encryptToken(token,config,current.ownerId,current._id),expiresAt,leaseUntil:new Date(now().getTime()+60000),nextRunAt:new Date(now().getTime()+60000)},session);
@@ -53,6 +54,7 @@ export function publishWorker(db:Db,client:MongoClient,config:InstagramConfig,pr
   // Persist the point of no automatic retry before making the publication POST.
   const submitting=await inTransaction(client,async session=>{
    const current=await rows.findOne({_id:r._id,revision:r.revision,state:'processing'},{session});if(!current)return null;
+   if(deliveryDeadline(current)<=now())return write(current,{state:'failed_safe',errorCode:'DELIVERY_WINDOW_EXPIRED',leaseUntil:null},session,true).then(()=>null);
    try{await eligible(current,session);}catch{return write(current,{state:'paused_auth',errorCode:'PUBLICATION_REVALIDATION_REQUIRED',leaseUntil:null},session,true).then(()=>null);}
    return write(current,{state:'submitting',polls:0,leaseUntil:new Date(now().getTime()+60000),nextRunAt:new Date(now().getTime()+60000)},session);
   });if(!submitting)return {worked:true};

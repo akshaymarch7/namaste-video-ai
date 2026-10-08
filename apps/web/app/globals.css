@@ -97,3 +97,4 @@
 .publish-caption { display: grid; gap: .75rem; margin: 1.5rem 0 .5rem; }
 .publish-caption textarea { width: 100%; min-height: 10rem; padding: 1rem; color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: .75rem; font: inherit; resize: vertical; }
 .publish-caption-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.publish-timing{border:1px solid var(--border);border-radius:12px;margin:1.5rem 0;padding:1rem;min-width:0}.publish-timing label{display:block;margin:.75rem 0}.publish-timing input:not([type=radio]),.publish-timing select{display:block;width:100%;min-width:0;box-sizing:border-box;background:var(--panel);color:inherit;border:1px solid var(--border);border-radius:8px;padding:.7rem;font:inherit;color-scheme:dark}.publish-timing input[type=radio]{accent-color:var(--accent);margin-right:.5rem}
