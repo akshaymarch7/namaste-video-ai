@@ -32,7 +32,8 @@ Do not publish the raw local test output without reviewing it.
 
 | Requirement | Existing evidence | Remaining acceptance |
 |---|---|---|
-| Private workspaces/auth | Auth/project/storage/storyboard/job/Instagram/publishing suites exercise ownership and disabled sessions; prior browser QA | Hosted two-account walkthrough of project, version, media and destination denial |
+| Private workspaces/auth | October 8 hosted two-account sign-in, project/version/media/asset denial and destination isolation passed; detailed evidence in Project Status | Retain isolation checks when authorization scope or storage boundaries change |
+| Direct Instagram connection | @namastevideoai real Instagram consent/callback, clean reload, expected workspace, consumed OAuth receipt, encrypted token and HTTP 200 profile check passed on October 8 | Public access needs applicable Advanced Access/App Review; lifecycle callbacks and recurring token refresh remain pending; this does not prove publishing |
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
 | Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; prior real reload/lost-response QA | Controlled hosted outage/recovery drill before continuous operation |
 | Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Rebuild renderer with F19 projections before resuming alongside publication; no ongoing activation yet |
@@ -40,7 +41,7 @@ Do not publish the raw local test output without reviewing it.
 | Schedule | F20 local DST, replacement, cancellation and due/expiry QA | Approved timed real post with browser closed and independent scheduler |
 | Accessibility | F21 responsive, keyboard and reduced-motion QA; earlier feature checks | Screen reader, Safari and end-to-end keyboard review |
 | Voice offering | Daniel test voice accepted for pilot | Indian male/female voices unavailable/unverified; do not advertise them as enabled |
-| Operating permission | Internal-only admission, no billing/public signup | Confirm actual team/provider license eligibility and nominate operating owner |
+| Operating permission | Internal-only admission; Akshay confirmed personal operation and is the pilot owner; ElevenLabs Free plan observed | Retain provider/license restrictions; free allowances only, no unapproved paid evaluation or continuous workloads |
 
 ## Representative content evaluation
 
@@ -161,11 +162,17 @@ actions; this document and local gate do not perform or authorize them.
   version. Never silently substitute an asset in a confirmed scheduled post.
 
 Full V1 acceptance remains open until live Instagram delivery, the content matrix,
-remaining usability/isolation checks and operating ownership are recorded. Any
+remaining usability checks and operating requirements are recorded. Any
 accepted pilot exception must be explicit and scoped; a local green suite is not
 full release approval.
 
 ## Direct Instagram setup support draft — not submitted
+
+Historical investigation: the older NamasteDev app subsequently provided the direct
+Instagram setup. Its approved pilot connection now passes real OAuth and profile
+verification without a Facebook Page. The fresh-app panel discrepancy remains
+unexplained, but no longer blocks this pilot. Preserve the unsent draft as evidence;
+no additional support submission or app creation is needed for this activation.
 
 The October 8 fresh-app check did not expose Instagram Login settings. The
 official bug tool's Developer Tools → App Dashboard → Create App category says
