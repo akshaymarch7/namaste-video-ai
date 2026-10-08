@@ -1,6 +1,6 @@
 # F22 — Internal release acceptance
 
-Status: in progress. This is a release gate, not a claim that all live flows passed.
+Status: in progress. Real Post now acceptance passed on October 8; scheduled delivery and the remaining matrix below are still pending. This is not a claim that all live flows passed.
 `PROJECT_STATUS.md` remains the authoritative implementation/evidence record.
 
 ## Repeatable local gate
@@ -37,7 +37,7 @@ Do not publish the raw local test output without reviewing it.
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
 | Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; prior real reload/lost-response QA | Controlled hosted outage/recovery drill before continuous operation |
 | Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Rebuild renderer with F19 projections before resuming alongside publication; no ongoing activation yet |
-| Publish now | F19 local UI/API/worker QA with simulated Meta | Exact-account/video/caption approved live post; verify remote permalink and app state |
+| Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery remains separate |
 | Schedule | F20 local DST, replacement, cancellation and due/expiry QA | Approved timed real post with browser closed and independent scheduler |
 | Accessibility | F21 responsive, keyboard and reduced-motion QA; earlier feature checks | Screen reader, Safari and end-to-end keyboard review |
 | Voice offering | Daniel test voice accepted for pilot | Indian male/female voices unavailable/unverified; do not advertise them as enabled |
