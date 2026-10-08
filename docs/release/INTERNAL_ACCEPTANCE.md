@@ -164,3 +164,39 @@ Full V1 acceptance remains open until live Instagram delivery, the content matri
 remaining usability/isolation checks and operating ownership are recorded. Any
 accepted pilot exception must be explicit and scoped; a local green suite is not
 full release approval.
+
+## Direct Instagram setup support draft — not submitted
+
+The October 8 fresh-app check did not expose Instagram Login settings. The
+official bug tool's Developer Tools → App Dashboard → Create App category says
+support is unavailable through that channel and directs developers to the
+Developer Community Forum. The following draft is prepared for review; it has
+not been sent to Meta or published. Obtain explicit authorization before posting.
+
+**Title:** Instagram Login setup missing in a newly created Instagram-only app
+
+We are setting up direct Instagram authorization for our own professional Creator
+account without a linked Facebook Page. In a new app named NamasteVideo Direct:
+
+1. Select only “Manage messaging & content on Instagram” during app creation.
+2. Complete creation without a business portfolio, accepting the displayed terms
+   and completing the account verification prompt.
+3. Open Use cases → Customize.
+4. The console immediately includes Facebook Login for Business and offers only
+   “API setup with Facebook login.” No Facebook Login configuration was saved.
+5. Add `instagram_business_basic` and `instagram_business_content_publish` in
+   Permissions and features. Both show Ready for testing.
+6. Reload: the Instagram Login setup is still absent. Add more to this use case
+   offers Webhooks; the use-case switcher contains only Instagram API.
+
+Expected: Meta's current [Instagram use-case guide](https://developers.facebook.com/docs/development/create-an-app/instagram-use-case/)
+describes choosing Instagram Login, obtaining an Instagram-specific App ID and
+App Secret, and configuring the business-login redirect URL. We cannot reach
+those settings. The same missing panel appears on our two older apps, so creating
+a dedicated app did not resolve it.
+
+Please identify the supported way to provision Instagram Login for this app, or
+any documented prerequisite missing from these steps. We have not established a
+root cause or confirmed a platform bug. We can provide a screenshot of the
+console without secrets. No passwords, access tokens, app secrets, private media
+or customer data are included in this report.
