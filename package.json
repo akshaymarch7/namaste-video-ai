@@ -35,7 +35,8 @@
     "test:storage": "npm run test:storage --workspace=@namastevideo/web --",
     "generations:worker": "npm run generations:worker --workspace apps/web --",
     "test:jobs": "npm run test:jobs --workspace apps/web",
-    "render:v2:fixture": "node --import tsx scripts/render-v2.ts"
+    "render:v2:fixture": "node --import tsx scripts/render-v2.ts",
+    "test:acceptance": "node scripts/acceptance.mjs"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.529",

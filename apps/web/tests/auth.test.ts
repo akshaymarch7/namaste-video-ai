@@ -280,7 +280,8 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     assert.equal(ideaPage.status, 200);
     const ideaHtml = await ideaPage.text();
     assert.match(ideaHtml, /<div hidden=""><div class="idea-shell"/);
-    assert.match(ideaHtml, /Checking your session/);
+    assert.match(ideaHtml, /role="status" aria-label="Loading your workspace"/);
+    assert.doesNotMatch(ideaHtml, /Checking your session/);
     assert.equal(ideaHtml.includes('HTTP project'), false, 'Project data loads only through the owner-scoped API');
     assert.equal((await fetch(`${origin}/projects/not-a-project/idea`, { headers: { Cookie: cookies(login) } })).status, 404);
 
@@ -309,7 +310,8 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     const storyboardPage=await fetch(`${origin}${storyboardPath}`,{headers:{Cookie:cookies(login)}});
     assert.equal(storyboardPage.status,200);const storyboardHtml=await storyboardPage.text();
     assert.match(storyboardHtml, /<div hidden=""><div class="idea-shell"/);
-    assert.match(storyboardHtml, /Checking your session/);
+    assert.match(storyboardHtml, /role="status" aria-label="Loading your workspace"/);
+    assert.doesNotMatch(storyboardHtml, /Checking your session/);
     assert.equal((await fetch(`${origin}/projects/not-a-project/storyboard`,{headers:{Cookie:cookies(login)}})).status,404);
     const privatePage = await fetch(`${origin}/projects`, { headers: { Cookie: cookies(login) } });
     assert.equal(privatePage.status, 200);
@@ -319,7 +321,8 @@ test('actual Next.js routes allow the full session round trip and expose no nati
     assert.match(privateHtml, /tester@example.test/);
     // Cached HTML must not display the identity before client session validation.
     assert.match(privateHtml, /<div hidden=""><div class="library-shell"/);
-    assert.match(privateHtml, /Checking your session/);
+    assert.match(privateHtml, /role="status" aria-label="Loading your workspace"/);
+    assert.doesNotMatch(privateHtml, /Checking your session/);
     const safeRedirect = await fetch(`${origin}/sign-in?returnTo=https://evil.example`, { headers: { Cookie: cookies(login) }, redirect: 'manual' });
     assert.equal(safeRedirect.headers.get('location'), '/projects');
     await client.db(dbName).collection('internalAccess').updateOne({ normalizedEmail: account.email }, { $set: { enabled: false } });
