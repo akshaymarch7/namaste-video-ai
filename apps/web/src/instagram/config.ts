@@ -2,6 +2,9 @@ import 'server-only';
 import {createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
 type CommonInstagramConfig={appId:string;appSecret:string;redirectUri:string;version:string;activeKey:string;keys:Record<string,string>};
 export type InstagramConfig=CommonInstagramConfig&({provider?:'instagram';facebookConfigId?:never}|{provider:'facebook';facebookConfigId:string});
+// Legacy provider configuration remains readable for existing connection/publishing records.
+// It must never be reinterpreted as Instagram Login credentials.
+export function directInstagramLoginConfigured(config:InstagramConfig|null):boolean{return !!config&&config.provider!=='facebook';}
 export function readInstagramConfig(env:Record<string,string|undefined>=process.env):InstagramConfig|null{
  try{
   const appId=env.INSTAGRAM_APP_ID!,appSecret=env.INSTAGRAM_APP_SECRET!,redirectUri=env.INSTAGRAM_REDIRECT_URI!,version=env.INSTAGRAM_GRAPH_VERSION!,activeKey=env.INSTAGRAM_TOKEN_KEY_ID!,keys=JSON.parse(env.INSTAGRAM_TOKEN_KEYS??'{}');

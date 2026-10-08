@@ -29,7 +29,7 @@ test('authorization uses documented reauthentication parameter and exact redirec
  const url=new URL(authorizationUrl(config,'fixture-state'));
  assert.equal(url.origin,'https://www.instagram.com');
  assert.equal(url.pathname,'/oauth/authorize');
- assert.deepEqual(Object.fromEntries(url.searchParams),{client_id:config.appId,redirect_uri:config.redirectUri,response_type:'code',scope:scopes.join(','),state:'fixture-state',enable_fb_login:'false',force_reauth:'true'});
+ assert.deepEqual(Object.fromEntries(url.searchParams),{client_id:config.appId,redirect_uri:config.redirectUri,response_type:'code',scope:scopes.join(','),state:'fixture-state',enable_fb_login:'false',force_reauth:'false'});
  assert.equal(url.searchParams.has('force_authentication'),false);
 });
 
@@ -105,4 +105,12 @@ test('long-lived refresh retains the documented flat token contract',async()=>{
  assert.equal(url.searchParams.get('grant_type'),'ig_refresh_token');
  assert.equal(url.searchParams.get('access_token'),'fixture-existing-token');
  assert.equal(requests.length,1);
+});
+
+
+test('invalid long-lived token and refresh responses are sanitized without another provider call',async()=>{
+ for(const malformed of [{...long,expires_in:0},{...long,expires_in:'5184000'},{...long,access_token:42},{data:[long]},null]){
+  const exchange=fixture([short,malformed]);await rejects(exchange.provider.exchange('fixture-code'),'INSTAGRAM_RESPONSE_INVALID');assert.equal(exchange.requests.length,2);
+  const refresh=fixture([malformed]);await rejects(refresh.provider.refresh('fixture-existing-token'),'INSTAGRAM_RESPONSE_INVALID');assert.equal(refresh.requests.length,1);
+ }
 });

@@ -16,46 +16,44 @@ test('storage errors block disconnect; separate tab stores and owners do not cle
 test('unconfigured status disables authorization, unexpected redirect hosts are rejected',async()=>{const c=instagramController(store(),'a',{...base,get:async()=>({connection:view,configured:false})},()=>{});await c.load();assert.equal(await c.connect(),null);const d=instagramController(store(),'b',{...base,connect:async()=>({authorizationUrl:'https://evil.example'})},()=>{});await d.load();assert.equal(await d.connect(),null);assert.equal(d.snapshot().error,'OUTCOME_UNKNOWN');});
 test('disposed response and malformed success preserve recovery receipt',async()=>{const s=store();let release!:(value:Awaited<ReturnType<typeof base.disconnect>>)=>void;const c=instagramController(s,'a',{...base,disconnect:()=>new Promise(r=>release=r)},()=>{});await c.load();const pending=c.disconnect();c.dispose();release(await base.disconnect());await pending;assert.equal(s.length,1);const d=instagramController(s,'a',{...base,disconnect:async()=>({connection:null as never})},()=>{});await d.load();await d.recover();assert.ok(d.snapshot().pending);assert.equal(s.length,1);});
 
-test('Facebook authorization requires an explicit numeric Page ID and preserves the selected destination',async()=>{
+test('direct connection needs one action with no Page ID and preserves an optional project return',async()=>{
  let calls=0,submitted:unknown;
- const c=instagramController(store(),'facebook',{...base,get:async()=>({connection:null,configured:true,provider:'facebook'}),connect:async(project,pageId)=>{calls++;submitted={project,pageId};return {authorizationUrl:'https://www.facebook.com/v26.0/dialog/oauth?state=fixture'};}},()=>{});
- await c.load();assert.equal(c.snapshot().provider,'facebook');
- for(const pageId of [undefined,'','page name','123abc',' 123','123 ','-1','1.5','1'.repeat(101)]){
-  assert.equal(await c.connect(undefined,pageId),null);assert.equal(c.snapshot().error,'PAGE_REQUIRED');
- }
- assert.equal(calls,0);
- assert.equal(await c.connect('prj_test','123456'), 'https://www.facebook.com/v26.0/dialog/oauth?state=fixture');
- assert.equal(calls,1);assert.deepEqual(submitted,{project:'prj_test',pageId:'123456'});assert.equal(c.snapshot().error,'');
-});
-test('legacy direct Instagram authorization rejects Page selection without submitting',async()=>{
- let calls=0;const c=instagramController(store(),'direct',{...base,connect:async()=>{calls++;return base.connect();}},()=>{});
+ const c=instagramController(store(),'direct',{...base,get:async()=>({connection:null,configured:true,provider:'instagram'}),connect:async project=>{calls++;submitted=project;return base.connect();}},()=>{});
  await c.load();assert.equal(c.snapshot().provider,'instagram');
- assert.equal(await c.connect(undefined,'123'),null);assert.equal(c.snapshot().error,'VALIDATION_FAILED');assert.equal(calls,0);
- assert.equal(await c.connect(),'https://www.instagram.com/oauth/authorize?state=fixture');assert.equal(calls,1);
+ assert.equal(await c.connect('prj_test'),'https://www.instagram.com/oauth/authorize?state=fixture');
+ assert.equal(calls,1);assert.equal(submitted,'prj_test');assert.equal(c.snapshot().error,'');
+ assert.equal(await c.connect(),'https://www.instagram.com/oauth/authorize?state=fixture');assert.equal(calls,2);assert.equal(submitted,undefined);
 });
-test('authorization redirects are limited to the configured provider and exact secure route',async()=>{
- for(const selectedProvider of ['facebook','instagram'] as const){
-  const host=selectedProvider==='facebook'?'www.facebook.com':'www.instagram.com';
-  const path=selectedProvider==='facebook'?'/v26.0/dialog/oauth':'/oauth/authorize';
-  const invalid=[
-   `http://${host}${path}`,`https://${host}:443${path}`,`https://${host}:444${path}`,
-   `https://user:secret@${host}${path}`,`https://user@${host}${path}`,
-   `https://${host}${path}#fragment`,`https://${host}${path}#`,
-   `https://${host}.evil.example${path}`,`https://${host}${path}/other`,
-   `https://${host}/other/..${path}`,`https://${host}${path.replace('oauth','login')}`,
-   selectedProvider==='facebook'?'https://www.instagram.com/oauth/authorize':'https://www.facebook.com/v26.0/dialog/oauth',
-   'javascript:alert(1)','not a URL'
-  ];
-  for(const authorizationUrl of invalid){
-   const c=instagramController(store(),'allowlist',{...base,get:async()=>({connection:view,configured:true,provider:selectedProvider}),connect:async()=>({authorizationUrl})},()=>{});
-   await c.load();assert.equal(await c.connect(undefined,selectedProvider==='facebook'?'123':undefined),null,authorizationUrl);assert.equal(c.snapshot().error,'OUTCOME_UNKNOWN');
-  }
+test('legacy Facebook configuration never starts a new Facebook flow',async()=>{
+ let calls=0;const c=instagramController(store(),'legacy',{...base,get:async()=>({connection:view,configured:true,provider:'facebook'}),connect:async()=>{calls++;return base.connect();}},()=>{});
+ await c.load();assert.equal(c.snapshot().ready,true);assert.equal(c.snapshot().configured,false);
+ assert.equal(await c.connect(),null);assert.equal(calls,0);assert.deepEqual(c.snapshot().connection,view);
+});
+test('authorization redirects accept only the exact secure direct Instagram route',async()=>{
+ const host='www.instagram.com',path='/oauth/authorize';
+ const invalid=[
+  `http://${host}${path}`,`https://${host}:443${path}`,`https://${host}:444${path}`,
+  `https://user:secret@${host}${path}`,`https://user@${host}${path}`,
+  `https://${host}${path}#fragment`,`https://${host}${path}#`,
+  `https://${host}.evil.example${path}`,`https://${host}${path}/other`,
+  `https://${host}/other/..${path}`,`https://${host}${path.replace('oauth','login')}`,
+  'https://www.facebook.com/v26.0/dialog/oauth','javascript:alert(1)','not a URL'
+ ];
+ for(const authorizationUrl of invalid){
+  const c=instagramController(store(),'allowlist',{...base,connect:async()=>({authorizationUrl})},()=>{});
+  await c.load();assert.equal(await c.connect(),null,authorizationUrl);assert.equal(c.snapshot().error,'OUTCOME_UNKNOWN');
  }
 });
-test('Facebook connection read retains Page identity and professional type across disconnect recovery',async()=>{
+test('legacy saved identity remains visible during direct reconnect and lost disconnect recovery',async()=>{
  const facebookView={...view,provider:'facebook' as const,page:{id:'123456',name:'Test Page'},account:{...view.account,type:'PROFESSIONAL' as const}};
- const c=instagramController(store(),'facebook',{...base,get:async()=>({connection:facebookView,configured:true,provider:'facebook'})},()=>{});
- await c.load();assert.deepEqual(c.snapshot().connection,facebookView);await c.disconnect();assert.equal(c.snapshot().provider,'facebook');assert.deepEqual(c.snapshot().connection?.page,facebookView.page);assert.equal(c.snapshot().pending,null);
+ const storage=store();let calls=0;
+ const transport={...base,get:async()=>({connection:facebookView,configured:true,provider:'instagram' as const}),disconnect:async()=>{calls++;if(calls===1)throw Error();return base.disconnect();}};
+ const c=instagramController(storage,'legacy',transport,()=>{});
+ await c.load();assert.deepEqual(c.snapshot().connection,facebookView);
+ assert.equal(await c.connect(),'https://www.instagram.com/oauth/authorize?state=fixture');assert.deepEqual(c.snapshot().connection,facebookView);
+ await c.disconnect();assert.ok(c.snapshot().pending);c.dispose();
+ const recovered=instagramController(storage,'legacy',transport,()=>{});await recovered.load();assert.deepEqual(recovered.snapshot().connection,facebookView);
+ await recovered.recover();assert.equal(recovered.snapshot().provider,'instagram');assert.equal(recovered.snapshot().pending,null);assert.equal(storage.length,0);
 });
 test('unknown provider prevents readiness and disposed connect responses do not navigate',async()=>{
  const c=instagramController(store(),'bad-provider',{...base,get:async()=>({connection:view,configured:true,provider:'unexpected' as never})},()=>{});
@@ -64,18 +62,25 @@ test('unknown provider prevents readiness and disposed connect responses do not 
  const d=instagramController(store(),'disposed',{...base,connect:()=>new Promise(r=>release=r)},()=>{});
  await d.load();const pending=d.connect();d.dispose();release(await base.connect());assert.equal(await pending,null);
 });
-test('transport parses provider headers strictly with legacy fallback and sends only supplied Page/project fields',async t=>{
+test('transport parses provider headers strictly and never asks for or submits a Page ID',async t=>{
  const {instagramTransport}=await import('../components/instagram/controller');
  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});
- let header:string|null='facebook',lastBody:unknown;
+ let header:string|null='instagram',lastBody:unknown;
  globalThis.fetch=async(_input,init)=>{
-  if(init?.method==='POST'){lastBody=JSON.parse(String(init.body));return Response.json({data:{authorizationUrl:'https://www.facebook.com/v26.0/dialog/oauth'}});}
+  if(init?.method==='POST'){lastBody=JSON.parse(String(init.body));return Response.json({data:{authorizationUrl:'https://www.instagram.com/oauth/authorize'}});}
   return Response.json({data:view},{headers:{'X-Instagram-Configured':'true',...(header===null?{}:{'X-Instagram-Provider':header})}});
  };
- assert.equal((await instagramTransport.get()).provider,'facebook');header='instagram';assert.equal((await instagramTransport.get()).provider,'instagram');header=null;assert.equal((await instagramTransport.get()).provider,'instagram');
+ assert.equal((await instagramTransport.get()).provider,'instagram');header=null;assert.equal((await instagramTransport.get()).provider,'instagram');
+ header='facebook';assert.equal((await instagramTransport.get()).provider,'facebook');
  for(header of ['unexpected','','Facebook','facebook,instagram'])await assert.rejects(instagramTransport.get());
- await instagramTransport.connect('prj_test','9876');assert.deepEqual(lastBody,{returnProjectId:'prj_test',pageId:'9876'});
- await instagramTransport.connect(undefined,'9876');assert.deepEqual(lastBody,{pageId:'9876'});
  await instagramTransport.connect('prj_test');assert.deepEqual(lastBody,{returnProjectId:'prj_test'});
  await instagramTransport.connect();assert.deepEqual(lastBody,{});
+});
+test('an in-flight connect is submitted once and setup rejection can be retried without a recovery lock',async()=>{
+ let release!:(value:{authorizationUrl:string})=>void,calls=0;
+ const c=instagramController(store(),'one',{...base,connect:()=>{calls++;return new Promise(resolve=>{release=resolve;});}},()=>{});
+ await c.load();const first=c.connect();assert.equal(c.snapshot().busy,true);assert.equal(await c.connect(),null);assert.equal(calls,1);
+ release(await base.connect());assert.equal(await first,'https://www.instagram.com/oauth/authorize?state=fixture');assert.equal(c.snapshot().busy,false);
+ const rejected=instagramController(store(),'two',{...base,connect:async()=>{throw {code:'INSTAGRAM_NOT_CONFIGURED'};}},()=>{});
+ await rejected.load();assert.equal(await rejected.connect(),null);assert.equal(rejected.snapshot().error,'INSTAGRAM_NOT_CONFIGURED');assert.equal(rejected.snapshot().pending,null);assert.equal(rejected.snapshot().busy,false);
 });

@@ -680,6 +680,13 @@ GET additionally supplies `X-Instagram-Provider: instagram|facebook`. POST conne
 Additional rejection outcomes: `page_required`, `page_unavailable`; provider/configuration changes invalidate pending authorization. The Facebook provider uses its configuration ID for the consent scopes and checks both user and Page-token grants. `business_management` is not requested. Same Page/provider/app/account reconnect preserves destination epoch; changing any destination binding increments it. Publishing remains disabled.
 
 
+### Direct Instagram onboarding (October 8, 2026; supersedes Facebook connect input)
+
+`POST /api/instagram/connect` accepts only `{}` or `{returnProjectId}`. `pageId` and other unknown fields are rejected with 422. The server returns only an Instagram authorization URL; no new Facebook OAuth state is created. GET's `X-Instagram-Provider` is `instagram` and describes new authorization, while the connection body's provider may still be `facebook` for a preserved legacy record. `X-Instagram-Configured:false` applies to missing/incomplete or legacy-only configuration; a connect attempt then returns 503 `INSTAGRAM_NOT_CONFIGURED` without changing the saved connection. Old Facebook callbacks cannot establish or replace a connection. Session/state/expiry/configuration fencing and pending-publication guards remain enforced.
+
+The customer UI has no Page ID field. Existing connections remain visible and disconnect recovery is unchanged. Direct connection requires profile and content-publish grants and a Creator/Business account. Cancellation or rejected grants retain the prior identity. Successful direct replacement removes Page fields and advances the destination binding. Provider tokens stay server-only and are never returned to the browser.
+
+
 ## Hosted dispatch implementation addendum (October 8, 2026)
 
 Implemented locally; disabled until the deployment/credential/workload checkpoint in PROJECT_STATUS is approved and verified. The five existing enqueue mutations retain their original authentication, origin, idempotency, body and response contracts. An accepted 202 registers a post-response dispatch kick; no cloud operation name, token or project input is added to their public response. Existing read/progress/cancel APIs remain authoritative. A post-response kick is best-effort; independent reconciliation is required.

@@ -98,6 +98,16 @@ the four-GiB allocation until a reviewed benchmark establishes a safe lower one.
 
 ## Controlled hosted rollout
 
+October 8 continuation: migrations 018–019 passed live; commit `2ddc9e5` is
+already serving the testing domain via Vercel Git auto-deploy. Both execution
+endpoints were verified disabled. The two-account HTTP/browser denial checks
+passed. @namastevideoai conversion and its new Facebook Page were approved and
+created. The user subsequently rejected the Facebook Page flow: leave that Page
+unlinked and complete direct Instagram Login instead. Direct product credentials,
+OAuth acceptance and publication remain pending. User permits free allowances
+only. Do not waive the 20-topic evaluation or infer zero future cost from rounded
+billing totals.
+
 The current hosted flags/scheduler state must be checked again at execution time.
 The historical baseline is publishing disabled, generation disabled, rendering
 scheduler paused, migrations through 017 and an older rendering image.
@@ -131,8 +141,8 @@ actions; this document and local gate do not perform or authorize them.
 
 ## Operations and rollback
 
-- Operator: **not yet assigned**. Assign a primary and backup contact before leaving
-  schedules active; no backup-product feature is implied.
+- Operator: **Akshay Saini**, personal pilot, confirmed October 8. No backup
+  operator is assigned; keep the pilot supervised and schedules bounded.
 - Watch accepted/queued/running/unknown counts, oldest pending age, provider error
   categories, render duration and scheduler failures. Use IDs and sanitized status,
   never credentials, full private prompts or signed media URLs in shared logs.

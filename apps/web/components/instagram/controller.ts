@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {connectionView,disconnectInput,facebookPageId,type ConnectionView} from '../../src/instagram/contracts';
+import {connectionView,disconnectInput,type ConnectionView} from '../../src/instagram/contracts';
 
 const receipt=z.object({key:z.string().uuid(),body:disconnectInput}).strict();
 const provider=z.enum(['instagram','facebook']);
@@ -7,16 +7,14 @@ export type InstagramProvider=z.infer<typeof provider>;
 type DisconnectReceipt=z.infer<typeof receipt>;
 export type InstagramTransport={
  get:()=>Promise<{connection:unknown;configured:boolean;provider?:InstagramProvider}>;
- connect:(project?:string,pageId?:string)=>Promise<{authorizationUrl:string}>;
+ connect:(project?:string)=>Promise<{authorizationUrl:string}>;
  disconnect:(pending:DisconnectReceipt)=>Promise<{connection:ConnectionView}>;
 };
 export type InstagramState={connection:ConnectionView|null;configured:boolean;provider:InstagramProvider;ready:boolean;busy:boolean;pending:DisconnectReceipt|null;error:string};
 export const initialInstagramState:InstagramState={connection:null,configured:false,provider:'instagram',ready:false,busy:false,pending:null,error:''};
 
-function authorizationLocation(value:string,selectedProvider:InstagramProvider){
- const route=selectedProvider==='facebook'
-  ? /^https:\/\/www\.facebook\.com\/v\d+\.0\/dialog\/oauth(?:\?|$)/
-  : /^https:\/\/www\.instagram\.com\/oauth\/authorize(?:\?|$)/;
+function authorizationLocation(value:string){
+ const route=/^https:\/\/www\.instagram\.com\/oauth\/authorize(?:\?|$)/;
  // Match the original authority too: URL parsing normalizes explicit default ports.
  if(!route.test(value)||value.includes('#'))throw Error();
  const url=new URL(value);
@@ -28,7 +26,10 @@ export function instagramController(storage:Storage,owner:string,transport:Insta
  const update=(patch:Partial<InstagramState>)=>{if(!disposed){state={...state,...patch};onChange(state);}};
  const clear=()=>{if(storage.getItem(slot)===JSON.stringify(state.pending))storage.removeItem(slot);};
  const error=(e:unknown)=>e&&typeof e==='object'&&'code'in e?String(e.code):'OUTCOME_UNKNOWN';
- const read=(result:Awaited<ReturnType<InstagramTransport['get']>>)=>({connection:connectionView.nullable().parse(result.connection),configured:result.configured,provider:provider.parse(result.provider??'instagram'),ready:true});
+ const read=(result:Awaited<ReturnType<InstagramTransport['get']>>)=>{
+  const selectedProvider=provider.parse(result.provider??'instagram');
+  return {connection:connectionView.nullable().parse(result.connection),configured:result.configured&&selectedProvider==='instagram',provider:selectedProvider,ready:true};
+ };
  async function load(){
   if(state.busy||disposed)return;
   update({busy:true,error:''});
@@ -51,12 +52,10 @@ export function instagramController(storage:Storage,owner:string,transport:Insta
    try{storage.setItem(slot,JSON.stringify(pending));update({pending});}catch{update({error:'RECOVERY_STORAGE'});return;}
    await recover();
   },
-  async connect(project?:string,pageId?:string){
+  async connect(project?:string){
    if(!state.ready||!state.configured||state.busy||state.pending)return null;
-   if(state.provider==='facebook'&&!facebookPageId.safeParse(pageId).success){update({error:'PAGE_REQUIRED'});return null;}
-   if(state.provider==='instagram'&&pageId!==undefined){update({error:'VALIDATION_FAILED'});return null;}
    update({busy:true,error:''});
-   try{const result=await transport.connect(project,pageId);if(disposed)return null;return authorizationLocation(result.authorizationUrl,state.provider);}
+   try{const result=await transport.connect(project);if(disposed)return null;return authorizationLocation(result.authorizationUrl);}
    catch(e){update({error:error(e)});return null;}
    finally{update({busy:false});}
   }
@@ -69,6 +68,6 @@ async function request(path:string,init:RequestInit={}){
 }
 export const instagramTransport:InstagramTransport={
  get:async()=>{const r=await request('connection');return {connection:r.data,configured:r.configured,provider:provider.parse(r.provider??'instagram')};},
- connect:async(project?:string,pageId?:string)=>(await request('connect',{method:'POST',body:JSON.stringify({...(project?{returnProjectId:project}:{}),...(pageId!==undefined?{pageId}:{})})})).data as {authorizationUrl:string},
+ connect:async(project?:string)=>(await request('connect',{method:'POST',body:JSON.stringify(project?{returnProjectId:project}:{})})).data as {authorizationUrl:string},
  disconnect:async(p:DisconnectReceipt)=>(await request('connection',{method:'DELETE',headers:{'Idempotency-Key':p.key},body:JSON.stringify(p.body)})).data as {connection:ConnectionView}
 };

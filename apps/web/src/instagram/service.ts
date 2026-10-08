@@ -5,7 +5,7 @@ import {MongoServerError,type Db,type Document,type MongoClient,type ClientSessi
 import {inTransaction} from '../db/client';
 import {ProjectError,idempotencyKey} from '../projects/contracts';
 import {connectInput,disconnectInput,connectionView} from './contracts';
-import {encryptToken,decryptToken,type InstagramConfig} from './config';
+import {encryptToken,decryptToken,directInstagramLoginConfigured,type InstagramConfig} from './config';
 import {authorizationUrl,type InstagramProvider} from './provider';
 type Row=Document&{_id:string};
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
@@ -13,7 +13,8 @@ const id=(prefix:string)=>`${prefix}_${randomUUID().replaceAll('-','')}`;
 const fail=(code:string,message:string,status=409)=>new ProjectError(status,code,message);
 export function instagramService(db:Db,client:MongoClient,config:InstagramConfig|null,provider:InstagramProvider|null){
  const rows=db.collection<Row>('instagramConnections'),states=db.collection<Row>('oauthStates'),commands=db.collection<Row>('instagramCommands');
- const configured=()=>{if(!config||!provider)throw fail('INSTAGRAM_NOT_CONFIGURED','Instagram connection is not configured yet.',503);return {config,provider};};
+ const configured=()=>{if(!config||!provider)throw fail('INSTAGRAM_NOT_CONFIGURED','Direct Instagram connection is awaiting administrator setup. Please try again once it is available.',503);return {config,provider};};
+ const loginConfigured=()=>{const settings=configured();if(!directInstagramLoginConfigured(settings.config))throw fail('INSTAGRAM_NOT_CONFIGURED','Direct Instagram connection is awaiting administrator setup. Please try again once it is available.',503);return settings;};
  async function guardIntents(ownerId:string,session:ClientSession){
   const intents=db.collection<Row>('publishIntents');
   // Unknown legacy states cannot be safely reclassified during a connection change.
@@ -33,9 +34,7 @@ export function instagramService(db:Db,client:MongoClient,config:InstagramConfig
  return {
   async get(ownerId:string){const r=await rows.findOne({ownerId});const result=view(r);if(result)result.pendingIntentCount=await db.collection('publishIntents').countDocuments({ownerId,state:{$nin:['published','cancelled','failed','failed_safe']}});return result;},
   async connect(ownerId:string,sessionId:string,raw:unknown){
-   const {config}=configured(),input=connectInput.parse(raw),state=randomBytes(32).toString('base64url'),now=new Date(),expiresAt=new Date(now.getTime()+600000),mode=config.provider??'instagram';
-   if(mode==='facebook'&&!input.pageId)throw fail('INSTAGRAM_PAGE_REQUIRED','Enter the Facebook Page ID linked to your Instagram account.',422);
-   if(mode==='instagram'&&input.pageId)throw fail('VALIDATION_FAILED','Page selection is only supported with Facebook Login.',422);
+   const {config}=loginConfigured(),input=connectInput.parse(raw),state=randomBytes(32).toString('base64url'),now=new Date(),expiresAt=new Date(now.getTime()+600000),mode=config.provider??'instagram';
    const work=()=>inTransaction(client,async session=>{
     if(input.returnProjectId&&!await db.collection('projects').findOne({_id:input.returnProjectId as never,ownerId,deletedAt:null},{session}))throw fail('NOT_FOUND','Project not found.',404);
     await guardIntents(ownerId,session);
@@ -49,7 +48,7 @@ export function instagramService(db:Db,client:MongoClient,config:InstagramConfig
    return {authorizationUrl:authorizationUrl(config,state),expiresAt:expiresAt.toISOString()};
   },
   async callback(ownerId:string,sessionId:string,state:string,code:string|null,denied:boolean){
-   const {config,provider}=configured();
+   const {config,provider}=loginConfigured();
    if(!/^[A-Za-z0-9_-]{43}$/.test(state))throw fail('INSTAGRAM_STATE_INVALID','Authorization expired or does not match this session.');
    const receipt=await states.findOneAndUpdate({ownerId,stateHash:hash(state),initiatingSessionHash:hash(sessionId),state:'pending',expiresAt:{$gt:new Date()}},{$set:{state:'exchanging',updatedAt:new Date()}},{returnDocument:'after'});
    if(!receipt)throw fail('INSTAGRAM_STATE_INVALID','Authorization expired or was already used.');
@@ -59,7 +58,7 @@ export function instagramService(db:Db,client:MongoClient,config:InstagramConfig
     if(denied){await states.updateOne({_id:receipt._id},{$set:{state:'failed',updatedAt:new Date()}});return result('cancelled');}
     if(receipt.provider!==(config.provider??'instagram')||receipt.providerAppId!==config.appId)throw fail('INSTAGRAM_STATE_INVALID','Connection configuration changed. Start again.');
     if(!code||code.length>4096)throw fail('INSTAGRAM_STATE_INVALID','Missing authorization code.');
-    const grant=await provider.exchange(code,receipt.pageId);
+    const grant=await provider.exchange(code);
     const mode=config.provider??'instagram',tokenKind=mode==='facebook'?'facebook_page':'instagram_user';
     if((grant.provider??'instagram')!==mode||(grant.tokenKind??'instagram_user')!==tokenKind||
       (mode==='facebook'&&(!grant.page||grant.page.id!==receipt.pageId))||

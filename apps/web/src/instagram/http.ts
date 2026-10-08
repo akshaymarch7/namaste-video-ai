@@ -5,7 +5,7 @@ import {dependencies} from '../auth/runtime';
 import {isAdmitted} from '../auth/engine';
 import {readBody,HttpError} from '../auth/http';
 import {ProjectError} from '../projects/contracts';
-import {readInstagramConfig,type InstagramConfig} from './config';
+import {readInstagramConfig,directInstagramLoginConfigured,type InstagramConfig} from './config';
 import {instagramProvider,type InstagramProvider} from './provider';
 import {instagramService} from './service';
 import {assertInstagramReady} from './setup';
@@ -27,14 +27,15 @@ export async function handleInstagram(request:Request,action:'read'|'connect'|'c
    const location=await service.callback(session.user.id,session.session.id,url.searchParams.get('state')??'',url.searchParams.get('code'),url.searchParams.has('error'));
    return new Response(null,{status:303,headers:{...headers,Location:location}});
   }
-  headers['X-Instagram-Configured']=settings?'true':'false';
-  headers['X-Instagram-Provider']=settings?.provider??'instagram';
+  headers['X-Instagram-Configured']=directInstagramLoginConfigured(settings)&&!!provider?'true':'false';
+  // This describes new OAuth connections, not the provider of a saved legacy account.
+  headers['X-Instagram-Provider']='instagram';
   const data=action==='read'?await service.get(session.user.id):action==='connect'?await service.connect(session.user.id,session.session.id,await readBody(request)):await service.disconnect(session.user.id,request.headers.get('idempotency-key')??'',await readBody(request));
   return Response.json({data,meta:{requestId}},{headers});
  }catch(e){
   let status=503,code='SERVICE_UNAVAILABLE',message='Could not confirm this request. Reload or recover your pending disconnect.';
   if(e instanceof ProjectError||e instanceof HttpError)({status,code,message}=e);else if(e instanceof z.ZodError){status=422;code='VALIDATION_FAILED';message='Check the connection request.';}
-  if(action==='callback')return new Response(null,{status:303,headers:{...headers,Location:`/settings/instagram?outcome=${code==='UNAUTHENTICATED'?'sign_in_required':'expired'}`}});
+  if(action==='callback')return new Response(null,{status:303,headers:{...headers,Location:`/settings/instagram?outcome=${code==='UNAUTHENTICATED'?'sign_in_required':code==='INSTAGRAM_NOT_CONFIGURED'?'not_configured':'expired'}`}});
   return Response.json({error:{code,message,requestId,retryable:status>=500},meta:{requestId}},{status,headers});
  }
 }

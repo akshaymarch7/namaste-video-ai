@@ -127,3 +127,25 @@ test('PATCH boundary validates origin, approved replacement and same-key recover
  assert.equal((await handlePublishing(request('https://app.test'),'replace',data.id,deps,{config:cfg,enabled:true})).status,200);
  const replay=await handlePublishing(request('https://app.test'),'replace',data.id,deps,{config:cfg,enabled:false});assert.equal(replay.status,200);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');assert.equal(await db.collection('publishRevisions').countDocuments({intentId:data.id}),2);
 });
+
+test('switching from Facebook configuration to direct Instagram pauses unsent work without provider calls',async()=>{
+ const f=await fixture(),legacy:InstagramConfig={...cfg,appId:'456',provider:'facebook',facebookConfigId:'789'};
+ await db.collection('instagramConnections').updateOne({_id:f.connection as never},{$set:{provider:'facebook',providerAppId:legacy.appId,tokenKind:'facebook_page',pageId:'321',pageName:'Legacy fixture Page',scopes:['instagram_basic','instagram_content_publish'],encryptedToken:encryptToken('private-fixture-token',legacy,f.owner,f.connection)}});
+ const legacyService=publishingService(db,client,legacy,true),{data}=await legacyService.create(f.owner,randomUUID(),f.input);
+ let calls=0;const unexpected=async()=>{calls++;throw Error('No legacy token may reach the direct provider');};
+ await publishWorker(db,client,cfg,{create:unexpected,status:unexpected,publish:unexpected,permalink:unexpected},'https://media.test').tick(f.owner);
+ const current=await f.service.get(f.owner,data.id);assert.equal(current.state,'paused_auth');assert.equal(current.errorCode,'PUBLICATION_REVALIDATION_REQUIRED');assert.equal(calls,0);
+ const stored=await db.collection('publishIntents').findOne({_id:data.id as never});assert.equal(stored?.encryptedToken,undefined);assert.equal(stored?.provider,'facebook');assert.equal(stored?.providerAppId,legacy.appId);
+});
+
+test('legacy uncertain publication retains recovery evidence after direct-login configuration change',async()=>{
+ const f=await fixture(),legacy:InstagramConfig={...cfg,appId:'456',provider:'facebook',facebookConfigId:'789'};
+ await db.collection('instagramConnections').updateOne({_id:f.connection as never},{$set:{provider:'facebook',providerAppId:legacy.appId,tokenKind:'facebook_page',pageId:'321',pageName:'Legacy fixture Page',scopes:['instagram_basic','instagram_content_publish'],encryptedToken:encryptToken('private-fixture-token',legacy,f.owner,f.connection)}});
+ const {data}=await publishingService(db,client,legacy,true).create(f.owner,randomUUID(),f.input);
+ await db.collection('publishIntents').updateOne({_id:data.id as never},{$set:{state:'outcome_unknown',containerId:'100001'}});
+ const before=await db.collection('publishIntents').findOne({_id:data.id as never});let calls=0;const unexpected=async()=>{calls++;throw Error('No legacy token may reach the direct provider');};
+ await publishWorker(db,client,cfg,{create:unexpected,status:unexpected,publish:unexpected,permalink:unexpected},'https://media.test').tick(f.owner);
+ assert.equal((await f.service.get(f.owner,data.id)).state,'needs_attention');assert.equal(calls,0);
+ const after=await db.collection('publishIntents').findOne({_id:data.id as never});assert.deepEqual(after?.encryptedToken,before?.encryptedToken);assert.equal(after?.containerId,before?.containerId);assert.equal(after?.provider,'facebook');assert.equal(after?.providerAppId,legacy.appId);
+ await fail(f.service.action(f.owner,data.id,randomUUID(),'retry',{expectedRevision:after!.revision,confirm:true}),'OUTCOME_UNKNOWN');
+});

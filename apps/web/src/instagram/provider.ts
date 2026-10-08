@@ -20,7 +20,7 @@ function singleResult<T>(schema:z.ZodType<T>,body:unknown):T{
 export function authorizationUrl(config:InstagramConfig,state:string){
  if(config.provider==='facebook')return facebookAuthorizationUrl(config,state);
  const u=new URL('https://www.instagram.com/oauth/authorize');
- u.search=new URLSearchParams({client_id:config.appId,redirect_uri:config.redirectUri,response_type:'code',scope:scopes.join(','),state,enable_fb_login:'false',force_reauth:'true'}).toString();return u.toString();
+ u.search=new URLSearchParams({client_id:config.appId,redirect_uri:config.redirectUri,response_type:'code',scope:scopes.join(','),state,enable_fb_login:'false',force_reauth:'false'}).toString();return u.toString();
 }
 export function instagramProvider(config:InstagramConfig,fetcher:typeof fetch=fetch):InstagramProvider{
  if(config.provider==='facebook')return facebookInstagramProvider(config,fetcher);
@@ -33,7 +33,9 @@ export function instagramProvider(config:InstagramConfig,fetcher:typeof fetch=fe
  }
  async function longToken(path:string,params:Record<string,string>,signal:AbortSignal){
   const u=new URL(`https://graph.instagram.com/${path}`);u.search=new URLSearchParams(params).toString();
-  const t=tokenSchema.parse(await request(u,{},signal));return {token:t.access_token,expiresIn:t.expires_in};
+  const parsed=tokenSchema.safeParse(await request(u,{},signal));
+  if(!parsed.success)throw new ProjectError(502,'INSTAGRAM_RESPONSE_INVALID','Instagram returned an invalid authorization response. Please reconnect.');
+  return {token:parsed.data.access_token,expiresIn:parsed.data.expires_in};
  }
  return {
   async exchange(code){
