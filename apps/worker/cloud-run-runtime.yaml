@@ -1,4 +1,5 @@
-# PREPARED ONLY. Reuses the verified image; bounded runtime code is unchanged.
+# Runtime template: image rebuilt from 32f5d55 on October 10, 2026.
+# Preserve existing deployed secret versions; this file is not a live-state export.
 # Create version 1 of each role-scoped secret separately; no values in source.
 # Applying this file must not execute a job or enable dashboard dispatch.
 apiVersion: run.googleapis.com/v1
@@ -19,7 +20,7 @@ spec:
           timeoutSeconds: '180'
           containers:
             - name: worker
-              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:d71189980fa2d79571758533bafd666b8b1598fb63764f6de975da75fc39d490
+              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:520e300e4063c4d478eba3bc017cb1fef2af8d6fb4e7caef9bb3ee2b9402ba2d
               args: ['storyboard', '--job', 'required']
               resources:
                 limits: {cpu: '2', memory: 4Gi}
@@ -53,7 +54,7 @@ spec:
           timeoutSeconds: '900'
           containers:
             - name: worker
-              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:d71189980fa2d79571758533bafd666b8b1598fb63764f6de975da75fc39d490
+              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:520e300e4063c4d478eba3bc017cb1fef2af8d6fb4e7caef9bb3ee2b9402ba2d
               args: ['generation', '--job', 'required']
               resources:
                 limits: {cpu: '2', memory: 4Gi}
