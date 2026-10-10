@@ -63,8 +63,7 @@ Do not publish the raw local test output without reviewing it.
 
 ## Representative content evaluation
 
-All rows below are **pending** as a 20-topic release evaluation. Historical
-water-cycle success is useful evidence, not a pass for this entire matrix.
+The 20-topic release evaluation is **in progress**. October10 topic1 produced an81.365-second narrated cloud output with complete decode, exact download hashes and owner isolation passing. Its generated precipitation wording required a manual correction; listening and the cyclic-visual check remain open. Rows2–20 have not run. Historical water-cycle success does not pass this matrix.
 Each run needs: project/version IDs, exact provider/model/voice, wall time,
 output duration, attempt count, technical QA, factual reviewer, listening review,
 and visual/caption assessment. Capture sanitized errors and whether a retry made
@@ -123,10 +122,7 @@ scheduled publications passed. The older Facebook Page route was rejected and
 is not required. The worker was rebuilt and its saved-narration render verified
 October 8. Vercel auto-deploys `dev`; the dashboard now runs in Mumbai.
 
-Both execution flags are disabled and both schedulers paused after the bounded
-acceptance window. Recheck live state before any execution. The US$1 approval
-covered the recorded single build/render, not another evaluation batch or ongoing
-operation. Do not waive the 20-topic evaluation or infer zero future cost from
+The October10 refreshed-worker test used a two-execution daily cap. Its dispatch scheduler was paused after the storyboard/render pair; Ready deployment F1XpVexaQD8g7rpX5KVzRbxbJWix with CLOUD_RUN_ENABLED=0 returned503 from cloud-dispatch. Publishing remains disabled. Recheck live state before any execution. The user approved US$10 total additional closeout spending; US$7 was paid as one-time ElevenLabs API credit with Auto Top Up off. The remaining US$3 must cover build, cloud compute, Gemini and ancillary costs; actual cloud billing can lag. This does not authorize subscriptions or indefinite operation. Do not waive the 20-topic evaluation or infer zero future cost from
 rounded billing totals. The steps below are the runbook for a newly authorized
 window, not evidence that the completed setup must be repeated.
 
