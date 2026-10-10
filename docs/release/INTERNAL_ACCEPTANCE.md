@@ -3,6 +3,23 @@
 Status: in progress. Real Post now and scheduled delivery acceptance passed on October 8. The remaining matrix below, including longer-run response reliability, is still open; this is not full release approval.
 `PROJECT_STATUS.md` remains the authoritative implementation/evidence record.
 
+## Current closeout authorization and order
+
+On October 10 the user approved completing the remaining release work, with a
+US$10 total additional spending ceiling for the worker rebuild, cloud verification
+and narrated evaluation. No subscription is authorized. Check final checkout
+totals and reserve cloud/tax headroom; delayed billing is not a real-time cap.
+
+1. Rebuild the reviewed worker and verify one bounded cloud generation.
+2. Complete controlled hosted provider/browser recovery checks.
+3. Execute the 20-topic matrix, recording technical, factual, visual and listening
+   results separately; stop if quota or the spending ceiling prevents completion.
+4. Finish current mobile/end-to-end usability checks. Keep VoiceOver off as
+   requested; do not label semantic checks as actual screen-reader acceptance.
+5. Run integrated release acceptance, then document supervised operating limits
+   and intentionally activate the pilot. Promotion to main remains a separate
+   explicit merge decision. Do not republish test Reels merely to repeat passed evidence.
+
 ## Repeatable local gate
 
 With Node 24 and installed dependencies, from the repository root:
@@ -115,7 +132,7 @@ window, not evidence that the completed setup must be repeated.
 
 1. Choose the reviewed `dev` commit and obtain deployment approval. Keep both
    execution flags disabled. Check active/unknown jobs and intents before changes.
-2. Verify migrations through 019 using the existing database setup flow;
+2. Verify migrations through 022 using the existing database setup flow;
    apply only newly required additive migrations and validate indexes. Never downgrade collections on rollback.
 3. Deploy the reviewed web source to the existing Vercel testing project; verify
    sign-in, two-account isolation, private media access and homepage. Do not merge
@@ -161,8 +178,9 @@ actions; this document and local gate do not perform or authorize them.
 - Missing/corrupt media: use recovery/regeneration to create a new reviewable
   version. Never silently substitute an asset in a confirmed scheduled post.
 
-Full V1 acceptance remains open until live Instagram delivery, the content matrix,
-remaining usability checks and operating requirements are recorded. Any
+Live Instagram immediate and scheduled delivery have passed. Full V1 acceptance
+remains open until the content matrix, remaining usability/recovery checks and
+operating requirements are recorded. Any
 accepted pilot exception must be explicit and scoped; a local green suite is not
 full release approval.
 
