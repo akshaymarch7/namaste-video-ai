@@ -54,16 +54,22 @@ Do not publish the raw local test output without reviewing it.
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
 | Dashboard latency | October 10 aligned Vercel Mumbai with Atlas Mumbai; 12 live reads, two-account isolation and exact media delivery passed; 476 local tests/build passed | Preserve timing evidence for any recurrence; short sample does not guarantee no future timeout |
 | Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; October 10 hosted create-response loss recovered with the same key/body, one project, changed-body rejection and cleanup | October 10 isolated hosted Atlas access-loss/recovery passed with API and browser autosave; controlled local provider transport/worker checks passed (156 targeted tests); hosted provider/browser and actual network-outage evidence remain separate |
-| Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Current renderer rebuilt and saved-narration revision verified October 8; ongoing activation remains paused |
+| Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Current renderer rebuilt and saved-narration revision verified October 8; bounded supervised October 10 evaluation is recorded in the latest Project Status; ongoing activation remains a separate decision |
 | Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery has separate live evidence below |
 | Schedule | October 8 real scheduled @namastevideoai Reel, project tabs closed before due; scheduler processing at due+7.610s, published at due+137.757s; one attempt, exact caption and no duplicate | Passed pilot timed-delivery check; no general timing SLA claimed |
 | Accessibility | F21 responsive/reduced-motion QA; October 10 Chrome dialog focus wrap/Escape and storyboard navigation; direct skip focus → next control → dialog/Escape passed live on f90ad44 | October 10 caption focus/field semantics passed locally and hosted on f56acc6; 17 focused tests/types/build passed. Actual screen-reader review was declined for this run and remains open; remaining end-to-end acceptance/listening are separate |
 | Voice offering | Daniel test voice accepted for pilot | Indian male/female voices unavailable/unverified; do not advertise them as enabled |
-| Operating permission | Internal-only admission; Akshay confirmed personal operation and is the pilot owner; ElevenLabs Free plan observed | Retain provider/license restrictions; free allowances only, no unapproved paid evaluation or continuous workloads |
+| Operating permission | Internal-only admission; Akshay confirmed personal operation and is the pilot owner; ElevenLabs Free plan observed | Retain provider/license restrictions; US$10 total additional closeout budget approved; US$7 one-time API prepaid purchase completed, Auto Top Up off; no subscriptions or indefinite workloads |
 
 ## Representative content evaluation
 
-The 20-topic release evaluation is **in progress**. October10 topic1 produced an81.365-second narrated cloud output with complete decode, exact download hashes and owner isolation passing. Its generated precipitation wording required a manual correction; listening and the cyclic-visual check remain open. Rows2–20 have not run. Historical water-cycle success does not pass this matrix.
+All 20 inputs have now been exercised through hosted storyboard requests. The
+initial matrix exposed bounded validation failures, factual/schematic corrections
+and measured narration overruns; results and separately identified follow-ups are
+recorded in [CONTENT_EVALUATION.md](CONTENT_EVALUATION.md). Successful outputs have
+full decode/hash/isolation/caption probes and authorized Gemini audio review.
+Automated audio review supplements, but does not replace, human listening.
+Do not treat completing the matrix as every topic passing on its first attempt.
 Each run needs: project/version IDs, exact provider/model/voice, wall time,
 output duration, attempt count, technical QA, factual reviewer, listening review,
 and visual/caption assessment. Capture sanitized errors and whether a retry made
