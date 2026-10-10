@@ -53,10 +53,10 @@ export async function dispatchCloud(db:Db,client:MongoClient,config:CloudConfig,
   const outstanding=await ledger.find({state:{$in:active},checkAt:{$lte:now()}}).sort({checkAt:1}).limit(2).toArray();
   for(const record of outstanding){
     if(Date.now()>stopAt)break;
-    // A deployment must not reinterpret receipts from another region/image.
-    if(record.target!==jobName(config,record.role)||record.image!==config.image){result.unavailable++;continue;}
+    // Observe older work in its original namespace and against its original image.
+    if(record.target!==jobName(config,record.role)){result.unavailable++;continue;}
     try{
-      const observed=await provider.observe(record.role,record._id,record.createdAt,record.operation);
+      const observed=await provider.observe(record.role,record._id,record.createdAt,record.operation,record.image);
       await inTransaction(client,async session=>{
         const fresh=await ledger.findOne({_id:record._id,state:{$in:active}},{session});if(!fresh)return;
         const date=now();

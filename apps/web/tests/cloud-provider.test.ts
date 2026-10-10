@@ -76,3 +76,14 @@ test('scheduler endpoint rejects unauthenticated, disabled, query and payload re
   assert.equal((await handleCloudDispatch(streamedEmpty,run,e)).status,200);assert.equal(calls,2);
   const failed=await handleCloudDispatch(req('Bearer '+secret),async()=>{throw Error('private fixture');},e);assert.equal(failed.status,503);assert.equal((await failed.text()).includes('private fixture'),false);
 });
+
+test('historical image observation requires its exact original digest and never alters launch validation',async()=>{
+ const oldImage=c.image.replace(/a{64}$/, 'd'.repeat(64)),old=execution();old.template.containers[0].image=oldImage;
+ const h=harness(url=>Response.json(url.includes('/operations/')?{done:true,response:old}:{executions:[old]}));
+ assert.equal((await h.provider.observe('generation',id,createdAt,operation,oldImage)).terminal,true);
+ assert.deepEqual(await h.provider.observe('generation',id,createdAt,operation),{terminal:false,execution:null});
+ assert.equal(h.calls.filter(x=>x.url.endsWith(':run')).length,0);
+ for(const invalid of ['latest',oldImage.replace('test-project','foreign-project'),oldImage+'extra'])await assert.rejects(h.provider.observe('generation',id,createdAt,operation,invalid));
+ const current=job();current.template.template.containers[0].image=oldImage;
+ await assert.rejects(harness(()=>Response.json(current)).provider.prepare('generation'));
+});

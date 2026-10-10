@@ -11,7 +11,7 @@ export class CloudError extends Error {
 export interface CloudProvider {
   prepare(role:WorkerRole):Promise<string>;
   launch(role:WorkerRole, id:string, etag:string):Promise<LaunchResult>;
-  observe(role:WorkerRole, id:string, createdAt:Date, operation:string|null):Promise<Observation>;
+  observe(role:WorkerRole, id:string, createdAt:Date, operation:string|null,image?:string):Promise<Observation>;
 }
 const token = z.string().min(1).max(16000);
 const container = z.object({name:z.string(),image:z.string(),command:z.array(z.string()).optional(),args:z.array(z.string()).optional(),resources:z.object({limits:z.record(z.string(),z.string())}).optional()});
@@ -49,11 +49,11 @@ export function googleCloudProvider(c:CloudConfig, request:typeof fetch=fetch,
     access??=authenticate();
     return json(`https://run.googleapis.com/v2/${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${await access}`,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
   }
-  function validExecution(value:unknown,role:WorkerRole,id:string,createdAt:Date){
+  function validExecution(value:unknown,role:WorkerRole,id:string,createdAt:Date,expectedImage:string){
     const parsed=execution.safeParse(value);if(!parsed.success)return null;
     const e=parsed.data,worker=e.template.containers[0];
     if(!bases.some(base=>{const prefix=`${base}/jobs/namastevideo-${role}/executions/`;return e.name.startsWith(prefix)&&/^[-a-z0-9]+$/.test(e.name.slice(prefix.length));})
-      ||e.template.containers.length!==1||worker.image!==c.image||JSON.stringify(worker.args)!==JSON.stringify([role,'--job',id])
+      ||e.template.containers.length!==1||worker.image!==expectedImage||JSON.stringify(worker.args)!==JSON.stringify([role,'--job',id])
       ||!Number.isFinite(Date.parse(e.createTime))||Date.parse(e.createTime)<createdAt.getTime()-5000)return null;
     return e;
   }
@@ -79,13 +79,17 @@ export function googleCloudProvider(c:CloudConfig, request:typeof fetch=fetch,
         return {state:'submitted',operation:op.data.name};
       } catch {return {state:'unknown',code:'LAUNCH_UNCONFIRMED'};}
     },
-    async observe(role,id,createdAt,operation){
+    async observe(role,id,createdAt,operation,expectedImage=c.image){
+      // Observe historical work against its original immutable image without
+      // changing launch validation or permitting a foreign repository.
+      const prefix=c.image.split('@')[0]+'@sha256:';
+      if(!expectedImage.startsWith(prefix)||!/^[a-f0-9]{64}$/.test(expectedImage.slice(prefix.length)))throw new CloudError('OBSERVATION_UNAVAILABLE');
       if(operation){
         if(!validOperation(operation))throw Error('INVALID_OPERATION');
         const r=await api(operation);
         const op=z.object({done:z.boolean().optional(),response:z.unknown().optional(),error:z.unknown().optional()}).safeParse(r.data);
         if(r.ok&&op.success&&op.data.done){
-          const e=validExecution(op.data.response,role,id,createdAt);
+          const e=validExecution(op.data.response,role,id,createdAt,expectedImage);
           if(e)return {terminal:Boolean(e.completionTime),execution:e.name};
           // An operation error alone may hide an execution; inspect executions below.
         }
@@ -95,7 +99,7 @@ export function googleCloudProvider(c:CloudConfig, request:typeof fetch=fetch,
         const r=await api(`${jobName(c,role)}/executions?pageSize=100${page?`&pageToken=${encodeURIComponent(page)}`:''}`);
         const list=z.object({executions:z.array(z.unknown()).optional(),nextPageToken:z.string().max(4000).optional()}).safeParse(r.data);
         if(!r.ok||!list.success)throw new CloudError('OBSERVATION_UNAVAILABLE',r.status);
-        const matches=(list.data.executions??[]).map(e=>validExecution(e,role,id,createdAt)).filter(e=>e!==null);
+        const matches=(list.data.executions??[]).map(e=>validExecution(e,role,id,createdAt,expectedImage)).filter(e=>e!==null);
         // More than one matching execution is an operator incident, never a reason to launch.
         if(matches.length>1)throw Error('CLOUD_DUPLICATE_EXECUTION');
         if(matches[0])return {terminal:Boolean(matches[0].completionTime),execution:matches[0].name};
