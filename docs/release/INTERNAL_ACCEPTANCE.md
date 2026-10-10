@@ -248,6 +248,18 @@ disabled; read checks must not enable schedulers or issue render/publish command
 
 ## Bounded Instagram token maintenance
 
+**Pilot configuration (October 10, 2026):** daily operation approved by the owner.
+Job `namastevideo-instagram-refresh` in `namastevideo-dev-20261007/us-east1`
+uses 09:00 Asia/Calcutta, an empty POST to the canonical endpoint, a dedicated
+Production bearer, a 60-second deadline and no automatic retries. Live acceptance
+results are recorded in Project Status. Other schedulers remain independent.
+
+To stop maintenance, pause this job and set `INSTAGRAM_REFRESH_ENABLED=0` in
+Vercel Production, then redeploy. A fresh connection is expected to return
+`skipped`; this is not evidence of a successful Meta token extension. The owner
+should inspect failed executions and expiring/reconnect-required connections.
+
+
 The disabled-by-default `POST /api/internal/instagram-refresh` accepts an empty
 body and no query string, using a **separate** server-only bearer in
 `INSTAGRAM_REFRESH_SCHEDULER_SECRET` (32+ random characters). It returns 503
