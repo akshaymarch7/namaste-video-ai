@@ -33,7 +33,7 @@ Do not publish the raw local test output without reviewing it.
 | Requirement | Existing evidence | Remaining acceptance |
 |---|---|---|
 | Private workspaces/auth | October 8 hosted two-account sign-in, project/version/media/asset denial and destination isolation passed; detailed evidence in Project Status | Retain isolation checks when authorization scope or storage boundaries change |
-| Direct Instagram connection | @namastevideoai real Instagram consent/callback, clean reload, expected workspace, consumed OAuth receipt, encrypted token and HTTP 200 profile check passed on October 8 | Public access needs applicable Advanced Access/App Review; lifecycle callbacks and recurring token refresh remain pending; this does not prove publishing |
+| Direct Instagram connection | @namastevideoai real Instagram consent/callback, clean reload, expected workspace, consumed OAuth receipt, encrypted token and HTTP 200 profile check passed on October 8 | Public access needs applicable Advanced Access/App Review; lifecycle callbacks passed live October 10; recurring token refresh remains pending; this does not prove publishing |
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
 | Dashboard latency | October 10 aligned Vercel Mumbai with Atlas Mumbai; 12 live reads, two-account isolation and exact media delivery passed; 476 local tests/build passed | Preserve timing evidence for any recurrence; short sample does not guarantee no future timeout |
 | Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; October 10 hosted create-response loss recovered with the same key/body, one project, changed-body rejection and cleanup | Controlled hosted outage/recovery drill before continuous operation |
@@ -435,3 +435,18 @@ without replacing unrelated NamasteDev settings, plus explicit approval for a
 real destructive deletion/reconnect test. No real user data has been erased by
 this implementation. Legal retention policy and public-creator readiness are not
 established by these technical tests. See the Meta deletion contract linked above.
+
+
+### October 10 lifecycle live acceptance
+
+Migrations 020–022 are applied. Both canonical Instagram-product callback URLs are
+registered and enabled. Actual removal delivered HTTP 200 to both handlers after
+numeric-ID, verified-alias and transport fixes. The second deletion completed
+automatically; the first was explicitly operator-reviewed after an unmapped-ID
+finding. Pilot connection was restored through real OAuth. Local publishing
+history was deleted with approval, while both generated videos/four assets and
+both original Instagram Reels remain. Live replay against restored consent was
+not executed following an automatic approval-review rejection; automated replay
+and newer-consent tests passed. Earlier “pending” activation text above is retained
+as a runbook, not the current live state. Renewal and workload schedulers remain
+disabled; this does not close the remaining F22 gates.
