@@ -1,3 +1,5 @@
+import {requestInstagramDeletion,completeReviewedDeletion,deletionStatus} from '../src/instagram/deletion';
+import {setupInstagramDeletion} from '../src/instagram/deletion-setup';
 import {inTransaction} from '../src/db/client';
 import {deauthorizeInstagram,fenceAuthorization} from '../src/instagram/lifecycle';
 import {setupInstagramLifecycle} from '../src/instagram/lifecycle-setup';
@@ -171,3 +173,37 @@ test('revocation pauses queued publication, preserves published history and does
 });
 
 async function registerLifecycle(f:Awaited<ReturnType<typeof fixture>>){const account=f.input.payload.destination.instagramUserId;await inTransaction(client,session=>fenceAuthorization(db,cfg,account,account,new Date(Date.now()-10000),session));}
+
+test('deletion removes mapped details, retains local media and prevents reposting after reconnection',async()=>{
+ await setupInstagramDeletion(db);const f=await fixture(),other=await fixture();await registerLifecycle(f);await f.service.create(f.owner,randomUUID(),f.input);await other.service.create(other.owner,randomUUID(),other.input);
+ const original=await db.collection('instagramConnections').findOne({_id:f.connection as never});const event={userId:f.input.payload.destination.instagramUserId,issuedAt:new Date()};
+ const result=await requestInstagramDeletion(db,client,cfg,event);assert.match(result.confirmation_code,/^[a-f0-9]{64}$/);assert.ok(result.url.endsWith(result.confirmation_code));assert.equal((await deletionStatus(db,result.confirmation_code))?.state,'completed');
+ for(const collection of ['publishIntents','publishRevisions'])assert.equal(await db.collection(collection).countDocuments({ownerId:f.owner}),0);
+ assert.equal((await db.collection('instagramConnections').findOne({_id:f.connection as never}))?.instagramUserId,undefined);assert.ok(await db.collection('videos').findOne({_id:f.video as never}));assert.ok(await db.collection('assets').findOne({_id:f.asset as never}));assert.equal(await db.collection('publishIntents').countDocuments({ownerId:other.owner}),1);
+ assert.deepEqual(await requestInstagramDeletion(db,client,cfg,event),result);
+ await db.collection('instagramConnections').updateOne({_id:f.connection as never},{$set:{state:'connected',instagramUserId:original!.instagramUserId,username:original!.username,accountType:original!.accountType,provider:'instagram',providerAppId:cfg.appId,tokenKind:'instagram_user',encryptedToken:original!.encryptedToken,scopes:original!.scopes}});
+ const current=await db.collection('instagramConnections').findOne({_id:f.connection as never});await fail(f.service.create(f.owner,randomUUID(),{...f.input,payload:{...f.input.payload,destination:{...f.input.payload.destination,destinationEpoch:current!.destinationEpoch}}}),'PUBLICATION_HISTORY_REMOVED');
+});
+test('uncertain submission stays in review until explicit operator completion',async()=>{
+ const f=await fixture();await registerLifecycle(f);const {data}=await f.service.create(f.owner,randomUUID(),f.input);await db.collection('publishIntents').updateOne({_id:data.id as never},{$set:{state:'submitting'}});
+ const result=await requestInstagramDeletion(db,client,cfg,{userId:f.input.payload.destination.instagramUserId,issuedAt:new Date()});assert.equal((await deletionStatus(db,result.confirmation_code))?.state,'needs_review');const pending=await db.collection('publishIntents').findOne({_id:data.id as never});assert.equal(pending?.state,'needs_attention');assert.equal(pending?.encryptedToken,undefined);
+ await f.worker().tick(f.owner);assert.equal(f.counts().publishes,0);await completeReviewedDeletion(db,client,result.confirmation_code);assert.equal((await deletionStatus(db,result.confirmation_code))?.state,'completed');assert.equal(await db.collection('publishIntents').countDocuments({ownerId:f.owner}),0);await completeReviewedDeletion(db,client,result.confirmation_code);
+});
+test('concurrent callback replay uses one receipt and unmapped identities cannot falsely complete',async()=>{
+ const f=await fixture();await registerLifecycle(f);const event={userId:f.input.payload.destination.instagramUserId,issuedAt:new Date()};const [a,b]=await Promise.all([requestInstagramDeletion(db,client,cfg,event),requestInstagramDeletion(db,client,cfg,event)]);assert.deepEqual(a,b);
+ const unknown=await requestInstagramDeletion(db,client,cfg,{userId:'999999999999',issuedAt:new Date()});assert.equal((await deletionStatus(db,unknown.confirmation_code))?.state,'needs_review');await fail(completeReviewedDeletion(db,client,unknown.confirmation_code),'IDENTITY_REVIEW_REQUIRED');assert.equal(await deletionStatus(db,'x'),null);assert.equal(await deletionStatus(db,'0'.repeat(64)),null);assert.deepEqual(Object.keys((await deletionStatus(db,unknown.confirmation_code))!).sort(),['state','updatedAt']);
+});
+test('deletion during publication fences late success and prevents another provider POST',async()=>{
+ const f=await fixture();await registerLifecycle(f);await f.service.create(f.owner,randomUUID(),f.input);await f.worker().tick(f.owner);f.advance();let release!:(id:string)=>void;let calls=0;f.provider.publish=async()=>{calls++;return new Promise(r=>release=r);};const flight=f.worker().tick(f.owner);while(!release)await new Promise(r=>setTimeout(r,5));
+ const result=await requestInstagramDeletion(db,client,cfg,{userId:f.input.payload.destination.instagramUserId,issuedAt:new Date()});release('900');await flight;assert.equal((await deletionStatus(db,result.confirmation_code))?.state,'needs_review');await completeReviewedDeletion(db,client,result.confirmation_code);f.advance();await f.worker().tick(f.owner);assert.equal(calls,1);
+});
+test('newer consent and unscoped historical snapshots remain in review',async()=>{
+ const f=await fixture();await registerLifecycle(f);const result=await requestInstagramDeletion(db,client,cfg,{userId:f.input.payload.destination.instagramUserId,issuedAt:new Date(Date.now()-60000)});assert.equal((await deletionStatus(db,result.confirmation_code))?.state,'needs_review');
+ const g=await fixture();await registerLifecycle(g);await g.service.create(g.owner,randomUUID(),g.input);await db.collection('publishIntents').deleteMany({ownerId:g.owner});await db.collection('instagramConnections').updateOne({_id:g.connection as never},{$set:{instagramUserId:'88888888888'}});
+ const ambiguous=await requestInstagramDeletion(db,client,cfg,{userId:g.input.payload.destination.instagramUserId,issuedAt:new Date()});assert.equal((await deletionStatus(db,ambiguous.confirmation_code))?.state,'needs_review');await fail(completeReviewedDeletion(db,client,ambiguous.confirmation_code),'HISTORY_SCOPE_REVIEW_REQUIRED');
+});
+test('database failure during deletion rolls back receipt, credential removal and deleted history',async()=>{
+ const f=await fixture();await registerLifecycle(f);await f.service.create(f.owner,randomUUID(),f.input);const before=await db.collection('instagramConnections').findOne({_id:f.connection as never});const count=await db.collection('instagramDeletions').countDocuments();
+ const faulty=new Proxy(db,{get(target,key){if(key==='collection')return (name:string)=>{const collection=target.collection(name);if(name!=='publishRevisions')return collection;return new Proxy(collection,{get(t,k){if(k==='deleteMany')return ()=>{throw Error('injected cleanup failure');};const value=Reflect.get(t,k);return typeof value==='function'?value.bind(t):value;}});};const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}});
+ await assert.rejects(requestInstagramDeletion(faulty,client,cfg,{userId:f.input.payload.destination.instagramUserId,issuedAt:new Date()}));assert.deepEqual(await db.collection('instagramConnections').findOne({_id:f.connection as never}),before);assert.equal(await db.collection('publishIntents').countDocuments({ownerId:f.owner}),1);assert.equal(await db.collection('instagramDeletions').countDocuments(),count);
+});

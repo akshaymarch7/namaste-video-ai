@@ -83,7 +83,7 @@ export function instagramService(db:Db,client:MongoClient,config:InstagramConfig
    }catch(e){
     await states.updateOne({_id:receipt._id,state:'exchanging'},{$set:{state:'failed',updatedAt:new Date()}}).catch(()=>undefined);
     if(e instanceof MongoServerError&&e.code===11000)return result('account_unavailable');
-    const outcomes:Record<string,string>={INSTAGRAM_PERMISSIONS_REQUIRED:'permissions',INSTAGRAM_PROFESSIONAL_REQUIRED:'professional_required',INSTAGRAM_PAGE_REQUIRED:'page_required',INSTAGRAM_PAGE_UNAVAILABLE:'page_unavailable',INSTAGRAM_STATE_INVALID:'expired',CONNECTION_RECONCILIATION_PENDING:'pending_publication'};
+    const outcomes:Record<string,string>={INSTAGRAM_PERMISSIONS_REQUIRED:'permissions',INSTAGRAM_PROFESSIONAL_REQUIRED:'professional_required',INSTAGRAM_PAGE_REQUIRED:'page_required',INSTAGRAM_PAGE_UNAVAILABLE:'page_unavailable',INSTAGRAM_STATE_INVALID:'expired',INSTAGRAM_DELETION_PENDING:'deletion_pending',CONNECTION_RECONCILIATION_PENDING:'pending_publication'};
     return result(e instanceof ProjectError?(outcomes[e.code]??'provider_error'):'provider_error');
    }
   },

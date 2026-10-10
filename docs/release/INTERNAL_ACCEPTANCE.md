@@ -362,3 +362,73 @@ Primary sources read October 10, 2026:
 The last source also requires deletion requests to return a confirmation code and
 human-readable status URL; this deauthorization endpoint intentionally does not
 claim to satisfy that separate deletion contract.
+
+## Instagram data-deletion requests
+
+The implemented callback is `POST https://namastevideo.ai/api/instagram/data-deletion`.
+It is disabled unless both `INSTAGRAM_LIFECYCLE_ENABLED=1` and
+`INSTAGRAM_DELETION_ENABLED=1`. Migrations 020 and **021-instagram-deletion** must
+be applied, and existing accounts must have the verified OAuth subject mapping.
+The callback shares the bounded form/HMAC verification used for deauthorization.
+It returns Meta's `{url, confirmation_code}` receipt only after transaction commit.
+Receiving that receipt is not a promise that deletion has completed.
+
+The high-entropy status URL `/instagram/deletion/<code>` is public without sign-in,
+no-store, no-referrer and noindex. It displays only completed/review status and an
+update time; no account, owner, username, caption, video or internal review reason.
+Missing or unavailable records never render a completed status. Treat the link as
+private even though it carries no identifying profile data.
+
+Scope and retained records:
+
+- Remove the verified account's connection/profile/credential fields, related
+  publish intents, matching approved-payload snapshots and media-ingest grants.
+  Clear relevant OAuth/disconnect receipts and the lifecycle profile mapping.
+  Recompute library flags. This removes local publication history, not Instagram
+  posts, generated MP4/audio/assets, project ideas or the NamasteVideo login.
+- Retain minimal deletion receipts and lifecycle replay timestamps/subject hashes,
+  existing command hashes/references, disconnected connection shells and hash-only
+  duplicate-publication markers. These are pseudonymous safety records, not a
+  claim of total erasure or anonymization. The status page discloses retention.
+  A removed version/account combination is conservatively blocked from publishing
+  again, including through replacement or retry and after feature flags change.
+- Different-app/account data is not selected for automatic cleanup. Legacy
+  snapshots lack provider-app provenance: if matching snapshots have no owner
+  corroborated by a matching current connection/intent, retain the request for
+  identity/history review rather than falsely claiming completion.
+
+Known mapped requests without uncertain submission or newer consent finish in
+one transaction. Same subject/issued_at callbacks replay the same random receipt.
+Unmapped identity, newer consent, ambiguous history or potentially submitted posts
+remain `needs_review`. Tokens/grants for a known mapping are removed immediately;
+work is paused/fenced and fresh authorization/publication is blocked during review.
+Already in-flight provider requests may still finish externally. Late results
+cannot recreate removed data or overwrite the review state.
+
+Operator completion is a separate, explicit destructive action:
+
+```
+npm run instagram:deletion --workspace apps/web -- status <confirmation-code>
+npm run instagram:deletion --workspace apps/web -- complete <confirmation-code> --confirm-account-and-publication-review
+```
+
+Before `complete`, verify the exact account/consent and inspect any submitted post
+on Instagram using the established internal operator process. The flag attests
+that review; it does not perform a provider query or prove an outcome. Completion
+retains the duplicate guard and makes no provider POST. Unmapped or ambiguous
+historical data cannot be bypassed by this flag: resolve identity/provenance with
+a reviewed operator data repair first, or keep the status pending. There is no
+public completion endpoint, automatic operator waiver or silent retry of a post.
+Use the status command after a lost CLI response; completion is idempotent.
+
+Migration 021 adds `instagramDeletions` (unique event hash, subject/state and
+app/profile/state indexes) and `instagramPublicationTombstones` (unique hash key),
+with strict validators and no TTL. This pilot processes an account's history in
+one transaction. Large accounts require a separately designed bounded erasure
+worker; timeout/failure rolls back and returns 503, never a false success.
+
+Live activation requires configuring the Instagram product's deletion callback
+without replacing unrelated NamasteDev settings, plus explicit approval for a
+real destructive deletion/reconnect test. No real user data has been erased by
+this implementation. Legal retention policy and public-creator readiness are not
+established by these technical tests. See the Meta deletion contract linked above.

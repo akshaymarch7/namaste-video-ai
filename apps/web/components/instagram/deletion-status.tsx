@@ -1,0 +1,9 @@
+import {AuthShell,AccessMark} from '../auth-shell';
+
+type Props={state:'completed'|'needs_review'|'not_found'|'unavailable';updatedAt?:string};
+export function DeletionStatus(props:Props){return <AuthShell><DeletionStatusContent {...props}/></AuthShell>;}
+export function DeletionStatusContent({state,updatedAt}:Props){
+ const title={completed:'Instagram data removed.',needs_review:'Your request is under review.',not_found:'Request not found.',unavailable:'Status temporarily unavailable.'}[state];
+ const message={completed:'The linked Instagram connection and publishing details have been removed from NamasteVideo.',needs_review:'We received your request. We need to verify the account or review a potentially submitted post before completing deletion. Contact your pilot administrator using your usual internal channel and share this status link.',not_found:'Check the exact status link supplied by Instagram. This page does not confirm a deletion.',unavailable:'We cannot check the request right now. Please refresh this page later. Your request has not been marked complete.'}[state];
+ return <section className="auth-card recovery-card"><AccessMark/><p className="eyebrow">INSTAGRAM DATA REQUEST</p><h1>{title}</h1><p className="auth-description">{message}</p>{updatedAt&&<p>Last updated: <time dateTime={updatedAt}>{new Date(updatedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'})+' IST'}</time></p>}<div className="recovery-instructions"><p>Your generated videos and NamasteVideo sign-in account are separate. Posts already on Instagram are not deleted by this request.</p><p>Minimal request, replay-prevention and duplicate-post safety records are retained. Removed publication details cannot be recovered, and previously submitted video versions cannot be posted again to the same account through this app.</p></div><a className="button button-secondary" href="/">Return home</a></section>;
+}

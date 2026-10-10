@@ -1,3 +1,5 @@
+import {setupInstagramDeletion} from '../src/instagram/deletion-setup';
+import {requestInstagramDeletion} from '../src/instagram/deletion';
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHmac,randomBytes} from 'node:crypto';
@@ -79,4 +81,9 @@ test('enabled lifecycle rejects missing migration or app-scoped grant identity',
  const svc=instagramService(db,client,config,{...provider,exchange:async()=>{const {oauthUserId,...rest}=grant('777');return rest;}});
  assert.match(await svc.callback('missing-subject','session',state(await svc.connect('missing-subject','session',{})),'code',false),/provider_error/);
  assert.equal((await svc.get('missing-subject'))?.state,'disconnected');
+});
+test('deletion during first OAuth exchange prevents restoration of access',async()=>{
+ await setupInstagramDeletion(db);let release!:(g:Grant)=>void;const svc=instagramService(db,client,config,{exchange:()=>new Promise(r=>release=r),refresh:async()=>({token:'x',expiresIn:86400})});
+ const pending=svc.callback('deletion-owner','session',state(await svc.connect('deletion-owner','session',{})),'code',false);while(!release)await new Promise(r=>setTimeout(r,5));
+ const receipt=await requestInstagramDeletion(db,client,config,{userId:'666',issuedAt:new Date()});assert.ok(receipt.confirmation_code);release(grant('666'));assert.match(await pending,/deletion_pending/);assert.equal((await svc.get('deletion-owner'))?.state,'disconnected');
 });

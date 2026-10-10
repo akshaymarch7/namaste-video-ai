@@ -1,3 +1,4 @@
+import {publicationTombstone} from '../instagram/deletion-guard';
 import 'server-only';
 import {randomUUID} from 'node:crypto';
 import {Long,MongoServerError,type Db,type MongoClient,type Document,type ClientSession} from 'mongodb';
@@ -31,7 +32,10 @@ export async function validatePublication(db:Db,ownerId:string,input:PublishInpu
  const a=await db.collection('videoApprovals').findOne({_id:input.payload.videoApprovalId as never,ownerId,projectId:p._id,subjectId:v._id,outputHash:v.outputHash,renderSpecHash:v.renderSpecHash},{session});
  if(!a)throw issue('VIDEO_NOT_APPROVED','Approve this video version before publishing.');
  if(!await db.collection('assets').findOne({_id:v.outputAssetId,ownerId,projectId:p._id,kind:'video',state:'ready',sha256:v.outputHash},{session}))throw issue('VIDEO_NOT_READY','The approved video is unavailable.');
- const d=input.payload.destination,c=await db.collection<PublishRow>('instagramConnections').findOne({_id:d.connectionId,ownerId},{session});
+ const d=input.payload.destination;
+ if(await db.collection('instagramPublicationTombstones').findOne({_id:publicationTombstone(ownerId,input.payload.videoId,d.instagramUserId) as never},{session}))throw issue('PUBLICATION_HISTORY_REMOVED','Prior publication data was removed. This version cannot be posted to that account again.');
+ if(await db.collection('instagramDeletions').findOne({appId:config.appId,profileId:d.instagramUserId,state:'needs_review'},{session}))throw issue('INSTAGRAM_DELETION_PENDING','Instagram data deletion is still under review.');
+ const c=await db.collection<PublishRow>('instagramConnections').findOne({_id:d.connectionId,ownerId},{session});
  if(!c||c.instagramUserId!==d.instagramUserId||c.destinationEpoch!==d.destinationEpoch)throw issue('DESTINATION_CHANGED','Review the current Instagram destination.');
  if(c.state!=='connected'||!c.encryptedToken||(c.expiresAt&&c.expiresAt<=new Date())||c.providerAppId!==config.appId||(c.provider??'instagram')!==(config.provider??'instagram'))throw issue('RECONNECT_REQUIRED','Reconnect this Instagram account before publishing.');
  const required=config.provider==='facebook'?'instagram_content_publish':'instagram_business_content_publish';if(!c.scopes.includes(required))throw issue('RECONNECT_REQUIRED','Grant publishing permission when reconnecting.');

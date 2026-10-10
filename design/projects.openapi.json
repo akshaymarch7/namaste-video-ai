@@ -5601,6 +5601,71 @@
         }
       }
     },
+    "/api/instagram/data-deletion": {
+      "post": {
+        "operationId": "requestInstagramDataDeletion",
+        "security": [],
+        "description": "Signed Meta deletion callback. Requires lifecycle and deletion flags plus migrations 020/021. Same subject and issued_at replay returns the same opaque confirmation code. Verified mapped data is removed transactionally; unknown publication outcomes, newer consent or ambiguous identity/history remain under operator review. Generated videos, login accounts, Instagram posts and minimal replay/duplicate safety records are retained. No auth cookies required.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "signed_request"
+                ],
+                "properties": {
+                  "signed_request": {
+                    "type": "string",
+                    "maxLength": 16384
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable receipt; this response does not mean deletion completed. Open the status URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "url",
+                    "confirmation_code"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "confirmation_code": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid signature/payload/query or body timeout."
+          },
+          "413": {
+            "description": "Body exceeds 20KB."
+          },
+          "415": {
+            "description": "Expected form encoding."
+          },
+          "503": {
+            "description": "Disabled, configuration/migration missing, or transaction failed. Retry delivery."
+          }
+        }
+      }
+    },
     "/api/instagram/deauthorize": {
       "post": {
         "operationId": "deauthorizeInstagram",
