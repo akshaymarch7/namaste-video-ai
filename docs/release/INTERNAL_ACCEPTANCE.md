@@ -302,12 +302,12 @@ after activation verification. Do not replace callbacks for another NamasteDev
 product. No callback has been configured by this implementation.
 
 The endpoint defaults off (`INSTAGRAM_LIFECYCLE_ENABLED=0`). It accepts only POST,
-no query, a <=20KB form body with exactly one `signed_request`, and a verified
+no query, a <=20KB form, multipart or exact single-field JSON body with one `signed_request`, and a verified
 HMAC-SHA256 signature made with the configured Instagram App Secret. The payload
 requires a decimal `user_id` string or losslessly parsed integer, algorithm and integer `issued_at`; more than five
 minutes in the future is rejected. Body reading is bounded to two seconds. Old
 legitimate deliveries are accepted, with replay prevention in the database.
-Unverified requests never open the database; errors do not echo payloads.
+Plain-text/unlabelled form or JSON delivery is also accepted, but never unsigned identity payloads. Unverified requests never open the database; errors do not echo payloads.
 
 Migration **020-instagram-lifecycle** creates `instagramLifecycle` with strict
 validation, built-in unique `_id`, no TTL. The key hashes provider/app/app-scoped
@@ -315,8 +315,11 @@ user ID; values are latest revocation/authorization timestamps, update time and
 the verified Instagram profile ID. No secret, raw signature or token is stored.
 The ledger is pseudonymous provider data, not anonymized data; deletion work must
 include it. OAuth records the short-token exchange's `user_id` independently of
-the profile `user_id`. Existing accounts must reconnect after activation to
-establish this mapping; unknown subjects are acknowledged and retained as a
+the profile `user_id`. Migration 022 adds optional app identity and an app/profile index without changing
+migration 020 checksum. OAuth transactionally maps both its verified subject and
+the authenticated profile ID: live Instagram removal delivered the latter. Both
+identities are checked for pending deletion/revocation before saving consent.
+Existing accounts must reconnect after activation to establish these mappings; unknown subjects are acknowledged and retained as a
 revocation watermark, never guessed or applied to another identity.
 
 One transaction advances the revocation watermark, marks the matching current
@@ -337,7 +340,7 @@ not revoke newer recorded consent. No new API permissions are requested.
 
 Activation checklist:
 
-1. Apply migration 020 using the normal reviewed database setup, keep generation
+1. Apply migrations 020 and 022 using the normal reviewed database setup, keep generation
    and publishing disabled, then enable the lifecycle flag in web Production.
 2. Reconnect the pilot account through the real OAuth UI to establish its verified
    app-scoped mapping. Confirm only the existence/match, without printing IDs or
@@ -367,7 +370,7 @@ claim to satisfy that separate deletion contract.
 
 The implemented callback is `POST https://namastevideo.ai/api/instagram/data-deletion`.
 It is disabled unless both `INSTAGRAM_LIFECYCLE_ENABLED=1` and
-`INSTAGRAM_DELETION_ENABLED=1`. Migrations 020 and **021-instagram-deletion** must
+`INSTAGRAM_DELETION_ENABLED=1`. Migrations 020, **021-instagram-deletion** and 022 must
 be applied, and existing accounts must have the verified OAuth subject mapping.
 The callback shares the bounded form/HMAC verification used for deauthorization.
 It returns Meta's `{url, confirmation_code}` receipt only after transaction commit.

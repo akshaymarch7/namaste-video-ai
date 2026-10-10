@@ -36,7 +36,7 @@ async function cleanup(db:Db,request:Row,session:ClientSession){
   await db.collection('instagramCommands').deleteMany({ownerId:row.ownerId},{session});
  }
  // Keep only the replay watermark, not the provider profile mapping.
- await db.collection<Row>('instagramLifecycle').updateOne({_id:request.subjectHash},{$unset:{instagramUserId:''},$set:{updatedAt:new Date()}},{session});
+ await db.collection<Row>('instagramLifecycle').updateMany({$or:[{_id:request.subjectHash},{appId:request.appId,instagramUserId:request.profileId}]},{$unset:{instagramUserId:''},$set:{updatedAt:new Date()}},{session});
  for(const project of new Set(intents.map(r=>r.projectId)))await publishFlags(db,project,session);
  await db.collection<Row>('instagramDeletions').updateOne({_id:request._id},{$set:{state:'completed',reason:'completed',completedAt:new Date(),updatedAt:new Date()},$unset:{profileId:''}},{session});
 }

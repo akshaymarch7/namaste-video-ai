@@ -26,7 +26,7 @@ test('HTTP rejects unsupported, oversized and unsigned bodies before database wo
  const req=(b=body,type='application/x-www-form-urlencoded',url='https://app.test/api/instagram/deauthorize')=>new Request(url,{method:'POST',headers:{'content-type':type},body:b});
  assert.equal((await handleDeauthorization(req(),config,run,false)).status,503);
  assert.equal((await handleDeauthorization(req(),null,run,true)).status,503);
- assert.equal((await handleDeauthorization(req(body,'application/json'),config,run,true)).status,415);
+ assert.equal((await handleDeauthorization(req(body,'application/xml'),config,run,true)).status,415);
  assert.equal((await handleDeauthorization(req('x'.repeat(20001)),config,run,true)).status,413);
  for(const b of ['',body+'&signed_request=x',body+'&extra=1','signed_request=bad'])assert.equal((await handleDeauthorization(req(b),config,run,true)).status,400);
  assert.equal((await handleDeauthorization(req(body,undefined,'https://app.test/api/instagram/deauthorize?x=1'),config,run,true)).status,400);
@@ -63,10 +63,10 @@ test('revocation arriving during first OAuth exchange prevents resurrection with
  const pending=svc.callback('new-owner','session',state(await svc.connect('new-owner','session',{})),'code',false);while(!release)await new Promise(r=>setTimeout(r,5));
  await deauthorizeInstagram(db,client,config,event('222',Math.floor(Date.now()/1000)));release(grant('222'));assert.match(await pending,/expired/);assert.equal((await svc.get('new-owner'))?.state,'disconnected');
 });
-test('app-scoped callback ID maps to profile identity rather than assuming both IDs match',async()=>{
+test('verified profile and OAuth identities both map to the same app-scoped account',async()=>{
  const svc=instagramService(db,client,config,{exchange:async()=>({...grant('333'),oauthUserId:'444'}),refresh:async()=>({token:'x',expiresIn:86400})});
  await svc.callback('mapped-owner','session',state(await svc.connect('mapped-owner','session',{})),'code',false);
- await deauthorizeInstagram(db,client,config,event('333',Math.floor(Date.now()/1000)));assert.equal((await svc.get('mapped-owner'))?.state,'connected');
+ await deauthorizeInstagram(db,client,config,event('333',Math.floor(Date.now()/1000)));assert.equal((await svc.get('mapped-owner'))?.state,'reconnect_required');
  await deauthorizeInstagram(db,client,config,event('444',Math.floor(Date.now()/1000)));assert.equal((await svc.get('mapped-owner'))?.state,'reconnect_required');
 });
 test('a new consent after revocation reconnects; replay cannot remove its new token',async()=>{
@@ -92,4 +92,24 @@ test('signed numeric lifecycle subject retains exact large integer digits',()=>{
  const body=Buffer.from('{"algorithm":"HMAC-SHA256","user_id":17841400000000001,"issued_at":'+issued+'}').toString('base64url');
  const signature=createHmac('sha256',config.appSecret).update(body).digest('base64url');
  assert.equal(verifyDeauthorization(signature+'.'+body,config.appSecret).userId,'17841400000000001');
+});
+
+test('profile-ID deletion removes both verified aliases but preserves another app mapping',async()=>{
+ const svc=instagramService(db,client,config,{exchange:async()=>({...grant('888'),oauthUserId:'889'}),refresh:async()=>({token:'x',expiresIn:86400})});
+ assert.match(await svc.callback('alias-owner','session',state(await svc.connect('alias-owner','session',{})),'code',false),/connected/);
+ await db.collection('instagramLifecycle').insertOne({_id:'a'.repeat(64) as never,appId:'999',instagramUserId:'888',authorizedAt:new Date(),revokedAt:new Date(0),updatedAt:new Date()});
+ const receipt=await requestInstagramDeletion(db,client,config,{userId:'888',issuedAt:new Date()});
+ assert.equal((await db.collection('instagramDeletions').findOne({_id:receipt.confirmation_code as never}))?.state,'completed');
+ assert.equal(await db.collection('instagramLifecycle').countDocuments({appId:config.appId,instagramUserId:'888'}),0);
+ assert.equal(await db.collection('instagramLifecycle').countDocuments({appId:'999',instagramUserId:'888'}),1);
+ assert.equal((await svc.get('alias-owner'))?.state,'disconnected');
+});
+
+test('signed callback accepts bounded JSON, multipart and unlabeled form transports without unsigned payloads',async()=>{
+ let calls=0;const run=async()=>{calls++;};
+ const forms:Request[]=[new Request('https://app.test',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({signed_request:value()})}),new Request('https://app.test',{method:'POST',body:new URLSearchParams({signed_request:value()}).toString()})];
+ const multipart=new FormData();multipart.set('signed_request',value());forms.push(new Request('https://app.test',{method:'POST',body:multipart}));
+ for(const request of forms)assert.equal((await handleDeauthorization(request,config,run,true)).status,200);
+ for(const body of ['{"user_id":"987"}','{"signed_request":"bad","signed_request":"bad"}','{"signed_request":"bad","extra":1}'])assert.equal((await handleDeauthorization(new Request('https://app.test',{method:'POST',headers:{'content-type':'application/json'},body}),config,run,true)).status,400);
+ assert.equal(calls,3);
 });

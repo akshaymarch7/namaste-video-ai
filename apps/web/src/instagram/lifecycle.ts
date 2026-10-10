@@ -30,11 +30,17 @@ export function verifyDeauthorization(value:string,secret:string,now=Date.now())
 export async function fenceAuthorization(db:Db,config:InstagramConfig,userId:string|undefined,instagramUserId:string,startedAt:Date,session:ClientSession){
  if(!userId||!/^\d{1,100}$/.test(userId))throw new ProjectError(502,'INSTAGRAM_RESPONSE_INVALID','Instagram did not return a lifecycle identity. Reconnect.');
  await assertInstagramLifecycleReady(db);
- const rows=db.collection<Row>('instagramLifecycle'),_id=lifecycleSubject(config.appId,userId);
- const row=await rows.findOne({_id},{session});
+ const rows=db.collection<Row>('instagramLifecycle');
+ // Both identities come from the authenticated exchange/profile response. Live Meta
+ // removal callbacks use the profile ID; also fence the OAuth subject for compatibility.
+ for(const identity of [...new Set([userId,instagramUserId])].sort()){
+ const _id=lifecycleSubject(config.appId,identity),row=await rows.findOne({_id},{session});
+ if(row?.instagramUserId&&row.instagramUserId!==instagramUserId)throw new ProjectError(409,'INSTAGRAM_STATE_INVALID','Instagram identity mapping conflicts.');
  if(await db.collection('instagramDeletions').findOne({subjectHash:_id,state:'needs_review'},{session}))throw new ProjectError(409,'INSTAGRAM_DELETION_PENDING','An Instagram deletion request is still under review.');
  if(row&&row.revokedAt.getTime()>=Math.floor(startedAt.getTime()/1000)*1000)throw new ProjectError(409,'INSTAGRAM_STATE_INVALID','Authorization was revoked. Start again.');
- await rows.updateOne({_id},{$set:{updatedAt:new Date(),instagramUserId},$max:{authorizedAt:startedAt},$setOnInsert:{revokedAt:new Date(0)}},{upsert:true,session});
+ await rows.updateOne({_id},{$set:{updatedAt:new Date(),instagramUserId,appId:config.appId},$max:{authorizedAt:startedAt},$setOnInsert:{revokedAt:new Date(0)}},{upsert:true,session});
+ }
+
 }
 export async function deauthorizeInstagram(db:Db,client:MongoClient,config:InstagramConfig,event:{userId:string;issuedAt:Date}){
  if(config.provider==='facebook')throw Error('DIRECT_INSTAGRAM_REQUIRED');
@@ -75,11 +81,19 @@ export async function handleSignedLifecycle(request:Request,config:InstagramConf
  let reader:ReadableStreamDefaultReader<Uint8Array>|undefined,timer:ReturnType<typeof setTimeout>|undefined;
  try{
   if(request.method!=='POST'||new URL(request.url).search)throw invalid();
-  if(request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()!=='application/x-www-form-urlencoded')return new Response(null,{status:415,headers});
+  const contentType=request.headers.get('content-type')??'',encoding=contentType.split(';')[0].trim().toLowerCase();
+  if(!['application/x-www-form-urlencoded','application/json','multipart/form-data','text/plain',''].includes(encoding))return new Response(null,{status:415,headers});
   reader=request.body?.getReader();if(!reader)throw invalid();
   const body=await Promise.race([(async()=>{const chunks:Uint8Array[]=[];let size=0;for(;;){const part=await reader!.read();if(part.done)break;size+=part.value.length;if(size>20000)throw new ProjectError(413,'PAYLOAD_TOO_LARGE','Callback too large.');chunks.push(part.value);}return Buffer.concat(chunks).toString('utf8');})(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(invalid()),2000);})]);
-  const form=new URLSearchParams(body);if([...form.keys()].length!==1||!form.has('signed_request'))throw invalid();
-  const event=verifyDeauthorization(form.get('signed_request')!,config.appSecret);
+  let signedRequest:string;
+  if(encoding==='application/json'||((encoding===''||encoding==='text/plain')&&body.trimStart().startsWith('{'))){
+   // Exact one-field JSON: reject duplicates, extra keys and unsigned payloads.
+   const match=/^\s*\{\s*"signed_request"\s*:\s*"([A-Za-z0-9_.-]+)"\s*\}\s*$/.exec(body);if(!match)throw invalid();signedRequest=match[1];
+  }else{
+   const form=encoding==='multipart/form-data'?await new Response(body,{headers:{'Content-Type':contentType}}).formData():new URLSearchParams(body);
+   if([...form.keys()].length!==1||!form.has('signed_request')||typeof form.get('signed_request')!=='string')throw invalid();signedRequest=form.get('signed_request') as string;
+  }
+  const event=verifyDeauthorization(signedRequest,config.appSecret);
   return Response.json(await run(event),{headers});
  }catch(e){return Response.json({error:{code:e instanceof ProjectError?e.code:'LIFECYCLE_UNAVAILABLE'}},{status:e instanceof ProjectError?e.status:503,headers});}
  finally{clearTimeout(timer);void reader?.cancel().catch(()=>undefined);}
