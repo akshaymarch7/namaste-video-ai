@@ -14,5 +14,5 @@ export function Brand({ documentNavigation = false }: { documentNavigation?: boo
   return <HomeLink className="brand" href="/" aria-label="NamasteVideo home"><span className="brand-mark" aria-hidden="true">▶</span><span>NamasteVideo<span className="accent">.ai</span></span></HomeLink>;
 }
 export function Shell({ children }: { children: ReactNode }) {
-  return <><header className="site-header"><Brand /><span className="preview-label"><span aria-hidden="true" />Development preview</span></header><main id="main" className="container">{children}</main><footer className="site-footer"><span>NamasteVideo.ai</span><span>One idea. One clear story.</span></footer></>;
+  return <><header className="site-header"><Brand /><span className="preview-label"><span aria-hidden="true" />Development preview</span></header><main id="main" tabIndex={-1} className="container">{children}</main><footer className="site-footer"><span>NamasteVideo.ai</span><span>One idea. One clear story.</span></footer></>;
 }

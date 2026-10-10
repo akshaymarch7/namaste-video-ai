@@ -3,7 +3,7 @@ import { Brand } from './ui';
 
 export function AuthShell({ children }: { children: ReactNode }) {
   return <div className="auth-shell"><header className="auth-header"><Brand /><span className="auth-access"><span aria-hidden="true" />Internal access</span></header>
-    <main id="main" className="auth-main">{children}</main>
+    <main id="main" tabIndex={-1} className="auth-main">{children}</main>
     <footer className="auth-footer"><span>One idea. One clear story.</span><span>NamasteVideo.ai</span></footer></div>;
 }
 export function AccessMark() {
