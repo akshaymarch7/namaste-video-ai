@@ -92,3 +92,22 @@ test('local normalization fixes identifier naming and unique cue casing without 
  assert.equal(result.scenes[0].events[0].cue.phrase,'Water');assert.equal(result.scenes[0].narration,raw.scenes[0].narration);assert.equal(raw.scenes[0].events[0].cue.phrase,'water');
  raw.scenes[0].events[0].cue.phrase='missing';bad(normalizeCandidate(raw),'MISSING_CUE');
 });
+
+test('repair receives the precise malformed visual JSON path without diagnostic content',async()=>{
+ let calls=0;const events:PlanningDiagnostic[]=[];
+ const malformed=wire(fixture());malformed.scenes[1].visual.dataJson='{"labels":["private incomplete';
+ const result=await planStoryboard(input,{key:'key',model:'test'},(async(_url:string,options:RequestInit)=>{
+  calls++;if(calls===1)return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(malformed)}]}}]});
+  const repair=JSON.parse(JSON.parse(options.body as string).contents[0].parts[0].text).repair;
+  assert.deepEqual(repair.issues,[{path:'scenes.1.visual.dataJson',code:'INVALID_JSON'}]);return response(fixture());
+ }) as typeof fetch,e=>events.push(e));
+ assert.equal(result.attempts,2);assert.equal(JSON.stringify(events).includes('private incomplete'),false);
+});
+test('bounded repair receives numeric field limits instead of an unexplained too_big code',async()=>{
+ const invalid=fixture();invalid.scenes[0].title='x'.repeat(66);let calls=0;
+ await planStoryboard(input,{key:'key',model:'test'},(async(_url:string,options:RequestInit)=>{
+  calls++;if(calls===1)return response(invalid);
+  const repair=JSON.parse(JSON.parse(options.body as string).contents[0].parts[0].text).repair;
+  assert.ok(repair.issues.some((i:any)=>i.path==='scenes.0.title'&&i.code==='too_big'&&i.maximum===65));return response(fixture());
+ }) as typeof fetch);assert.equal(calls,2);
+});

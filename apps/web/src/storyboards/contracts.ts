@@ -29,6 +29,11 @@ export const storyboardSchema = z.object({
 }).strict();
 export type Storyboard = z.infer<typeof storyboardSchema>;
 export type PlanIssue = { path: string; code: string; actual?: number; minimum?: number; maximum?: number };
+export function schemaIssues(issues:readonly z.core.$ZodIssue[]):PlanIssue[] {
+  return issues.slice(0,30).map(issue=>({path:issue.path.join('.'),code:issue.code,
+    ...('maximum' in issue&&typeof issue.maximum==='number'&&Number.isFinite(issue.maximum)?{maximum:issue.maximum}:{}),
+    ...('minimum' in issue&&typeof issue.minimum==='number'&&Number.isFinite(issue.minimum)?{minimum:issue.minimum}:{})}));
+}
 export class StoryboardInvalid extends Error {
   constructor(public issues: PlanIssue[]) { super('STORYBOARD_INVALID'); }
 }
@@ -40,7 +45,7 @@ function occurrence(text: string, phrase: string, n: number) {
 export function validateStoryboard(raw: unknown, context: {notes: string; voicePreset: string}) {
   const parsed = storyboardSchema.safeParse(raw);
   // Only schema paths and fixed codes leave validation. Never echo model/user text.
-  if(!parsed.success) throw new StoryboardInvalid(parsed.error.issues.slice(0,30).map(i=>({path:i.path.join('.'),code:i.code})));
+  if(!parsed.success) throw new StoryboardInvalid(schemaIssues(parsed.error.issues));
   const plan = parsed.data, issues: PlanIssue[]=[];
   const add=(path:string,code:string)=>{if(issues.length<30)issues.push({path,code});};
   const unique=(values:string[],path:string)=>{if(new Set(values).size!==values.length)add(path,'DUPLICATE_ID');};

@@ -27,8 +27,8 @@ function harness(run:(url:string,init:RequestInit)=>Response|Promise<Response>){
 test('cloud mode is opt-in; malformed destinations, unpinned images and invalid pilot limits fail closed',()=>{
   assert.equal(cloudEnabled({}),false);assert.equal(cloudEnabled({CLOUD_RUN_ENABLED:'true'}),false);assert.equal(cloudEnabled({CLOUD_RUN_ENABLED:'1'}),true);
   assert.equal(cloudConfig(env).dailyLimit,10);
-  assert.equal(cloudConfig({...env,CLOUD_RUN_DAILY_LIMIT:'40'}).dailyLimit,40);
-  for(const override of [{CLOUD_RUN_PROJECT:'../evil'},{CLOUD_RUN_IMAGE:'https://evil.test'},{CLOUD_RUN_DAILY_LIMIT:'41'},{CLOUD_RUN_DAILY_LIMIT:'0'},{CLOUD_RUN_NOT_BEFORE:''},{CLOUD_RUN_REGION:'east/../../evil'}])assert.throws(()=>cloudConfig({...env,...override}));
+  assert.equal(cloudConfig({...env,CLOUD_RUN_DAILY_LIMIT:'50'}).dailyLimit,50);
+  for(const override of [{CLOUD_RUN_PROJECT:'../evil'},{CLOUD_RUN_IMAGE:'https://evil.test'},{CLOUD_RUN_DAILY_LIMIT:'51'},{CLOUD_RUN_DAILY_LIMIT:'0'},{CLOUD_RUN_NOT_BEFORE:''},{CLOUD_RUN_REGION:'east/../../evil'}])assert.throws(()=>cloudConfig({...env,...override}));
 });
 test('verified job template and etag produce one bounded invocation with no content or secrets in args',async()=>{
   const h=harness((url,init)=>{if(!url.endsWith(':run'))return Response.json(job());assert.deepEqual(JSON.parse(init.body as string),{etag:'fixture-etag',overrides:{taskCount:1,timeout:'900s',containerOverrides:[{name:'worker',args:['generation','--job',id]}]}});return Response.json({name:operation});});
