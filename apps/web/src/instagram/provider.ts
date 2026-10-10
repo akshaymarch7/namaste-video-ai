@@ -1,4 +1,5 @@
 import 'server-only';
+import {parseInstagramJson} from './json';
 import {z} from 'zod';
 import {ProjectError} from '../projects/contracts';
 import {scopes} from './contracts';
@@ -28,7 +29,7 @@ export function instagramProvider(config:InstagramConfig,fetcher:typeof fetch=fe
   try{
    const response=await fetcher(url,{...init,signal,redirect:'error',cache:'no-store'});
    const body=await response.text();if(body.length>65536)throw Error();
-   let data:unknown;try{data=JSON.parse(body);}catch{if(response.ok)throw Error();data=null;}
+   let data:unknown;try{data=parseInstagramJson(body);}catch{if(response.ok)throw Error();data=null;}
    if(!response.ok){
     // Meta may report an invalid/expired OAuth token as HTTP 400 with code 190.
     const auth=response.status===401||response.status===403||(response.status===400&&z.object({error:z.object({code:z.literal(190)})}).safeParse(data).success);

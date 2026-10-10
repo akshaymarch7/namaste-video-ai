@@ -304,7 +304,7 @@ product. No callback has been configured by this implementation.
 The endpoint defaults off (`INSTAGRAM_LIFECYCLE_ENABLED=0`). It accepts only POST,
 no query, a <=20KB form body with exactly one `signed_request`, and a verified
 HMAC-SHA256 signature made with the configured Instagram App Secret. The payload
-requires string `user_id`, algorithm and integer `issued_at`; more than five
+requires a decimal `user_id` string or losslessly parsed integer, algorithm and integer `issued_at`; more than five
 minutes in the future is rejected. Body reading is bounded to two seconds. Old
 legitimate deliveries are accepted, with replay prevention in the database.
 Unverified requests never open the database; errors do not echo payloads.

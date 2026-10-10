@@ -1,4 +1,5 @@
 import 'server-only';
+import {parseInstagramJson} from './json';
 import {createHash,createHmac,timingSafeEqual} from 'node:crypto';
 import {MongoServerError,type Db,type MongoClient,type ClientSession,type Document} from 'mongodb';
 import {z} from 'zod';
@@ -19,7 +20,7 @@ export function verifyDeauthorization(value:string,secret:string,now=Date.now())
  if(signature.length!==32||signature.toString('base64url')!==sig||!timingSafeEqual(signature,expected))throw invalid();
  try{
   const decoded=Buffer.from(encoded,'base64url');if(decoded.toString('base64url')!==encoded)throw invalid();
-  const data=payload.parse(JSON.parse(decoded.toString('utf8')));
+  const data=payload.parse(parseInstagramJson(decoded.toString('utf8')));
   if(data.issued_at*1000>now+300000)throw invalid();
   return {userId:data.user_id,issuedAt:new Date(data.issued_at*1000)};
  }catch{throw invalid();}

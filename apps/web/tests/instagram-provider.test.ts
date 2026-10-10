@@ -88,7 +88,7 @@ test('short-token envelopes reject missing, malformed, mixed and multiple result
 });
 
 test('profile envelopes reject missing, malformed, mixed and multiple accounts without selecting one',async()=>{
- const invalid=[null,[],[account],{},envelope(null),envelope({user_id:'123',username:account.username}),envelope({...account,user_id:123}),envelope({...account,user_id:'not-an-id'}),envelope({...account,username:''}),envelope({...account,account_type:null}),{data:[]},{data:[account,{...account,user_id:'456'}]},{data:account},{data:[envelope(account)]},{...account,data:[account]},{...account,data:null}];
+ const invalid=[null,[],[account],{},envelope(null),envelope({user_id:'123',username:account.username}),envelope({...account,user_id:'not-an-id'}),envelope({...account,username:''}),envelope({...account,account_type:null}),{data:[]},{data:[account,{...account,user_id:'456'}]},{data:account},{data:[envelope(account)]},{...account,data:[account]},{...account,data:null}];
  for(const body of invalid){
   const {provider,requests}=fixture([short,long,body]);
   await rejects(provider.exchange('fixture-code'),'INSTAGRAM_RESPONSE_INVALID');
@@ -117,4 +117,10 @@ test('invalid long-lived token and refresh responses are sanitized without anoth
 
 test('exchange preserves app-scoped OAuth subject independently of the profile publishing ID',async()=>{
  const {provider}=fixture([{...short,user_id:'456'},long,account]);const result=await provider.exchange('code');assert.equal(result.oauthUserId,'456');assert.equal(result.account.id,'123');
+});
+
+test('exchange accepts an exact unquoted OAuth identity without number rounding',async()=>{
+ const replies=['{"access_token":"fixture-short-token","user_id":17841400000000001,"permissions":"'+scopes.join(',')+'"}',JSON.stringify(long),JSON.stringify(account)];
+ const provider=instagramProvider(config,async()=>new Response(replies.shift(),{status:200}));
+ assert.equal((await provider.exchange('fixture-code')).oauthUserId,'17841400000000001');
 });

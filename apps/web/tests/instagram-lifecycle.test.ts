@@ -17,7 +17,7 @@ const signed=(data:unknown,secret=config.appSecret)=>{const p=Buffer.from(JSON.s
 const value=()=>signed({algorithm:'HMAC-SHA256',user_id:'987',issued_at:issued});
 test('signature verifies before identity parsing; rejects forged, duplicate separators, invalid algorithm and future time',()=>{
  assert.equal(verifyDeauthorization(value(),config.appSecret).userId,'987');
- for(const v of [value()+'=',value()+'.x',value().slice(1),signed({algorithm:'SHA256',user_id:'987',issued_at:issued}),signed({algorithm:'HMAC-SHA256',user_id:987,issued_at:issued}),signed({algorithm:'HMAC-SHA256',user_id:'987',issued_at:issued+1000}),signed({algorithm:'HMAC-SHA256',user_id:'987',issued_at:issued},'other')])assert.throws(()=>verifyDeauthorization(v,config.appSecret));
+ for(const v of [value()+'=',value()+'.x',value().slice(1),signed({algorithm:'SHA256',user_id:'987',issued_at:issued}),signed({algorithm:'HMAC-SHA256',user_id:-987,issued_at:issued}),signed({algorithm:'HMAC-SHA256',user_id:'987',issued_at:issued+1000}),signed({algorithm:'HMAC-SHA256',user_id:'987',issued_at:issued},'other')])assert.throws(()=>verifyDeauthorization(v,config.appSecret));
  // Old legitimate deliveries are accepted: the durable watermark, not a short time cutoff, handles replay.
  assert.equal(verifyDeauthorization(signed({algorithm:'HMAC-SHA256',user_id:'987',issued_at:1}),config.appSecret).issuedAt.getTime(),1000);
 });
@@ -86,4 +86,10 @@ test('deletion during first OAuth exchange prevents restoration of access',async
  await setupInstagramDeletion(db);let release!:(g:Grant)=>void;const svc=instagramService(db,client,config,{exchange:()=>new Promise(r=>release=r),refresh:async()=>({token:'x',expiresIn:86400})});
  const pending=svc.callback('deletion-owner','session',state(await svc.connect('deletion-owner','session',{})),'code',false);while(!release)await new Promise(r=>setTimeout(r,5));
  const receipt=await requestInstagramDeletion(db,client,config,{userId:'666',issuedAt:new Date()});assert.ok(receipt.confirmation_code);release(grant('666'));assert.match(await pending,/deletion_pending/);assert.equal((await svc.get('deletion-owner'))?.state,'disconnected');
+});
+
+test('signed numeric lifecycle subject retains exact large integer digits',()=>{
+ const body=Buffer.from('{"algorithm":"HMAC-SHA256","user_id":17841400000000001,"issued_at":'+issued+'}').toString('base64url');
+ const signature=createHmac('sha256',config.appSecret).update(body).digest('base64url');
+ assert.equal(verifyDeauthorization(signature+'.'+body,config.appSecret).userId,'17841400000000001');
 });
