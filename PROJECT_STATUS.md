@@ -2495,3 +2495,11 @@ Next release work, in order: (1) controlled hosted recovery plus end-to-end acce
 - Stop deployment `F1XpVexaQD8g7rpX5KVzRbxbJWix` reached Ready on969c3a8. Canonical endpoint probes confirmed cloud-dispatch503 and publish-tick503; renewal401 without its bearer confirms the separately authorized maintenance endpoint remains protected. The new video preview loaded and Chrome playback advanced without a media error. All28 VTT cues are ordered, nonoverlapping and inside the81.365-second output (last ends81.0s). Browser route navigation briefly failed during cutover; direct navigation subsequently loaded the review page. No full browser-reliability or listening pass inferred.
 
 - Final hosted playback observation: Chrome reached ended=true at81.365333/81.365333 seconds with no media error. Screenshot `runs/f22/closeout-live-preview.png`. This confirms complete technical browser playback, not audible pronunciation/naturalness review.
+
+
+## October 10, 2026 — Remaining closeout evaluation (in progress)
+
+- User requested proceeding with all remaining tasks after the batch-limit question. Preparing a configurable40-execution ceiling for the supervised20-topic matrix; default10 and transactional daily counting remain unchanged. No ledger reset, extra retries or concurrency increase. US$10 total cap still applies, including the US$7 prepaid purchase and earlier cloud costs. Live configuration remains disabled pending checks.
+- Files: cloud configuration, provider boundary regression, environment example and worker runbook. Verification pending; this does not mark the remaining evaluation rows as passed. VoiceOver stays off; no main merge or new Instagram publication.
+
+- Configurable-limit verification passed:24 cloud provider/dispatch regressions (including daily-cap refusal without another launch), web typecheck and diff checks. Default remains10,40 is accepted and41 rejected. Initial check was launched from the wrong working directory before edits; final successful run used the correct web workspace.
