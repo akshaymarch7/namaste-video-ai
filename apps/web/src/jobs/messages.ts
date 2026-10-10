@@ -9,6 +9,8 @@ export function generationError(code:string){
   SPEECH_RECOVERY_REQUIRED:'The narration could not be recovered from private storage. We did not repeat the speech request. Check storage before generating again.',
   SPEECH_ACCESS_DENIED:'ElevenLabs denied this request. Check the configured API key and voice permissions.',
   SPEECH_QUOTA_LIMIT:'ElevenLabs returned a quota or rate limit. Check the account before generating again.',
+  SPEECH_TOO_LONG:'The measured narration and scene pauses exceed 90 seconds. Shorten the storyboard narration, then approve a new version. Generating again uses speech credits.',
+  SPEECH_TOO_SHORT:'The measured narration and scene pauses are shorter than 60 seconds. Expand the explanation, then approve a new version. Generating again uses speech credits.',
   SPEECH_TIMING_INVALID:'The measured narration or motion timing did not pass validation. Review the storyboard before generating again.',
   RENDERER_NOT_CONNECTED:'This earlier preparation job has no renderer. Generate a new job from your approved storyboard.',
   JOB_DEADLINE:'The job reached its time limit. Your storyboard and earlier videos are preserved.',

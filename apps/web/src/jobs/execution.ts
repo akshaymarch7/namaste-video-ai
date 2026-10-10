@@ -9,7 +9,7 @@ import {canonical} from '../projects/service';
 import {renderConfigSchema,type RenderConfig} from './render-config';
 import {assertRenderingReady} from './render-setup';
 import type {ReadableObjectStore} from '../storage/r2';
-import {compileV2,spokenText,type MeasuredSpeech} from '../../../../src/plan-v2/compiler';
+import {compileV2,MeasuredDurationError,spokenText,type MeasuredSpeech} from '../../../../src/plan-v2/compiler';
 import {validateStoryboard,type Storyboard} from '../storyboards/contracts';
 import {MAX_ASSET_BYTES} from '../storage/contracts';
 type Doc=Document&{_id:string};
@@ -90,7 +90,10 @@ export async function executeGeneration(db:Db,client:MongoClient,job:Doc,adapter
   await guard(undefined,'rendering');
   let duration:number;
   try{duration=compileV2(plan,{notes:job.inputSnapshot.notes,voicePreset:plan.voicePreset},speech as Record<string,MeasuredSpeech>,false,job.inputSnapshot.captionRevision?.overrides).frames/30;}
-  catch{throw new ExecutionError('SPEECH_TIMING_INVALID');}
+  catch(error){
+   if(error instanceof MeasuredDurationError)throw new ExecutionError(error.frames>2700?'SPEECH_TOO_LONG':'SPEECH_TOO_SHORT');
+   throw new ExecutionError('SPEECH_TIMING_INVALID');
+  }
   const rendered=await adapters.render(plan,job.inputSnapshot.notes,speech,abort.signal,job.inputSnapshot.captionRevision?.overrides);
   if(Math.abs(rendered.duration-duration)>0.1)throw new ExecutionError('RENDER_INVALID');
   await guard(undefined,'uploading');

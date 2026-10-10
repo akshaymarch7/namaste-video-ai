@@ -3,6 +3,10 @@ import {validateStoryboard, type Storyboard} from '../../apps/web/src/storyboard
 import {FPS, cueOffset, type Alignment, type Caption} from '../contracts';
 import {makeCaptions, validateAlignment} from '../pipeline/timing';
 
+export class MeasuredDurationError extends Error {
+  constructor(public readonly frames:number){super('MEASURED_DURATION_OUT_OF_RANGE');}
+}
+
 export type SceneV2 = Storyboard['scenes'][number];
 export type MeasuredSpeech = {alignment: Alignment; duration: number};
 export type MotionEvent = {id: string; targetId: string; action: SceneV2['events'][number]['action']; start: number; frames: number};
@@ -82,7 +86,7 @@ export function compileV2(raw:unknown, context:{notes:string;voicePreset:string}
     cursor+=frames;return result;
   });
   if(used.size!==edits.length)throw Error('INVALID_SPAN');
-  if(cursor<1800||cursor>2700)throw Error('MEASURED_DURATION_OUT_OF_RANGE');
+  if(cursor<1800||cursor>2700)throw new MeasuredDurationError(cursor);
   return {schemaVersion:2,rendererVersion:'plan-v2-2',title:plan.title,fps:30,frames:cursor,fixture,scenes};
 }
 

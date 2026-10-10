@@ -120,9 +120,21 @@ test('upload failure cannot expose a partial ready output',async()=>{
  await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal((await service().get(owner,j.id)).state,'needs_input');
  assert.equal(await db.collection('assets').countDocuments({projectId:s.project.id}),0);assert.equal(await db.collection('renderOutputs').countDocuments({jobId:j.id}),0);
 });
-test('measured timing failure stops before renderer invocation',async()=>{
+test('short measured narration gives actionable duration failure before rendering',async()=>{
  const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble();
  d.adapters.speech=async text=>{const s=syntheticSpeech(text,5);return {audio:'dGVzdA==',alignment:s.alignment,duration:s.duration};};
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal((await service().get(owner,j.id)).errorCode,'SPEECH_TOO_SHORT');assert.equal(d.calls().renderCalls,0);
+});
+test('long measured narration stops before rendering and worker replay does not repeat speech',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble();let calls=0;
+ d.adapters.speech=async text=>{calls++;const speech=syntheticSpeech(text,35);return {audio:'dGVzdA==',alignment:speech.alignment,duration:speech.duration};};
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
+ const view=await service().get(owner,j.id);assert.equal(view.state,'needs_input');assert.equal(view.errorCode,'SPEECH_TOO_LONG');assert.equal(d.calls().renderCalls,0);
+ await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal(calls,3);assert.equal(await db.collection('renderOutputs').countDocuments({jobId:j.id}),0);
+});
+test('alignment failure remains distinct from duration failure',async()=>{
+ const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble(),speech=d.adapters.speech;
+ d.adapters.speech=async(...args)=>{const result=await speech(...args);result.alignment.characters[0]='?';return result;};
  await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal((await service().get(owner,j.id)).errorCode,'SPEECH_TIMING_INVALID');assert.equal(d.calls().renderCalls,0);
 });
 test('lost speech upload acknowledgement recovers exact stored bytes without repeating TTS',async()=>{
