@@ -40,7 +40,7 @@ Do not publish the raw local test output without reviewing it.
 | Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Current renderer rebuilt and saved-narration revision verified October 8; ongoing activation remains paused |
 | Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery has separate live evidence below |
 | Schedule | October 8 real scheduled @namastevideoai Reel, project tabs closed before due; scheduler processing at due+7.610s, published at due+137.757s; one attempt, exact caption and no duplicate | Passed pilot timed-delivery check; no general timing SLA claimed |
-| Accessibility | F21 responsive/reduced-motion QA; October 10 Chrome dialog focus wrap/Escape and storyboard navigation; explicit main skip targets added | Hosted focus-target recheck; full screen reader/end-to-end keyboard review; Safari playback unverified (independent MP4 control also failed) |
+| Accessibility | F21 responsive/reduced-motion QA; October 10 Chrome dialog focus wrap/Escape and storyboard navigation; direct skip focus → next control → dialog/Escape passed live on f90ad44 | Full screen reader/end-to-end keyboard review; Safari playback unverified (independent MP4 control also failed) |
 | Voice offering | Daniel test voice accepted for pilot | Indian male/female voices unavailable/unverified; do not advertise them as enabled |
 | Operating permission | Internal-only admission; Akshay confirmed personal operation and is the pilot owner; ElevenLabs Free plan observed | Retain provider/license restrictions; free allowances only, no unapproved paid evaluation or continuous workloads |
 
@@ -100,24 +100,23 @@ the four-GiB allocation until a reviewed benchmark establishes a safe lower one.
 
 ## Controlled hosted rollout
 
-October 8 continuation: migrations 018–019 passed live; commit `2ddc9e5` is
-already serving the testing domain via Vercel Git auto-deploy. Both execution
-endpoints were verified disabled. The two-account HTTP/browser denial checks
-passed. @namastevideoai conversion and its new Facebook Page were approved and
-created. The user subsequently rejected the Facebook Page flow: leave that Page
-unlinked and complete direct Instagram Login instead. Direct product credentials,
-OAuth acceptance and publication remain pending. User permits free allowances
-only. Do not waive the 20-topic evaluation or infer zero future cost from rounded
-billing totals.
+Current baseline (October 10): migrations through 019, direct Instagram Login
+for @namastevideoai, custom-domain callbacks/media and both real immediate and
+scheduled publications passed. The older Facebook Page route was rejected and
+is not required. The worker was rebuilt and its saved-narration render verified
+October 8. Vercel auto-deploys `dev`; the dashboard now runs in Mumbai.
 
-The current hosted flags/scheduler state must be checked again at execution time.
-The historical baseline is publishing disabled, generation disabled, rendering
-scheduler paused, migrations through 017 and an older rendering image.
+Both execution flags are disabled and both schedulers paused after the bounded
+acceptance window. Recheck live state before any execution. The US$1 approval
+covered the recorded single build/render, not another evaluation batch or ongoing
+operation. Do not waive the 20-topic evaluation or infer zero future cost from
+rounded billing totals. The steps below are the runbook for a newly authorized
+window, not evidence that the completed setup must be repeated.
 
 1. Choose the reviewed `dev` commit and obtain deployment approval. Keep both
    execution flags disabled. Check active/unknown jobs and intents before changes.
-2. Apply additive migrations 018 and 019 using the existing database setup flow;
-   inspect applied versions/index validation. Never downgrade collections on rollback.
+2. Verify migrations through 019 using the existing database setup flow;
+   apply only newly required additive migrations and validate indexes. Never downgrade collections on rollback.
 3. Deploy the reviewed web source to the existing Vercel testing project; verify
    sign-in, two-account isolation, private media access and homepage. Do not merge
    to `main` or enable public registration as part of this step.
