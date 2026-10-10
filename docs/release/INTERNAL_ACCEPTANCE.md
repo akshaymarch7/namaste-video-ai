@@ -40,7 +40,7 @@ Do not publish the raw local test output without reviewing it.
 | Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Current renderer rebuilt and saved-narration revision verified October 8; ongoing activation remains paused |
 | Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery has separate live evidence below |
 | Schedule | October 8 real scheduled @namastevideoai Reel, project tabs closed before due; scheduler processing at due+7.610s, published at due+137.757s; one attempt, exact caption and no duplicate | Passed pilot timed-delivery check; no general timing SLA claimed |
-| Accessibility | F21 responsive/reduced-motion QA; October 10 Chrome dialog focus wrap/Escape and storyboard navigation; direct skip focus → next control → dialog/Escape passed live on f90ad44 | Full screen reader/end-to-end keyboard review; Safari playback smoke passed October 10 with native progression and user visual confirmation; complete listening review remains separate |
+| Accessibility | F21 responsive/reduced-motion QA; October 10 Chrome dialog focus wrap/Escape and storyboard navigation; direct skip focus → next control → dialog/Escape passed live on f90ad44 | October 10 caption focus/field semantics passed locally and hosted on f56acc6; 17 focused tests/types/build passed. Actual screen-reader review was declined for this run and remains open; remaining end-to-end acceptance/listening are separate |
 | Voice offering | Daniel test voice accepted for pilot | Indian male/female voices unavailable/unverified; do not advertise them as enabled |
 | Operating permission | Internal-only admission; Akshay confirmed personal operation and is the pilot owner; ElevenLabs Free plan observed | Retain provider/license restrictions; free allowances only, no unapproved paid evaluation or continuous workloads |
 
@@ -566,7 +566,7 @@ UI-only temporary fixture. Enabled and disabled confirmation tab order, return
 focus, invalid descriptions and supported edits passed. The temporary route and
 server were removed before the production build. Seventeen caption/accessibility
 and video-command regressions passed; the new tests are included in the normal
-client acceptance group. Hosted integrated recheck follows the normal dev push.
+client acceptance group. Hosted integrated recheck passed on Ready deployment `DiKHHWWxCuKjHEm7ZR45LPMiimyK` (source `f56acc6`): 27 caption groups, heading/Confirm/Keep editing focus sequence, return to trigger and linked invalid-field guidance. The test edit was restored exactly; no render or post was submitted. Root/web typechecks and production build passed.
 
 Limits: a transient hosted session verification interruption was visible during
 navigation; its Try again action recovered. This is not a claim that network
