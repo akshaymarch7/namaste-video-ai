@@ -1,3 +1,4 @@
+import {setupInstagramLifecycle} from '../src/instagram/lifecycle-setup';
 import {setupScheduling} from '../src/publishing/schedule-setup';
 import {setupPublishing} from '../src/publishing/setup';
 import {setupCloudDispatch} from '../src/cloud/setup';
@@ -31,11 +32,12 @@ try {
   const storyboards = await setupStoryboards(db); const queue = await setupStoryboardQueue(db); const editable = await setupEditableDrafts(db); const revisions = await setupStoryboardRevisions(db); const snapshots = await setupStoryboardSnapshots(db); const approvals = await setupStoryboardApprovals(db);const storage = await setupStorage(db); const jobs = await setupJobs(db);
   const videos = await setupVideos(db);
   const instagram = await setupInstagram(db);
+  const instagramLifecycle = await setupInstagramLifecycle(db);
   const cloud = await setupCloudDispatch(db);
   const publishing = await setupPublishing(db);
   const scheduling = await setupScheduling(db);
   const repairs = {...await repairGenerationProjectFlags(db,client),...await backfillVideos(db,client)};
-  console.log(JSON.stringify({ status: 'ok', repairs, migrations: [result, projects, drafts, ideas, storyboards, queue, editable, revisions, snapshots, approvals, storage, jobs, videos, instagram, cloud, publishing, scheduling] }));
+  console.log(JSON.stringify({ status: 'ok', repairs, migrations: [result, projects, drafts, ideas, storyboards, queue, editable, revisions, snapshots, approvals, storage, jobs, videos, instagram, cloud, publishing, scheduling, instagramLifecycle] }));
 } catch (error) {
   // Driver diagnostics can include connection strings or document data. Do not print them.
   console.error(JSON.stringify({

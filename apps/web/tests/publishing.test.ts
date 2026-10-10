@@ -1,3 +1,6 @@
+import {inTransaction} from '../src/db/client';
+import {deauthorizeInstagram,fenceAuthorization} from '../src/instagram/lifecycle';
+import {setupInstagramLifecycle} from '../src/instagram/lifecycle-setup';
 import {setupScheduling} from '../src/publishing/schedule-setup';
 import {videoHash} from '../src/videos/materialize';
 import {setupProjects} from '../src/projects/setup';
@@ -149,3 +152,22 @@ test('legacy uncertain publication retains recovery evidence after direct-login 
  const after=await db.collection('publishIntents').findOne({_id:data.id as never});assert.deepEqual(after?.encryptedToken,before?.encryptedToken);assert.equal(after?.containerId,before?.containerId);assert.equal(after?.provider,'facebook');assert.equal(after?.providerAppId,legacy.appId);
  await fail(f.service.action(f.owner,data.id,randomUUID(),'retry',{expectedRevision:after!.revision,confirm:true}),'OUTCOME_UNKNOWN');
 });
+
+
+test('Meta deauthorization fences in-flight publish completion and removes every saved credential',async()=>{
+ await setupInstagramLifecycle(db);const f=await fixture();await registerLifecycle(f);const {data}=await f.service.create(f.owner,randomUUID(),f.input);
+ await f.worker().tick(f.owner);f.advance();let release!:(id:string)=>void;let calls=0;
+ f.provider.publish=async()=>{calls++;return new Promise(r=>release=r);};const flight=f.worker().tick(f.owner);while(!release)await new Promise(r=>setTimeout(r,5));
+ await deauthorizeInstagram(db,client,cfg,{userId:f.input.payload.destination.instagramUserId,issuedAt:new Date()});
+ release('999');await flight;
+ const row=await db.collection('publishIntents').findOne({_id:data.id as never});assert.equal(row?.state,'needs_attention');assert.equal(row?.encryptedToken,undefined);assert.equal(row?.ingestToken,undefined);assert.equal(await db.collection('publishMediaGrants').countDocuments({intentId:data.id}),0);
+ f.advance();await f.worker().tick(f.owner);assert.equal(calls,1);assert.equal((await db.collection('projects').findOne({_id:f.project as never}))?.flags.needsAttention,true);
+});
+test('revocation pauses queued publication, preserves published history and does not affect another account',async()=>{
+ const f=await fixture(),other=await fixture();await registerLifecycle(f);const {data}=await f.service.create(f.owner,randomUUID(),f.input);await other.service.create(other.owner,randomUUID(),other.input);
+ await deauthorizeInstagram(db,client,cfg,{userId:f.input.payload.destination.instagramUserId,issuedAt:new Date()});assert.equal((await f.service.get(f.owner,data.id)).state,'paused_auth');await f.worker().tick(f.owner);assert.equal(f.counts().creates,0);assert.equal((await db.collection('instagramConnections').findOne({_id:other.connection as never}))?.state,'connected');
+ const published=await fixture();await registerLifecycle(published);const done=await published.service.create(published.owner,randomUUID(),published.input);await published.worker().tick(published.owner);published.advance();await published.worker().tick(published.owner);
+ await deauthorizeInstagram(db,client,cfg,{userId:published.input.payload.destination.instagramUserId,issuedAt:new Date()});assert.equal((await published.service.get(published.owner,done.data.id)).state,'published');assert.ok((await published.service.get(published.owner,done.data.id)).permalink);
+});
+
+async function registerLifecycle(f:Awaited<ReturnType<typeof fixture>>){const account=f.input.payload.destination.instagramUserId;await inTransaction(client,session=>fenceAuthorization(db,cfg,account,account,new Date(Date.now()-10000),session));}

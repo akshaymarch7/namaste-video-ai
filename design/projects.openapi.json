@@ -5601,6 +5601,62 @@
         }
       }
     },
+    "/api/instagram/deauthorize": {
+      "post": {
+        "operationId": "deauthorizeInstagram",
+        "security": [],
+        "description": "Meta server callback. Disabled unless INSTAGRAM_LIFECYCLE_ENABLED=1 and migration 020 is ready. Requires HMAC-SHA256 signed_request from the configured Instagram app. App-scoped subject mapping is captured during OAuth. No session/cookie/origin required. Revokes saved credentials; pauses unsent work, leaves submitted outcomes for manual review. Does not delete local projects or Instagram posts.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "signed_request"
+                ],
+                "properties": {
+                  "signed_request": {
+                    "type": "string",
+                    "maxLength": 16384
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Callback applied or replay acknowledged; no account details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid signature/payload/query or body timeout."
+          },
+          "413": {
+            "description": "Body exceeds 20KB."
+          },
+          "415": {
+            "description": "Expected form encoding."
+          },
+          "503": {
+            "description": "Disabled, configuration/migration missing, or transaction failed. Retry delivery."
+          }
+        }
+      }
+    },
     "/api/internal/instagram-refresh": {
       "post": {
         "operationId": "refreshInstagramToken",

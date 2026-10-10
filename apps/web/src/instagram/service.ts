@@ -1,3 +1,5 @@
+import {assertInstagramLifecycleReady} from './lifecycle-setup';
+import {lifecycleEnabled,fenceAuthorization} from './lifecycle';
 import 'server-only';
 import {publishingEnabled,publishFlags} from '../publishing/service';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
@@ -34,6 +36,7 @@ export function instagramService(db:Db,client:MongoClient,config:InstagramConfig
  return {
   async get(ownerId:string){const r=await rows.findOne({ownerId});const result=view(r);if(result)result.pendingIntentCount=await db.collection('publishIntents').countDocuments({ownerId,state:{$nin:['published','cancelled','failed','failed_safe']}});return result;},
   async connect(ownerId:string,sessionId:string,raw:unknown){
+   if(lifecycleEnabled())await assertInstagramLifecycleReady(db);
    const {config}=loginConfigured(),input=connectInput.parse(raw),state=randomBytes(32).toString('base64url'),now=new Date(),expiresAt=new Date(now.getTime()+600000),mode=config.provider??'instagram';
    const work=()=>inTransaction(client,async session=>{
     if(input.returnProjectId&&!await db.collection('projects').findOne({_id:input.returnProjectId as never,ownerId,deletedAt:null},{session}))throw fail('NOT_FOUND','Project not found.',404);
@@ -48,6 +51,7 @@ export function instagramService(db:Db,client:MongoClient,config:InstagramConfig
    return {authorizationUrl:authorizationUrl(config,state),expiresAt:expiresAt.toISOString()};
   },
   async callback(ownerId:string,sessionId:string,state:string,code:string|null,denied:boolean){
+   if(lifecycleEnabled())await assertInstagramLifecycleReady(db);
    const {config,provider}=loginConfigured();
    if(!/^[A-Za-z0-9_-]{43}$/.test(state))throw fail('INSTAGRAM_STATE_INVALID','Authorization expired or does not match this session.');
    const receipt=await states.findOneAndUpdate({ownerId,stateHash:hash(state),initiatingSessionHash:hash(sessionId),state:'pending',expiresAt:{$gt:new Date()}},{$set:{state:'exchanging',updatedAt:new Date()}},{returnDocument:'after'});
@@ -65,6 +69,7 @@ export function instagramService(db:Db,client:MongoClient,config:InstagramConfig
       (mode==='instagram'&&(grant.page||grant.expiresIn===null))||
       (grant.expiresIn!==null&&(!Number.isFinite(grant.expiresIn)||grant.expiresIn<=0)))throw fail('INSTAGRAM_RESPONSE_INVALID','Could not verify the selected destination.',502);
     await inTransaction(client,async session=>{
+     if(lifecycleEnabled())await fenceAuthorization(db,config,grant.oauthUserId,grant.account.id,receipt.createdAt,session);
      await guardIntents(ownerId,session);
      const current=await rows.findOne({_id:receipt.connectionId,ownerId,oauthEpoch:receipt.oauthEpoch},{session});
      if(!current)throw fail('INSTAGRAM_STATE_INVALID','A newer connection action replaced this authorization.');

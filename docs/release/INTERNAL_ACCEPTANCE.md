@@ -293,3 +293,72 @@ Primary contract checked October 10:
 [Meta Business Login for Instagram — refresh a long-lived token](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/business-login).
 Deauthorization/data-deletion callback handling remains a separate unfinished
 lifecycle requirement; this maintenance endpoint does not claim to implement it.
+
+## Signed Instagram deauthorization
+
+Implementation is separate from data deletion. Configure the **Instagram product's**
+deauthorization URL as `https://namastevideo.ai/api/instagram/deauthorize` only
+after activation verification. Do not replace callbacks for another NamasteDev
+product. No callback has been configured by this implementation.
+
+The endpoint defaults off (`INSTAGRAM_LIFECYCLE_ENABLED=0`). It accepts only POST,
+no query, a <=20KB form body with exactly one `signed_request`, and a verified
+HMAC-SHA256 signature made with the configured Instagram App Secret. The payload
+requires string `user_id`, algorithm and integer `issued_at`; more than five
+minutes in the future is rejected. Body reading is bounded to two seconds. Old
+legitimate deliveries are accepted, with replay prevention in the database.
+Unverified requests never open the database; errors do not echo payloads.
+
+Migration **020-instagram-lifecycle** creates `instagramLifecycle` with strict
+validation, built-in unique `_id`, no TTL. The key hashes provider/app/app-scoped
+user ID; values are latest revocation/authorization timestamps, update time and
+the verified Instagram profile ID. No secret, raw signature or token is stored.
+The ledger is pseudonymous provider data, not anonymized data; deletion work must
+include it. OAuth records the short-token exchange's `user_id` independently of
+the profile `user_id`. Existing accounts must reconnect after activation to
+establish this mapping; unknown subjects are acknowledged and retained as a
+revocation watermark, never guessed or applied to another identity.
+
+One transaction advances the revocation watermark, marks the matching current
+connection reconnect-required, clears its token and increments OAuth/token fences.
+It invalidates outstanding OAuth receipts. It also removes encrypted publishing
+and ingest credentials plus grants for the mapped provider/app/account, including
+older intents after an account switch. Unsubmitted work becomes paused_auth;
+submitting/unknown work becomes needs_attention. Confirmed posts/history remain.
+Library flags are recomputed. A late worker response cannot overwrite that state.
+An already in-flight provider POST may still finish externally; there is no claim
+that revocation cancels it. Check Instagram manually before any further action.
+
+OAuth and revocation write the same ledger row transactionally, preventing an
+in-flight first authorization from resurrecting revoked access. A newer consent
+must start strictly after the revoked second. Same-second ambiguity is resolved
+conservatively by asking the user to start again. Delayed/replayed callbacks do
+not revoke newer recorded consent. No new API permissions are requested.
+
+Activation checklist:
+
+1. Apply migration 020 using the normal reviewed database setup, keep generation
+   and publishing disabled, then enable the lifecycle flag in web Production.
+2. Reconnect the pilot account through the real OAuth UI to establish its verified
+   app-scoped mapping. Confirm only the existence/match, without printing IDs or
+   credentials. Capture a mapping for each existing account before calling its
+   lifecycle handling live-ready.
+3. Save the Instagram-product deauthorization URL in Meta; preserve all other
+   app/product callbacks. With explicit test authorization, revoke the pilot's
+   app access, verify callback acceptance, credentials removed, queued/unknown
+   states correct, then reconnect and verify old replay cannot revoke it.
+4. Leave callback handling active once registered; disabling it returns 503 and
+   requires operator follow-up. It has no scheduler or provider API workload.
+
+Remaining: live contract/identifier verification, data-deletion request/status
+workflow, actual provider/Atlas outage, screen-reader and narrated-content gates.
+Do not describe deauthorization as account deletion, erase publication history,
+or return a deletion-completed response from this endpoint.
+
+Primary sources read October 10, 2026:
+[Instagram app setup, Business login settings](https://developers.facebook.com/documentation/instagram-platform/create-an-instagram-app),
+[Business Login identity exchange](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/business-login),
+[Meta signed-request/deletion contract](https://developers.facebook.com/documentation/development/create-an-app/app-dashboard/data-deletion-callback).
+The last source also requires deletion requests to return a confirmation code and
+human-readable status URL; this deauthorization endpoint intentionally does not
+claim to satisfy that separate deletion contract.

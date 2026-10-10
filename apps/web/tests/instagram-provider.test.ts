@@ -36,7 +36,7 @@ test('authorization uses documented reauthentication parameter and exact redirec
 for(const shortWrapped of [false,true])for(const accountWrapped of [false,true]){
  test(`exchange accepts ${shortWrapped?'documented enveloped':'flat'} token and ${accountWrapped?'documented enveloped':'flat'} account`,async()=>{
   const {provider,requests}=fixture([shortWrapped?envelope(short):short,long,accountWrapped?envelope(account):account]);
-  assert.deepEqual(await provider.exchange('fixture-code'),{token:long.access_token,expiresIn:long.expires_in,account:{id:'123',username:account.username,type:'CREATOR'},scopes:[...scopes],provider:'instagram',tokenKind:'instagram_user'});
+  assert.deepEqual(await provider.exchange('fixture-code'),{oauthUserId:'123',token:long.access_token,expiresIn:long.expires_in,account:{id:'123',username:account.username,type:'CREATOR'},scopes:[...scopes],provider:'instagram',tokenKind:'instagram_user'});
   assert.equal(requests.length,3);
   assert.equal(requests[0].url,'https://api.instagram.com/oauth/access_token');
   assert.equal(requests[0].init.method,'POST');
@@ -113,4 +113,8 @@ test('invalid long-lived token and refresh responses are sanitized without anoth
   const exchange=fixture([short,malformed]);await rejects(exchange.provider.exchange('fixture-code'),'INSTAGRAM_RESPONSE_INVALID');assert.equal(exchange.requests.length,2);
   const refresh=fixture([malformed]);await rejects(refresh.provider.refresh('fixture-existing-token'),'INSTAGRAM_RESPONSE_INVALID');assert.equal(refresh.requests.length,1);
  }
+});
+
+test('exchange preserves app-scoped OAuth subject independently of the profile publishing ID',async()=>{
+ const {provider}=fixture([{...short,user_id:'456'},long,account]);const result=await provider.exchange('code');assert.equal(result.oauthUserId,'456');assert.equal(result.account.id,'123');
 });
