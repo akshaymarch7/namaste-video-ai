@@ -8,7 +8,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const env = Object.fromEntries(['PATH', 'HOME', 'TMPDIR', 'TEMP', 'TMP', 'SystemRoot'].filter(key => process.env[key]).map(key => [key, process.env[key]]));
 const tests = directory => readdirSync(path.join(root, directory)).filter(name => name.endsWith('.test.ts')).sort().map(name => `${directory}/${name}`);
 // Match the client/server conditions used by the individual package scripts.
-const clientNames = new Set(['instagram-deletion-ui', 'autosave', 'generation-controller', 'instagram-controller', 'library', 'preferences-controller', 'publishing-ui', 'session-controller', 'session-events', 'storyboard-approval', 'storyboard-editor', 'storyboard-review', 'video-review'].map(name => `${name}.test.ts`));
+const clientNames = new Set(['caption-accessibility', 'instagram-deletion-ui', 'autosave', 'generation-controller', 'instagram-controller', 'library', 'preferences-controller', 'publishing-ui', 'session-controller', 'session-events', 'storyboard-approval', 'storyboard-editor', 'storyboard-review', 'video-review'].map(name => `${name}.test.ts`));
 const webTests = tests('apps/web/tests');
 const steps = [
   {name: 'Prototype and renderer regression', cwd: root, args: ['--import', 'tsx', '--test', '--test-concurrency=1', ...tests('tests')]},

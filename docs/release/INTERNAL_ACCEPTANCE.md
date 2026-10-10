@@ -535,3 +535,42 @@ claim a real provider incident, hosted browser outage acceptance, or new live
 voice/video quality evidence. The speech change also needs the next explicitly
 approved worker-image rebuild before it is active in Cloud Run; pushing web source
 alone does not update the deployed worker. Existing activation flags remain unchanged.
+
+## Keyboard and semantic accessibility review — October 10
+
+VoiceOver remains off at the user's explicit request. Accessibility-tree/DOM
+inspection and keyboard actions do not establish an actual screen-reader pass or
+full WCAG conformance. Screen-reader acceptance remains open.
+
+Verified in Chrome on the hosted application: library skip link focuses main and
+Tab reaches New project; the project dialog starts on its named title input,
+Shift-Tab/Tab wrap and Escape returns to its trigger. Idea fields expose labels,
+limits and saved status; keyboard Continue reaches storyboard. Full script toggles
+with a pressed state and exposes all six narration headings. Video and publishing
+controls have names; Schedule reveals named date/time/timezone fields. Preferences
+flag an invalid timezone and keyboard Discard restores the saved value. Homepage
+FAQ opens with Enter. Local sign-in exposes required email/password labels,
+autocomplete roles and native empty-email validation with focus on the field.
+No project changes, video generation, publication or preference save was submitted.
+
+Found and fixed: the caption revision confirmation previously left focus at its
+trigger, before the intervening link and 27 caption fields. It now focuses its
+named heading; Tab reaches Confirm new version, and Keep editing restores the
+original trigger. This is an inline region, not a modal, and does not trap Tab.
+Caption fields now have distinct scene/group labels, independent original-text
+and limit descriptions, and aria-invalid with linked correction guidance when
+words/punctuation change. Supported capitalization/spacing remain valid.
+
+Local browser verification used the actual new components in a clearly labelled,
+UI-only temporary fixture. Enabled and disabled confirmation tab order, return
+focus, invalid descriptions and supported edits passed. The temporary route and
+server were removed before the production build. Seventeen caption/accessibility
+and video-command regressions passed; the new tests are included in the normal
+client acceptance group. Hosted integrated recheck follows the normal dev push.
+
+Limits: a transient hosted session verification interruption was visible during
+navigation; its Try again action recovered. This is not a claim that network
+reliability is solved. A requested 390px viewport override did not change the
+measured viewport, so no new mobile/reflow pass is claimed; the override was reset.
+Full screen-reader, all destructive/paid workflow confirmations and integrated V1
+acceptance remain separate. Do not infer those passes from these checks.
