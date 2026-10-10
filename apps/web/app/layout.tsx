@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SkipLink } from "../components/skip-link";
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
@@ -13,5 +14,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body><a className="skip-link" href="#main">Skip to content</a>{children}</body></html>;
+  return <html lang="en"><body><SkipLink/>{children}</body></html>;
 }
