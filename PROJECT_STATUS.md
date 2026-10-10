@@ -2383,3 +2383,9 @@ Next release work, in order: (1) controlled hosted recovery plus end-to-end acce
 - Ignored evidence: `runs/f22/deletion-acceptance.log`, `deletion-tests.log`, `deletion-ui.log`, `deletion-root-types.log`, `deletion-types-final.log`, `deletion-build.log`. Migration 020/021 and destructive Meta verification remain pending. No real revocation/deletion, render, publication or recurring activation occurred.
 
 - Hosted verification: code `22301d133d42839089934e15f627f2d3b0b43a1c` reached Ready Production (`GepSWXaiJqGs2CBqusU7ZQ2vHqRa`). Canonical-domain empty POST probes returned **503** for deletion, deauthorization, renewal, generation dispatch and publishing. The invalid-link status page returned **200**, correct not-found content and `no-store`, `no-referrer`, `noindex/nofollow` headers. Earlier 404 probes occurred while deployment was building and are superseded by these checks. Remote `dev` matched the code commit; `main` unchanged. No live lifecycle activation occurred.
+
+
+## October 10, 2026 — Instagram lifecycle live activation (in progress)
+
+- User requested closing the first remaining release item. Live Atlas preflight confirmed the expected connected pilot and zero unsettled publications. Applied additive migrations 020/021 successfully; no account/history data deleted. Existing subjects have no lifecycle mapping and require reconnect.
+- Prepared `INSTAGRAM_LIFECYCLE_ENABLED=1` in Vercel Production; activation/read-back follows deployment. Instagram product callback fields are currently empty; existing three OAuth redirects are preserved. Deletion activation and a real destructive test are not yet performed. The exact pilot-history deletion choice is awaiting explicit user confirmation. Generation/publishing/renewal activation is outside this step.
