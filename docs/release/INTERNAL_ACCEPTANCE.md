@@ -1,6 +1,6 @@
 # F22 — Internal release acceptance
 
-Status: in progress. Real Post now and scheduled delivery acceptance passed on October 8. The remaining matrix below, including intermittent hosted response-timeout investigation, is still open; this is not full release approval.
+Status: in progress. Real Post now and scheduled delivery acceptance passed on October 8. The remaining matrix below, including longer-run response reliability, is still open; this is not full release approval.
 `PROJECT_STATUS.md` remains the authoritative implementation/evidence record.
 
 ## Repeatable local gate
@@ -35,6 +35,7 @@ Do not publish the raw local test output without reviewing it.
 | Private workspaces/auth | October 8 hosted two-account sign-in, project/version/media/asset denial and destination isolation passed; detailed evidence in Project Status | Retain isolation checks when authorization scope or storage boundaries change |
 | Direct Instagram connection | @namastevideoai real Instagram consent/callback, clean reload, expected workspace, consumed OAuth receipt, encrypted token and HTTP 200 profile check passed on October 8 | Public access needs applicable Advanced Access/App Review; lifecycle callbacks and recurring token refresh remain pending; this does not prove publishing |
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
+| Dashboard latency | October 10 aligned Vercel Mumbai with Atlas Mumbai; 12 live reads, two-account isolation and exact media delivery passed; 476 local tests/build passed | Preserve timing evidence for any recurrence; short sample does not guarantee no future timeout |
 | Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; prior real reload/lost-response QA | Controlled hosted outage/recovery drill before continuous operation |
 | Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Current renderer rebuilt and saved-narration revision verified October 8; ongoing activation remains paused |
 | Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery has separate live evidence below |
