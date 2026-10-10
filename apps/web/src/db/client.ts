@@ -1,3 +1,4 @@
+import {measureStage} from '../diagnostics/timing';
 import 'server-only';
 import { MongoClient, type ClientSession, type Db } from 'mongodb';
 import { DatabaseError, readDatabaseConfig, type DatabaseConfig } from './config';
@@ -56,10 +57,10 @@ export async function inTransaction<T>(
 ): Promise<T> {
   const session = client.startSession();
   try {
-    return await session.withTransaction(() => operation(session), {
+    return await measureStage('transaction',()=>session.withTransaction(() => operation(session), {
       readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' },
       readPreference: 'primary', maxCommitTimeMS: 10_000,
-    });
+    }));
   } finally {
     await session.endSession();
   }

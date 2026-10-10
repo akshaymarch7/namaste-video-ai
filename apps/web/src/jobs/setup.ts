@@ -1,3 +1,4 @@
+import {measureStage} from '../diagnostics/timing';
 import 'server-only';
 import {createHash} from 'node:crypto';
 import type {Db} from 'mongodb';
@@ -16,7 +17,9 @@ export const jobDefinitions:CollectionDefinition[]=[
 ];
 const id='mig_generationjobs001',checksum=createHash('sha256').update(JSON.stringify(jobDefinitions)).digest('hex');
 export async function setupJobs(db:Db){await assertStorageReady(db);await runMigration(db,'012-generation-jobs',id,checksum,jobDefinitions,{successors:{generationJobs:renderJobDefinition().validator}});return setupRendering(db);}
-export async function assertJobsReady(db:Db){
+async function assertJobsReadyImpl(db:Db){
  if(!await db.collection('schemaMigrations').findOne({_id:id as never,checksum,state:'completed'}))throw new DatabaseError('JOBS_SETUP_REQUIRED','Run db:setup before using generation jobs.');
  for(const d of jobDefinitions){const indexes=await db.collection(d.name).indexes();for(const i of d.indexes)if(!indexes.some(x=>x.name===i.name&&JSON.stringify(x.key)===JSON.stringify(i.key)&&Boolean(x.unique)===Boolean(i.unique)))throw new DatabaseError('JOBS_SETUP_REQUIRED','Generation indexes are missing.');}
 }
+
+export function assertJobsReady(db:Db){return measureStage('readiness',()=>assertJobsReadyImpl(db));}

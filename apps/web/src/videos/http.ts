@@ -1,3 +1,4 @@
+import {observeHandler, measureStage} from '../diagnostics/timing';
 import {captionService} from './captions';
 import 'server-only';
 import {randomUUID} from 'node:crypto';
@@ -8,12 +9,12 @@ import {HttpError,readBody} from '../auth/http';
 import {ProjectError,projectId,idempotencyKey} from '../projects/contracts';
 import {videoId,listQuery} from './contracts';
 import {videoService} from './service';
-export async function handleVideos(request:Request,action:'list'|'read'|'approve'|'select'|'captions'|'edit-captions'|'regenerate',id:string,deps=dependencies){
+async function handleVideosImpl(request:Request,action:'list'|'read'|'approve'|'select'|'captions'|'edit-captions'|'regenerate',id:string,deps=dependencies){
  const requestId=`req_${randomUUID().replaceAll('-','')}`,headers=new Headers({'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Request-Id':requestId});
  const reply=(body:unknown)=>Response.json({...body as object,meta:{requestId}},{headers});
  try{
   const cookie=request.headers.get('cookie');if(!cookie)throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
-  const {db,client,auth,config}=await deps();const session=await auth.api.getSession({headers:new Headers({cookie})});if(!session)throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
+  const {db,client,auth,config}=await deps();const session=await measureStage('session',()=>auth.api.getSession({headers:new Headers({cookie})}));if(!session)throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
   if(!await isAdmitted(db,session.user.id))throw new ProjectError(403,'ACCESS_DISABLED','Account access is disabled.');
   if(!(action==='list'?projectId:videoId).safeParse(id).success)throw new ProjectError(404,'NOT_FOUND','Video not found.');
   const url=new URL(request.url),service=videoService(db,client),owner=session.user.id;
@@ -29,3 +30,5 @@ export async function handleVideos(request:Request,action:'list'|'read'|'approve
   const result=action==='edit-captions'||action==='regenerate'?await captionService(db,client).revise(owner,id,key,await readBody(request),action==='regenerate'?'regenerate':'captions'):await service.mutate(owner,id,action,key,await readBody(request));if(result.replayed)headers.set('Idempotency-Replayed','true');if(action==='edit-captions'||action==='regenerate')return Response.json({data:result.data,meta:{requestId}},{status:202,headers});return reply({data:result.data});
  }catch(e){let status=503,code='SERVICE_UNAVAILABLE',message='The result is unconfirmed. Recover the same request.';if(e instanceof ProjectError||e instanceof HttpError)({status,code,message}=e);else if(e instanceof z.ZodError){status=422;code='VALIDATION_FAILED';message='Check the request fields.';}return Response.json({error:{code,message,requestId,retryable:false},meta:{requestId}},{status,headers});}
 }
+
+export const handleVideos=observeHandler('videos',handleVideosImpl);

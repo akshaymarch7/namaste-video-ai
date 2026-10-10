@@ -36,7 +36,7 @@ Do not publish the raw local test output without reviewing it.
 | Direct Instagram connection | @namastevideoai real Instagram consent/callback, clean reload, expected workspace, consumed OAuth receipt, encrypted token and HTTP 200 profile check passed on October 8 | Public access needs applicable Advanced Access/App Review; lifecycle callbacks and recurring token refresh remain pending; this does not prove publishing |
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
 | Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; prior real reload/lost-response QA | Controlled hosted outage/recovery drill before continuous operation |
-| Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Rebuild renderer with F19 projections before resuming alongside publication; no ongoing activation yet |
+| Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Current renderer rebuilt and saved-narration revision verified October 8; ongoing activation remains paused |
 | Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery has separate live evidence below |
 | Schedule | October 8 real scheduled @namastevideoai Reel, project tabs closed before due; scheduler processing at due+7.610s, published at due+137.757s; one attempt, exact caption and no duplicate | Passed pilot timed-delivery check; no general timing SLA claimed |
 | Accessibility | F21 responsive, keyboard and reduced-motion QA; earlier feature checks | Screen reader, Safari and end-to-end keyboard review |
@@ -216,3 +216,31 @@ or customer data are included in this report.
 - Intermittent preview/read/approval/schedule response timeouts occurred. Original approval and schedule commands recovered successfully without duplicates. This is recovery evidence, **not** a latency fix. A follow-up should capture sanitized per-stage request timings and distinguish browser/network, Vercel and Atlas latency before expanding the pilot.
 - Publisher paused19:08:53IST; bounded window began18:51:06IST. Vercel shutdown deployment `X8nhGCT1ttegERyzPNuA4gaXqDFG` reached Ready; cloud-dispatch and publish-tick both returned503. Rendering already paused after its single execution. No ongoing execution authorized.
 - Cost authorization: up toUS$1 additional Google Cloud for one build/one saved-narration render; no new speech synthesis. Recorded build332seconds and execution208.326seconds correspond to aboutUS$0.043 list compute before free allowances/ancillary usage/taxes. This is an estimate, not a final invoice or account-wide spend cap; image storage persists. Remaining narrated evaluation was not run or waived.
+
+## Dashboard latency diagnostics
+
+The web project pins Vercel Functions to `bom1` in `apps/web/vercel.json` to
+match the verified Atlas AWS `AP_SOUTH_1` deployment. Keep this aligned if the
+database moves. Static assets remain on Vercel's CDN. This does not move or
+activate Cloud Run workers. See [Vercel region configuration](https://vercel.com/docs/functions/configuring-functions/region).
+
+Session, project/draft, video, job, publishing and media HTTP handlers expose
+`Server-Timing`: `app`, `dependencies`, `session`, `admission`, `readiness`, and
+`transaction` where applicable. Stage durations are inclusive; nested or
+concurrent work must not be added to estimate total latency. `app` starts inside
+the handler and excludes platform startup, edge routing, network transfer and
+response-body consumption. Compare it with client wall time and the existing
+`X-Request-Id`; a large difference is not proof that MongoDB is slow.
+
+Requests taking at least five seconds or returning 5xx emit a `dashboard_request`
+server log with fixed route group, status, generated request ID and timings only.
+No request URL, query, body, cookie, credentials, user/project identity or raw
+exception is logged. Normal fast responses produce no log. These diagnostics
+never retry a request or change the client recovery receipt. A killed invocation
+may have no completion log; use Vercel's platform logs for that case.
+
+For a bounded retest, sign in using an existing local test-account file, read
+session, projects, video versions and publication history three times, then sign
+out. Do not print cookies or response bodies. Record status, sanitized request
+ID, timings and deployment revision. Verify publication/generation remain
+disabled; read checks must not enable schedulers or issue render/publish commands.

@@ -1,3 +1,4 @@
+import {measureStage} from '../diagnostics/timing';
 import 'server-only';
 import {createHash} from 'node:crypto';
 import type {Db} from 'mongodb';
@@ -17,7 +18,9 @@ export const storageDefinitions:CollectionDefinition[]=[
 ];
 const id='mig_privatestorage001',checksum=createHash('sha256').update(JSON.stringify(storageDefinitions)).digest('hex');
 export async function setupStorage(db:Db){await assertStoryboardApprovalsReady(db);return runMigration(db,'011-private-storage',id,checksum,storageDefinitions);}
-export async function assertStorageReady(db:Db){
+async function assertStorageReadyImpl(db:Db){
  if(!await db.collection('schemaMigrations').findOne({_id:id as never,checksum,state:'completed'}))throw new DatabaseError('STORAGE_SETUP_REQUIRED','Run db:setup before using media.');
  for(const definition of storageDefinitions){const indexes=await db.collection(definition.name).indexes();for(const index of definition.indexes)if(!indexes.some(i=>i.name===index.name&&JSON.stringify(i.key)===JSON.stringify(index.key)&&Boolean(i.unique)===Boolean(index.unique)&&i.expireAfterSeconds===index.expireAfterSeconds))throw new DatabaseError('STORAGE_SETUP_REQUIRED','Media indexes are missing.');}
 }
+
+export function assertStorageReady(db:Db){return measureStage('readiness',()=>assertStorageReadyImpl(db));}

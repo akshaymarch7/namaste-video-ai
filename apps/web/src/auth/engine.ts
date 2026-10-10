@@ -1,3 +1,4 @@
+import {measureStage} from '../diagnostics/timing';
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
@@ -7,9 +8,9 @@ import type { Db, MongoClient } from 'mongodb';
 import type { AuthConfig } from './config';
 
 export async function isAdmitted(db: Db, userId: string) {
-  return Boolean(await db.collection('internalAccess').findOne({
+  return measureStage('admission',async()=>Boolean(await db.collection('internalAccess').findOne({
     provisionedUserId: userId, enabled: true, provisioningState: 'active',
-  }, { projection: { _id: 1 } }));
+  }, { projection: { _id: 1 } })));
 }
 
 export function authOptions(db: Db, client: MongoClient, config: AuthConfig, operator = false): BetterAuthOptions {

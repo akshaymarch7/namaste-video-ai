@@ -1,3 +1,4 @@
+import {observeHandler, measureStage} from '../diagnostics/timing';
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -47,7 +48,7 @@ function sessionView(value: { user: { id: string; email: string; name: string };
   };
 }
 
-export async function handleSession(request: Request, action: SessionAction, dependencies: () => Promise<Dependencies>) {
+async function handleSessionImpl(request: Request, action: SessionAction, dependencies: () => Promise<Dependencies>) {
   const requestId = `req_${randomUUID().replaceAll('-', '')}`;
   const headers = new Headers({ 'Cache-Control': 'private, no-store', 'X-Request-Id': requestId });
   const reply = (data: unknown, status = 200) => Response.json({ data, meta: { requestId } }, { status, headers });
@@ -70,7 +71,7 @@ export async function handleSession(request: Request, action: SessionAction, dep
         throw new HttpError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
       }
       const signedCookies = new Headers({ cookie: upstream.headers.getSetCookie().map(value => value.split(';')[0]).join('; ') });
-      const session = await auth.api.getSession({ headers: signedCookies });
+      const session = await measureStage('session',()=>auth.api.getSession({ headers: signedCookies }));
       if (!session || !await isAdmitted(db, session.user.id)) {
         await auth.api.signOut({ headers: signedCookies });
         throw new HttpError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
@@ -86,7 +87,7 @@ export async function handleSession(request: Request, action: SessionAction, dep
       copyCookies(upstream.headers);
       return new Response(null, { status: 204, headers });
     }
-    const session = await auth.api.getSession({ headers: cookieHeaders(request.headers) });
+    const session = await measureStage('session',()=>auth.api.getSession({ headers: cookieHeaders(request.headers) }));
     if (!session) throw new HttpError(401, 'UNAUTHENTICATED', 'Sign in to continue.');
     if (!await isAdmitted(db, session.user.id)) throw new HttpError(403, 'ACCESS_DISABLED', 'Account access is disabled.');
     return reply(sessionView(session));
@@ -99,3 +100,5 @@ export async function handleSession(request: Request, action: SessionAction, dep
     return error(503, 'SERVICE_UNAVAILABLE', 'Sign-in service is temporarily unavailable.');
   }
 }
+
+export const handleSession=observeHandler('session',handleSessionImpl);

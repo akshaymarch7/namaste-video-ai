@@ -1,3 +1,4 @@
+import {measureStage} from '../diagnostics/timing';
 import 'server-only';
 import {createHash} from 'node:crypto';
 import type {Db} from 'mongodb';
@@ -13,4 +14,6 @@ export const videoDefinitions=[
 ];
 const id='mig_videoreview00001',checksum=createHash('sha256').update(JSON.stringify(videoDefinitions)).digest('hex');
 export async function setupVideos(db:Db){return runMigration(db,'014-video-review',id,checksum,videoDefinitions);}
-export async function assertVideosReady(db:Db){if(!await db.collection('schemaMigrations').findOne({_id:id as never,checksum,state:'completed'}))throw new DatabaseError('VIDEO_SETUP_REQUIRED','Run db:setup before reviewing videos.');}
+async function assertVideosReadyImpl(db:Db){if(!await db.collection('schemaMigrations').findOne({_id:id as never,checksum,state:'completed'}))throw new DatabaseError('VIDEO_SETUP_REQUIRED','Run db:setup before reviewing videos.');}
+
+export function assertVideosReady(db:Db){return measureStage('readiness',()=>assertVideosReadyImpl(db));}

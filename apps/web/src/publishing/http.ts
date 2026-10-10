@@ -1,3 +1,4 @@
+import {observeHandler, measureStage} from '../diagnostics/timing';
 import 'server-only';
 import {randomUUID,timingSafeEqual} from 'node:crypto';
 import {z} from 'zod';
@@ -8,11 +9,11 @@ import {projectId,ProjectError} from '../projects/contracts';
 import {readInstagramConfig} from '../instagram/config';
 import {intentId,query} from './contracts';
 import {publishingService,publishingEnabled} from './service';
-export async function handlePublishing(request:Request,action:'create'|'list'|'read'|'cancel'|'retry'|'replace',id='',deps=dependencies,options?:{config:ReturnType<typeof readInstagramConfig>;enabled:boolean;kick?:(owner:string)=>void}){
+async function handlePublishingImpl(request:Request,action:'create'|'list'|'read'|'cancel'|'retry'|'replace',id='',deps=dependencies,options?:{config:ReturnType<typeof readInstagramConfig>;enabled:boolean;kick?:(owner:string)=>void}){
  const requestId=`req_${randomUUID().replaceAll('-','')}`,headers=new Headers({'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Request-Id':requestId});
  try{
   const cookie=request.headers.get('cookie');if(!cookie)throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
-  const {db,client,auth,config}=await deps(),session=await auth.api.getSession({headers:new Headers({cookie})});if(!session)throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
+  const {db,client,auth,config}=await deps(),session=await measureStage('session',()=>auth.api.getSession({headers:new Headers({cookie})}));if(!session)throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
   if(!await isAdmitted(db,session.user.id))throw new ProjectError(403,'ACCESS_DISABLED','Account access is disabled.');
   if(action!=='create'&&!(action==='list'?projectId:intentId).safeParse(id).success)throw new ProjectError(404,'NOT_FOUND','Publication not found.');
   const url=new URL(request.url),service=publishingService(db,client,options?options.config:readInstagramConfig(),options?options.enabled:publishingEnabled()),owner=session.user.id;
@@ -42,3 +43,5 @@ export async function handlePublishTick(request:Request,run:()=>Promise<unknown>
  catch{return Response.json({error:{code:'PUBLISH_TICK_UNAVAILABLE'}},{status:503,headers});}
  finally{clearTimeout(timer);void reader?.cancel().catch(()=>undefined);}
 }
+
+export const handlePublishing=observeHandler('publishing',handlePublishingImpl);

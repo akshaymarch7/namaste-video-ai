@@ -1,3 +1,4 @@
+import {measureStage} from '../diagnostics/timing';
 import {editableDraftDefinition} from '../drafts/edit-schema';
 import 'server-only';
 import { draftDefinition } from '../drafts/schema';
@@ -31,7 +32,7 @@ export async function setupProjects(db: Db) {
   if (!await db.collection('schemaMigrations').findOne({ _id: foundationId as never, checksum: foundationChecksum, state: 'completed' })) throw new DatabaseError('DB_SETUP_REQUIRED', 'Run foundation setup first.');
   return runMigration(db, '002-projects', projectMigrationId, checksum, definitions, { successors: { drafts: [draftDefinition.validator,editableDraftDefinition.validator] } });
 }
-export async function assertProjectsReady(db: Db) {
+async function assertProjectsReadyImpl(db: Db) {
   if (!await db.collection('schemaMigrations').findOne({ _id: projectMigrationId as never, checksum, state: 'completed' })) throw new DatabaseError('PROJECT_SETUP_REQUIRED', 'Run db:setup before project operations.');
   // Runtime credentials never administer schemas/indexes.
   for (const definition of definitions) {
@@ -39,3 +40,5 @@ export async function assertProjectsReady(db: Db) {
     for (const required of definition.indexes) if (!indexes.some(index => index.name === required.name && JSON.stringify(index.key) === JSON.stringify(required.key) && Boolean(index.unique) === Boolean(required.unique))) throw new DatabaseError('PROJECT_SETUP_REQUIRED', 'Project indexes are missing.');
   }
 }
+
+export function assertProjectsReady(db:Db){return measureStage('readiness',()=>assertProjectsReadyImpl(db));}

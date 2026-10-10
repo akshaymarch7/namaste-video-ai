@@ -1,3 +1,4 @@
+import {measureStage} from '../diagnostics/timing';
 import 'server-only';
 import { getDatabase } from '../db/client';
 import { readAuthConfig } from './config';
@@ -6,7 +7,7 @@ import { handleSession, type SessionAction } from './http';
 import { assertAuthReady } from './setup';
 
 let pending: Promise<{ client: Awaited<ReturnType<typeof getDatabase>>['client']; auth: ReturnType<typeof createAuth>; db: Awaited<ReturnType<typeof getDatabase>>['db']; config: ReturnType<typeof readAuthConfig> }> | undefined;
-export async function dependencies() {
+async function loadDependencies() {
   if (!pending) pending = (async () => {
     const config = readAuthConfig();
     const { db, client } = await getDatabase();
@@ -28,3 +29,5 @@ export async function readPageSession(headers: Headers) {
     return { state: 'authenticated' as const, user: { id: session.user.id, name: session.user.name, email: session.user.email }, expiresAt: session.session.expiresAt.toISOString() };
   } catch { return { state: 'unavailable' as const }; }
 }
+
+export function dependencies(){return measureStage('dependencies',loadDependencies);}

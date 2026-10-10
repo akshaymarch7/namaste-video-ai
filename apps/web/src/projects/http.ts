@@ -1,3 +1,4 @@
+import {observeHandler, measureStage} from '../diagnostics/timing';
 import {applyStoryboard} from '../storyboards/editable-contract';
 import 'server-only';
 import { assertDraftsReady } from '../drafts/setup';
@@ -12,14 +13,14 @@ import { assertProjectsReady } from './setup';
 import { createProject, renameProject, deleteProject, listProjects, projectId, idempotencyKey, ProjectError } from './contracts';
 import { projectService } from './service';
 export type ProjectAction = 'list' | 'create' | 'read' | 'rename' | 'delete' | 'draft-read' | 'draft-save' | 'draft-apply';
-export async function handleProjects(request: Request, action: ProjectAction, rawId?: string, getDependencies = dependencies) {
+async function handleProjectsImpl(request: Request, action: ProjectAction, rawId?: string, getDependencies = dependencies) {
   const requestId = `req_${randomUUID().replaceAll('-', '')}`;
   const headers = new Headers({ 'Cache-Control': 'private, no-store', 'X-Request-Id': requestId });
   const reply = (data: unknown, status = 200, page?: unknown) => status === 204 ? new Response(null, { status, headers }) : Response.json({ data, ...(page ? { page } : {}), meta: { requestId } }, { status, headers });
   try {
     if (!request.headers.get('cookie')) throw new ProjectError(401, 'UNAUTHENTICATED', 'Sign in to continue.');
     const { db, client, config, auth } = await getDependencies();
-    const session = await auth.api.getSession({ headers: new Headers({ cookie: request.headers.get('cookie')! }) });
+    const session = await measureStage('session',()=>auth.api.getSession({ headers: new Headers({ cookie: request.headers.get('cookie')! }) }));
     if (!session) throw new ProjectError(401, 'UNAUTHENTICATED', 'Sign in to continue.');
     const ownerId = session.user.id;
     if (!await isAdmitted(db, ownerId)) throw new ProjectError(403, 'ACCESS_DISABLED', 'Account access is disabled.');
@@ -64,3 +65,5 @@ export async function handleProjects(request: Request, action: ProjectAction, ra
     return Response.json({ error: { code, message, requestId, retryable: status === 503 || code === 'COMMAND_IN_PROGRESS', ...(details ? { details } : {}) }, meta: { requestId } }, { status, headers });
   }
 }
+
+export const handleProjects=observeHandler('projects',handleProjectsImpl);

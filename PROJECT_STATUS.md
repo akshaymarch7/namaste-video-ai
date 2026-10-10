@@ -1,10 +1,12 @@
 # Project Status — NamasteVideo.ai
 
-Last updated: October 8, 2026 (Asia/Kolkata).
+Last updated: October 10, 2026 (Asia/Kolkata).
 
 This is the source of truth for development progress. Specifications describe intent; a feature is complete here only when its implementation and verification are recorded. Design approval is not evidence of working functionality.
 
 ## Current checkpoint
+
+**F22 dashboard reliability investigation in progress.** Bounded live reads reproduced slow successful responses (first sign-in 6.475s and project list 7.580s), but not a timeout. Adding server-stage timings and sanitized slow/failure diagnostics before attributing the earlier incidents to a particular service. Recovery semantics, publishing flags and scheduler activation are unchanged. Vercel Functions were verified in `iad1`, while Atlas hello reports AWS `AP_SOUTH_1`; web configuration now pins `bom1`. 476 local tests, both typechecks and demo decodes passed; production build passed; hosted comparison is pending for this change.
 
 **F22 real Post now and scheduled publication acceptance passed; full release gate remains open.** Both water-cycle Reels are live on @namastevideoai. Scheduled delivery ran with project tabs closed: due19:06IST, processing19:06:07, published19:08:17 (137.757seconds after due). Verified two intents, two published results, one attempt each, both approvals preserved, no unresolved request and temporary credentials cleared. The approved single worker rebuild and saved-narration render succeeded; identical audio, exact asset hashes, full decode and browser preview passed. Both cloud schedulers are paused; both execution endpoints return disabled503. Current regression gate remains **470 tests**, both typechecks, production build and three demo decodes from the preceding checkpoint; no new application logic was changed in this configuration run. **Remaining:** investigate intermittent hosted response timeouts (same-request recovery worked), 20-topic representative evaluation, recorded accessibility/Safari/outage checks and applicable public Instagram lifecycle/refresh/access requirements. These gates are not waived. See final evidence below.
 
@@ -2272,3 +2274,16 @@ Limits / next acceptance:
 - Files: runtime YAML pinned in8dbb09f; worker README records verified refresh; release acceptance table and this status record now include real scheduled delivery and remaining gaps. No application implementation changes in this run. Configuration diff check passed; live dispatch's template checks and actual render/publication provide relevant configuration validation. Earlier470-test/typecheck/build evidence retains its prior scope and was not relabelled as a new rerun.
 - Ignored private evidence: `worker-rebuild-success.png`, `scheduled-revision-preview.png`, `scheduled-caption-frame.png`, `scheduled-reel-review.png`, `scheduled-reel-confirmed.png`, `scheduled-instagram-live.png`, `scheduled-publisher-paused.png`; sanitized render/publication/final-check probes and private verification downloads. No credentials or signed media URLs committed.
 - **Next work before full F22 sign-off:** diagnose intermittent hosted response latency with sanitized timings, finish the recorded representative-content and accessibility/Safari/outage gates, and resolve applicable external-creator Instagram lifecycle/refresh/App Review work. The bounded live publishing/scheduling acceptance is complete; fullF22 is not represented as complete.
+
+## October 10, 2026 — F22 dashboard latency investigation and region alignment
+
+Scope: investigate the intermittent hosted read/approval/schedule response delays, without changing durable recovery semantics or activating generation/publication.
+
+- Read-only baseline on `namastevideo.ai`: sign-in 6,475ms; three session reads 984/870/861ms; project lists 7,580/1,813/1,792ms; video lists 2,152/1,998/1,990ms. All returned 200; sign-out returned 204. No timeout reproduced in this sample. An initially incorrect publication-history probe URL returned 404 and is excluded from acceptance; corrected route is `/api/projects/:id/publish-intents`.
+- Vercel's existing Function Region setting was `iad1` (Washington, D.C.). A sanitized Atlas `hello` returned provider AWS, region `AP_SOUTH_1`; local connection 865ms and ping 38–39ms. Cross-region database round trips are a concrete avoidable latency source; they do not establish the cause of every previous timeout.
+- Added `apps/web/vercel.json` with single-region `bom1`, matching Atlas Mumbai. Existing same-origin auth/media/OAuth settings are retained. The established `dev` push auto-deploys the web app; cloud worker image and paused scheduler settings are untouched.
+- Added `src/diagnostics/timing.ts` and instrumentation for session, projects/drafts, videos, jobs, publishing and media handlers, dependency initialization, admission, readiness checks and transactions. Responses expose `Server-Timing`; slow (>=5s) or 5xx requests produce fixed-field server logs. Request bodies, URLs, cookies, identities, tokens and raw exceptions are excluded. Unknown mutation outcomes and existing receipts remain unchanged; instrumentation never retries an operation.
+- Six focused tests cover response/cookie/body preservation, single execution, failure/throw behavior, logger failure, concurrent-request isolation, sanitized IDs and slow-success logging. Full local acceptance passed **476 tests** (43+313+114+6) and three full demo decodes. Both typechecks passed. Final production build passed. Post-deployment comparison remains pending.
+- `docs/release/INTERNAL_ACCEPTANCE.md` documents timing interpretation and corrects the stale renderer-rebuild gate, which was completed October 8.
+
+Status: implementation and local acceptance complete; hosted comparison pending. This is not closure of the entire F22 release gate. Remaining content matrix, accessibility/Safari, hosted outage drill and Instagram lifecycle/access requirements remain open. No new paid generation, narration or social publication occurred.

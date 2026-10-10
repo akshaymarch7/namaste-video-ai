@@ -1,3 +1,4 @@
+import {measureStage} from '../diagnostics/timing';
 import 'server-only';
 import {createHash} from 'node:crypto';
 import type {Db} from 'mongodb';
@@ -18,4 +19,6 @@ export const publishingDefinitions=[
 ];
 const id='mig_publish000000001',checksum=createHash('sha256').update(JSON.stringify(publishingDefinitions)).digest('hex');
 export async function setupPublishing(db:Db){return runMigration(db,'018-publishing',id,checksum,publishingDefinitions,{successors:{publishIntents:schedulingDefinition(publishingDefinitions[0]).validator}});}
-export async function assertPublishingReady(db:Db){if(!await db.collection('schemaMigrations').findOne({_id:id as never,checksum,state:'completed'}))throw new DatabaseError('PUBLISH_SETUP_REQUIRED','Run db:setup before publishing.');}
+async function assertPublishingReadyImpl(db:Db){if(!await db.collection('schemaMigrations').findOne({_id:id as never,checksum,state:'completed'}))throw new DatabaseError('PUBLISH_SETUP_REQUIRED','Run db:setup before publishing.');}
+
+export function assertPublishingReady(db:Db){return measureStage('readiness',()=>assertPublishingReadyImpl(db));}

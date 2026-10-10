@@ -1,3 +1,4 @@
+import {observeHandler, measureStage} from '../diagnostics/timing';
 import 'server-only';
 import {randomUUID,timingSafeEqual} from 'node:crypto';
 import {z} from 'zod';
@@ -10,7 +11,7 @@ import {deliveryConfig} from './config';
 import {storageService} from './service';
 import {assertStorageReady} from './setup';
 import {serviceSignature,authPath} from './wire';
-export async function handleMedia(request:Request,action:'list'|'access'|'revoke'|'authorize',id='',deps=dependencies,config=deliveryConfig){
+async function handleMediaImpl(request:Request,action:'list'|'access'|'revoke'|'authorize',id='',deps=dependencies,config=deliveryConfig){
  const requestId=`req_${randomUUID().replaceAll('-','')}`,headers={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Request-Id':requestId};
  const reply=(data:unknown,status=200)=>Response.json(data,{status,headers});
  try{
@@ -29,7 +30,7 @@ export async function handleMedia(request:Request,action:'list'|'access'|'revoke
    return reply({data:await storageService(db,client).authorize(parsedBody as z.infer<typeof mediaAuthRequest>)});
   }
   const cookie=request.headers.get('cookie');if(!cookie)throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
-  const {db,client,auth,config:authConfig}=await deps();const session=await auth.api.getSession({headers:new Headers({cookie})});if(!session)throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
+  const {db,client,auth,config:authConfig}=await deps();const session=await measureStage('session',()=>auth.api.getSession({headers:new Headers({cookie})}));if(!session)throw new ProjectError(401,'UNAUTHENTICATED','Sign in to continue.');
   if(!await isAdmitted(db,session.user.id))throw new ProjectError(403,'ACCESS_DISABLED','Account access is disabled.');
   const parsed=(action==='list'?projectId:assetId).safeParse(id);if(!parsed.success)throw new ProjectError(404,'NOT_FOUND','Media not found.');
   const service=storageService(db,client),owner=session.user.id;
@@ -49,3 +50,5 @@ export async function handleMedia(request:Request,action:'list'|'access'|'revoke
   return reply({error:{code,message,requestId,retryable:status===503},meta:{requestId}},status);
  }
 }
+
+export const handleMedia=observeHandler('media',handleMediaImpl);
