@@ -53,8 +53,8 @@ Do not publish the raw local test output without reviewing it.
 | Direct Instagram connection | @namastevideoai real Instagram consent/callback, clean reload, expected workspace, consumed OAuth receipt, encrypted token and HTTP 200 profile check passed on October 8 | Public access needs applicable Advanced Access/App Review; lifecycle callbacks passed live October 10; daily token-maintenance activation passed October 10; actual provider extension awaits eligible expiry; this does not prove publishing |
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
 | Dashboard latency | October 10 aligned Vercel Mumbai with Atlas Mumbai; 12 live reads, two-account isolation and exact media delivery passed; 476 local tests/build passed | Preserve timing evidence for any recurrence; short sample does not guarantee no future timeout |
-| Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; October 10 hosted create-response loss recovered with the same key/body, one project, changed-body rejection and cleanup | October 10 isolated hosted Atlas access-loss/recovery passed with API and browser autosave; controlled local provider transport/worker checks passed (156 targeted tests); hosted provider/browser and actual network-outage evidence remain separate |
-| Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Current renderer rebuilt and saved-narration revision verified October 8; bounded supervised October 10 evaluation is recorded in the latest Project Status; ongoing activation remains a separate decision |
+| Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; October 10 hosted create-response loss recovered with the same key/body, one project, changed-body rejection and cleanup | October 10 isolated hosted Atlas access-loss/recovery passed with API and browser autosave; controlled local provider transport/worker checks passed (156 targeted tests); real hosted Gemini503 with retained saved candidates/error UI was observed; actual network-outage evidence remains separate |
+| Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | October10 image233c9d28 verified on both jobs; October11 dispatcher fix reconciled an older-image receipt and released capacity without relaunch. Technical narrated matrix results are in CONTENT_EVALUATION.md; ongoing activation remains a separate decision |
 | Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery has separate live evidence below |
 | Schedule | October 8 real scheduled @namastevideoai Reel, project tabs closed before due; scheduler processing at due+7.610s, published at due+137.757s; one attempt, exact caption and no duplicate | Passed pilot timed-delivery check; no general timing SLA claimed |
 | Accessibility | F21 responsive/reduced-motion QA; October 10 Chrome dialog focus wrap/Escape and storyboard navigation; direct skip focus → next control → dialog/Escape passed live on f90ad44 | October 10 caption focus/field semantics passed locally and hosted on f56acc6; 17 focused tests/types/build passed. Actual screen-reader review was declined for this run and remains open; remaining end-to-end acceptance/listening are separate |
@@ -594,3 +594,43 @@ reliability is solved. A requested 390px viewport override did not change the
 measured viewport, so no new mobile/reflow pass is claimed; the override was reset.
 Full screen-reader, all destructive/paid workflow confirmations and integrated V1
 acceptance remain separate. Do not infer those passes from these checks.
+
+
+## October 11 evaluation checkpoint and next release decisions
+
+The full local gate passed **529 tests**, both typechecks, production build and
+three public-demo decodes. A subsequent web-only dispatch fix passed **26 focused
+regressions**, web typecheck/build and live old-image receipt reconciliation.
+Those scopes are distinct; this does not claim a new full-suite run after that fix.
+
+Both Cloud Run jobs use immutable image `233c9d28` from source `940bbe7`; the web
+dispatcher fix is `f66f60e`. All 20 inputs were attempted. Original failures, manual
+factual corrections and bounded follow-ups are recorded in CONTENT_EVALUATION.md.
+The matrix is useful evidence, but is **not a blanket quality pass**.
+
+Before full internal V1 acceptance:
+
+1. Address the remaining binary-search validation and overbroad-topic clarification
+   cases; preserve their original failed runs. Contradictory-note narration remains
+   unverified after a separate evaluation-helper stale-version mistake and failed
+   bounded recovery. Do not conceal these with another edited fixture.
+2. Review the private generated-video gallery for audible pronunciation, numeric
+   readings, continuous motion and factual accuracy. Automated audio checks and six
+   stills per output do not replace this review. Record explicit decisions on the
+   missing water-cycle return arrow, non-proportional comparison cards and awkward
+   word wrapping.
+3. Confirm the pilot's permitted operating use and explicitly choose a bounded
+   activation window after quality findings are resolved or accepted. Actual
+   screen-reader review remains deferred by the user. Public external onboarding
+   still needs applicable Meta access review; main promotion needs merge approval.
+
+No new Instagram posts, subscriptions or indefinite cloud workloads were added.
+
+Final bounded batch: **17 narrated outputs across16 topics**, including five
+reviewed follow-ups, passed technical probes and automated audio review (original
+flags retained). All47 cloud executions completed; no unresolved dispatch receipts.
+Ready stop deployment `FvCuyDs1aydXWex5x1jUpNS1xfmQ` returned homepage200, generation503,
+publishing503 and unauthorized renewal401. Generation/publication schedulers are
+paused; daily renewal remains enabled. The private review gallery is
+`runs/f22/evaluation-review.html`. See the content report for cost estimates and
+open quality findings. This completes the bounded test run, not full V1 approval.
