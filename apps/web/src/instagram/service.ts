@@ -105,8 +105,14 @@ export function instagramService(db:Db,client:MongoClient,config:InstagramConfig
     const result=await provider.refresh(decryptToken(row.encryptedToken,config,ownerId,row._id)),date=new Date();
     const saved=await rows.updateOne({...filter,refreshLeaseUntil:{$eq:row.refreshLeaseUntil,$gt:date}},{$set:{encryptedToken:encryptToken(result.token,config,ownerId,row._id),expiresAt:new Date(date.getTime()+result.expiresIn*1000),tokenIssuedAt:date,updatedAt:date},$inc:{tokenRevision:1,revision:1},$unset:{refreshLeaseUntil:''}});
     return saved.matchedCount?'refreshed':'superseded';
-   }catch{
-    await rows.updateOne(filter,{$set:{state:'reconnect_required',updatedAt:new Date()},$inc:{revision:1},$unset:{refreshLeaseUntil:''}});return 'reconnect_required';
+   }catch(error){
+    const date=new Date(),fresh={...filter,refreshLeaseUntil:{$eq:row.refreshLeaseUntil,$gt:date}};
+    // A timeout, rate limit or malformed response does not prove the existing token is revoked.
+    const rejected=error instanceof ProjectError&&error.code==='INSTAGRAM_AUTH_REJECTED';
+    const saved=await rows.updateOne(fresh,rejected
+     ?{$set:{state:'reconnect_required',updatedAt:date},$inc:{revision:1},$unset:{refreshLeaseUntil:''}}
+     :{$set:{refreshLeaseUntil:new Date(date.getTime()+15*60000)}});
+    return !saved.matchedCount?'superseded':rejected?'reconnect_required':'retry_later';
    }
   },
  };

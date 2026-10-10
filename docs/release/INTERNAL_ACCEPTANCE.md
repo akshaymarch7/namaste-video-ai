@@ -244,3 +244,52 @@ session, projects, video versions and publication history three times, then sign
 out. Do not print cookies or response bodies. Record status, sanitized request
 ID, timings and deployment revision. Verify publication/generation remain
 disabled; read checks must not enable schedulers or issue render/publish commands.
+
+
+## Bounded Instagram token maintenance
+
+The disabled-by-default `POST /api/internal/instagram-refresh` accepts an empty
+body and no query string, using a **separate** server-only bearer in
+`INSTAGRAM_REFRESH_SCHEDULER_SECRET` (32+ random characters). It returns 503
+unless `INSTAGRAM_REFRESH_ENABLED=1`; missing/invalid authorization returns 401.
+Do not reuse the publishing, render-dispatch, session or media secrets.
+
+One invocation considers only admitted owners and renews at most one direct
+Instagram connection for the currently configured app. The existing
+`connection_refresh` index supports the state/expiry query; no schema migration
+is required. The token must be unexpired, at least 24 hours old, and expire in
+less than seven days. Selection prefers the earliest expiry. The 60-second lease
+and token revision fence concurrent scheduler/manual runs and late responses.
+Successful renewal changes token/connection revision but not destination identity
+or approval/publication history. Existing Settings displays expiry and connection
+state; no additional creator workflow is required.
+
+Transient provider/network/invalid-response failures retain the valid credential
+and use the existing lease timestamp as a durable 15-minute retry delay. Explicit
+401/403 or Meta error 190 authentication rejection requires reconnection. Actual
+expiry still prevents publishing. Results contain only `skipped`, `refreshed`,
+`retry_later`, `reconnect_required` or `superseded`; no tokens/account IDs/raw errors.
+A crash after a provider response can still produce an unknown maintenance
+outcome; the next invocation rechecks durable eligibility rather than bypassing
+the lease. This does not submit Instagram content.
+
+Activation checklist (not activated by implementation):
+
+1. Provision a dedicated secret in the existing web Production environment and
+   a **paused** Cloud Scheduler job targeting the canonical HTTPS endpoint.
+2. Review deployment, admission and token dates; enable only this maintenance
+   flag for one bounded live check. A fresh token correctly returns `skipped`;
+   do not falsify its age or expiry to force renewal.
+3. Record sanitized result/state, then disable again unless recurring operation
+   has been explicitly approved. For this personal pilot, a daily tick is enough
+   for one eligible account; larger populations require cadence/capacity planning
+   because a tick renews at most one account. Failures need operator follow-up;
+   no automatic paid monitoring service is configured.
+4. After recurring approval, enable the dedicated job with bounded retries and
+   monitor stale `expiring`/`reconnect_required` connections. Publishing/render
+   flags and their paused schedulers remain independent.
+
+Primary contract checked October 10:
+[Meta Business Login for Instagram — refresh a long-lived token](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/business-login).
+Deauthorization/data-deletion callback handling remains a separate unfinished
+lifecycle requirement; this maintenance endpoint does not claim to implement it.

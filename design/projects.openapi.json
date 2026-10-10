@@ -5601,6 +5601,66 @@
         }
       }
     },
+    "/api/internal/instagram-refresh": {
+      "post": {
+        "operationId": "refreshInstagramToken",
+        "description": "Disabled unless INSTAGRAM_REFRESH_ENABLED=1. Requires a distinct server-only bearer, empty body and no query. Renews at most one eligible admitted direct account; never publishes or renders.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^Bearer .+"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded maintenance result; no tokens/account IDs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "result"
+                      ],
+                      "properties": {
+                        "result": {
+                          "enum": [
+                            "skipped",
+                            "refreshed",
+                            "retry_later",
+                            "reconnect_required",
+                            "superseded"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Method/query/body not supported."
+          },
+          "401": {
+            "description": "Maintenance bearer missing or invalid."
+          },
+          "503": {
+            "description": "Disabled or unavailable."
+          }
+        }
+      }
+    },
     "/api/instagram/connect": {
       "post": {
         "operationId": "connectInstagram",

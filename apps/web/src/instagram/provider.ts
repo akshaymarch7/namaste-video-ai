@@ -27,8 +27,14 @@ export function instagramProvider(config:InstagramConfig,fetcher:typeof fetch=fe
  async function request(url:URL|string,init:RequestInit,signal:AbortSignal){
   try{
    const response=await fetcher(url,{...init,signal,redirect:'error',cache:'no-store'});
-   if(!response.ok)throw new ProjectError(502,response.status===401||response.status===403?'INSTAGRAM_AUTH_REJECTED':'INSTAGRAM_UNAVAILABLE','Instagram could not complete authorization. Please reconnect.');
-   const body=await response.text();if(body.length>65536)throw Error();return JSON.parse(body);
+   const body=await response.text();if(body.length>65536)throw Error();
+   let data:unknown;try{data=JSON.parse(body);}catch{if(response.ok)throw Error();data=null;}
+   if(!response.ok){
+    // Meta may report an invalid/expired OAuth token as HTTP 400 with code 190.
+    const auth=response.status===401||response.status===403||(response.status===400&&z.object({error:z.object({code:z.literal(190)})}).safeParse(data).success);
+    throw new ProjectError(502,auth?'INSTAGRAM_AUTH_REJECTED':'INSTAGRAM_UNAVAILABLE','Instagram could not complete the request.');
+   }
+   return data;
   }catch(e){if(e instanceof ProjectError)throw e;throw new ProjectError(502,'INSTAGRAM_UNAVAILABLE','Instagram could not complete authorization. Please reconnect.');}
  }
  async function longToken(path:string,params:Record<string,string>,signal:AbortSignal){

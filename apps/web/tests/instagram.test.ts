@@ -8,6 +8,8 @@ import {instagramService} from '../src/instagram/service';
 import {readInstagramConfig,directInstagramLoginConfigured,encryptToken,decryptToken,type InstagramConfig} from '../src/instagram/config';
 import {instagramProvider,authorizationUrl,type InstagramProvider,type Grant} from '../src/instagram/provider';
 import {handleInstagram} from '../src/instagram/http';
+import {ProjectError} from '../src/projects/contracts';
+import {refreshOne} from '../src/instagram/refresh';
 import {setupDatabase,runMigration} from '../src/db/setup';
 import {setupAuth} from '../src/auth/setup';
 import {createAuth} from '../src/auth/engine';
@@ -78,7 +80,7 @@ test('successful refresh rotates encrypted token; failures require reconnection 
  account='789';await service.callback('refresh-owner','s',stateOf(await service.connect('refresh-owner','s',{})),'code',false);
  const age=()=>db.collection('instagramConnections').updateOne({ownerId:'refresh-owner'},{$set:{expiresAt:new Date(Date.now()+86400000),tokenIssuedAt:new Date(Date.now()-2*86400000)}});
  await age();assert.equal(await service.refresh('refresh-owner'),'refreshed');const row=await db.collection('instagramConnections').findOne({ownerId:'refresh-owner'});assert.equal(decryptToken(row!.encryptedToken,config,'refresh-owner',String(row!._id)),'fixture-refreshed');
- await age();const failing=instagramService(db,client,config,{...provider,refresh:async()=>{throw Error('secret provider message');}});assert.equal(await failing.refresh('refresh-owner'),'reconnect_required');assert.equal((await service.get('refresh-owner'))?.state,'reconnect_required');
+ await age();const failing=instagramService(db,client,config,{...provider,refresh:async()=>{throw new ProjectError(502,'INSTAGRAM_AUTH_REJECTED','fixture rejection');}});assert.equal(await failing.refresh('refresh-owner'),'reconnect_required');assert.equal((await service.get('refresh-owner'))?.state,'reconnect_required');
  await db.collection('instagramConnections').updateOne({ownerId:'refresh-owner'},{$set:{state:'connected',expiresAt:new Date(0)}});assert.equal(await service.refresh('refresh-owner'),'skipped');assert.equal((await service.get('refresh-owner'))?.state,'reconnect_required');
 });
 test('concurrent duplicate disconnects commit once and return identical receipts',async()=>{
@@ -190,4 +192,28 @@ test('migration 016 upgrades applied 015 without changing its checksum or existi
  assert.deepEqual(await connections.findOne({_id:row._id}),priorRow);assert.equal((await instagramService(legacy,client,config,provider).get('legacy-owner'))?.state,'reconnect_required');
  const providerCallsBefore=calls;assert.match(await instagramService(legacy,client,config,provider).callback('legacy-owner','legacy-session','a'.repeat(43),'code',false),/outcome=expired/);assert.equal(calls,providerCallsBefore);
  await legacy.dropDatabase();
+});
+
+
+test('transient refresh failure preserves token and backs off; late failures cannot overwrite a newer connection',async()=>{
+ const owner='maintenance-retry';const base=instagramService(db,client,config,{...provider,exchange:async()=>grant('99981')});
+ await base.callback(owner,'s',stateOf(await base.connect(owner,'s',{})),'code',false);
+ const rows=db.collection('instagramConnections');await rows.updateOne({ownerId:owner},{$set:{expiresAt:new Date(Date.now()+86400000),tokenIssuedAt:new Date(Date.now()-2*86400000)}});
+ const before=await rows.findOne({ownerId:owner});let calls=0;
+ const failing=instagramService(db,client,config,{...provider,refresh:async()=>{calls++;throw Error('private provider message');}});
+ assert.equal(await failing.refresh(owner),'retry_later');const after=await rows.findOne({ownerId:owner});assert.equal(after!.state,'connected');assert.equal(after!.revision,before!.revision);assert.deepEqual(after!.encryptedToken,before!.encryptedToken);assert.ok(after!.refreshLeaseUntil.getTime()>Date.now()+14*60000);assert.equal(await failing.refresh(owner),'skipped');assert.equal(calls,1);
+ await rows.updateOne({ownerId:owner},{$unset:{refreshLeaseUntil:''}});
+ let reject!:(e:unknown)=>void;const slow=instagramService(db,client,config,{...provider,refresh:()=>new Promise<{token:string;expiresIn:number}>((_,r)=>{reject=r;})});const pending=slow.refresh(owner);while(!reject)await new Promise(r=>setTimeout(r,5));
+ await rows.updateOne({ownerId:owner},{$inc:{tokenRevision:1,revision:1},$unset:{refreshLeaseUntil:''}});reject(new ProjectError(502,'INSTAGRAM_AUTH_REJECTED','fixture'));assert.equal(await pending,'superseded');assert.equal((await rows.findOne({ownerId:owner}))!.state,'connected');
+ await rows.updateOne({ownerId:owner},{$set:{expiresAt:new Date(0)}});
+});
+test('bounded runner excludes unadmitted owners and renews only one eligible token',async()=>{
+ // Independent DB avoids affecting earlier fixture accounts or strict auth fixtures.
+ const isolated=client.db('renewal_candidates');await setupInstagram(isolated);
+ let n=90000,calls=0;const p={...provider,exchange:async()=>grant(String(++n)),refresh:async(t:string)=>{calls++;return provider.refresh(t);}};
+ const svc=instagramService(isolated,client,config,p),rows=isolated.collection('instagramConnections');
+ async function seed(owner:string,extra:Record<string,unknown>={},enabled=true){await svc.callback(owner,'s',stateOf(await svc.connect(owner,'s',{})),'code',false);await rows.updateOne({ownerId:owner},{$set:{expiresAt:new Date(Date.now()+86400000),tokenIssuedAt:new Date(Date.now()-2*86400000),...extra}});await isolated.collection('internalAccess').insertOne({provisionedUserId:owner,enabled,provisioningState:'active'});}
+ await seed('disabled',{},false);await seed('expired',{expiresAt:new Date(0)});await seed('young',{tokenIssuedAt:new Date()});await seed('fresh',{expiresAt:new Date(Date.now()+30*86400000)});await seed('foreign-app',{providerAppId:'999999'});await seed('leased',{refreshLeaseUntil:new Date(Date.now()+86400000)});await seed('first');await seed('second',{expiresAt:new Date(Date.now()+2*86400000)});
+ assert.deepEqual(await refreshOne(isolated,client,config,p),{result:'refreshed'});assert.equal(calls,1);assert.equal((await rows.findOne({ownerId:'first'}))!.tokenRevision,2);assert.equal((await rows.findOne({ownerId:'second'}))!.tokenRevision,1);
+ assert.deepEqual(await refreshOne(isolated,client,config,p),{result:'refreshed'});assert.equal(calls,2);assert.deepEqual(await refreshOne(isolated,client,config,p),{result:'skipped'});assert.equal(calls,2);
 });
