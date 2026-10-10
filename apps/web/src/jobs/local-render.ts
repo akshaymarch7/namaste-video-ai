@@ -8,6 +8,7 @@ import {promisify} from 'node:util';
 import {mediaProbePath} from '../../../../src/pipeline/media-binaries';
 import {r2Store} from '../storage/r2';
 import {ExecutionError,type ExecutionAdapters} from './execution';
+import {requestSpeech} from './speech-provider';
 const exec=promisify(execFile),root=fileURLToPath(new URL('../../../../',import.meta.url));
 const probe=mediaProbePath();
 export async function localExecutionAdapters():Promise<ExecutionAdapters>{
@@ -19,15 +20,7 @@ export async function localExecutionAdapters():Promise<ExecutionAdapters>{
  return {store,
   async speech(text,config,signal){
    const combined=AbortSignal.any([signal,AbortSignal.timeout(120000)]);
-   let response:Response;
-   try{response=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${config.voiceId}/with-timestamps?output_format=${config.format}`,{method:'POST',headers:{'Content-Type':'application/json','xi-api-key':apiKey},body:JSON.stringify({text,model_id:config.model,voice_settings:{stability:config.stability,similarity_boost:config.similarityBoost}}),signal:combined});}
-   catch{throw new ExecutionError('PROVIDER_OUTCOME_UNKNOWN');}
-   if(!response.ok){await response.body?.cancel();throw new ExecutionError([401,403].includes(response.status)?'SPEECH_ACCESS_DENIED':response.status===429?'SPEECH_QUOTA_LIMIT':'PROVIDER_OUTCOME_UNKNOWN');}
-   if(!response.body)throw new ExecutionError('PROVIDER_OUTCOME_UNKNOWN');
-   const reader=response.body.getReader();const chunks:Uint8Array[]=[];let length=0;
-   try{for(;;){const {done,value}=await reader.read();if(done)break;length+=value.length;if(length>12*1024*1024)throw Error();chunks.push(value);}}finally{await reader.cancel().catch(()=>{});}
-   const payload=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-   if(typeof payload.audio_base64!=='string'||!payload.audio_base64||!payload.alignment)throw new ExecutionError('PROVIDER_OUTCOME_UNKNOWN');
+   const payload=await requestSpeech(text,config,apiKey,combined);
    const temp=await fs.mkdtemp(path.join(os.tmpdir(),'namaste-speech-'));
    try{
     const file=path.join(temp,'audio.mp3');await fs.writeFile(file,Buffer.from(payload.audio_base64,'base64'),{mode:0o600});

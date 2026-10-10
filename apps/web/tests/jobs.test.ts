@@ -1,3 +1,5 @@
+import {endpoint,sever} from './helpers/provider-endpoint';
+import {requestSpeech} from '../src/jobs/speech-provider';
 import {setupVideos} from '../src/videos/setup';
 import type {ExecutionAdapters} from '../src/jobs/execution';
 import {syntheticSpeech} from '../../../src/pipeline/timing';
@@ -268,3 +270,26 @@ test('older queued renderer snapshots stop before speech rather than silently ch
 });
 
 test('worker shutdown stops dispatch before claiming queued work',async()=>{const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data;let calls=0;const result=await dispatchJobs(db,client,async()=>{calls++;},()=>new Date(),()=>true);assert.equal(calls,0);assert.equal(result.delivered,0);assert.equal((await db.collection('generationOutbox').findOne({jobId:j.id}))!.state,'pending');assert.equal((await service().get(owner,j.id)).state,'queued');});
+
+
+test('real speech socket loss preserves prior video and durable receipt without a second request',async()=>{
+ await endpoint(async h=>{
+  const s=await seed(),d=executionDouble();
+  const first=(await service().create(owner,s.project.id,randomUUID(),s.input)).data;
+  await runGenerationJob(db,client,first.id,undefined,undefined,d.adapters);
+  const previous=await db.collection('renderOutputs').findOne({jobId:first.id});assert.ok(previous);
+  const j=(await service().create(owner,s.project.id,randomUUID(),{...s.input,acknowledgePossibleRepeat:true})).data;
+  h.set(sever);
+  d.adapters.speech=async(text,config,signal)=>{
+   assert.equal(await db.collection('speechStages').countDocuments({jobId:j.id,state:'request_started'}),1);
+   const payload=await requestSpeech(text,config,'synthetic-key',signal,h.request);
+   return {audio:payload.audio_base64,alignment:payload.alignment,duration:1};
+  };
+  await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
+  const failed=await service().get(owner,j.id);assert.equal(failed.errorCode,'PROVIDER_OUTCOME_UNKNOWN');
+  await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);assert.equal(h.count(),1);
+  assert.deepEqual(await db.collection('renderOutputs').findOne({jobId:first.id}),previous);
+  assert.equal(await db.collection('renderOutputs').countDocuments({jobId:j.id}),0);
+  await fail(service().create(owner,s.project.id,randomUUID(),s.input),'REPEAT_ACK_REQUIRED');
+ });
+});

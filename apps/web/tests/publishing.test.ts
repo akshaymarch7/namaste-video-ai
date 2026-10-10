@@ -1,3 +1,4 @@
+import {endpoint,sever,json} from './helpers/provider-endpoint';
 import {requestInstagramDeletion,completeReviewedDeletion,deletionStatus} from '../src/instagram/deletion';
 import {setupInstagramDeletion} from '../src/instagram/deletion-setup';
 import {inTransaction} from '../src/db/client';
@@ -28,7 +29,7 @@ import {encryptToken,type InstagramConfig} from '../src/instagram/config';
 import {instagramService} from '../src/instagram/service';
 import {publishingService,uid} from '../src/publishing/service';
 import {publishWorker} from '../src/publishing/worker';
-import {type PublishProvider} from '../src/publishing/provider';
+import {publishProvider,type PublishProvider} from '../src/publishing/provider';
 import {storageService,digest} from '../src/storage/service';
 import {handlePublishing,handlePublishTick} from '../src/publishing/http';
 const cfg:InstagramConfig={appId:'123',appSecret:'fixture',redirectUri:'https://app.test/api/instagram/callback',version:'v26.0',activeKey:'one',keys:{one:randomBytes(32).toString('base64')}};
@@ -206,4 +207,23 @@ test('database failure during deletion rolls back receipt, credential removal an
  const f=await fixture();await registerLifecycle(f);await f.service.create(f.owner,randomUUID(),f.input);const before=await db.collection('instagramConnections').findOne({_id:f.connection as never});const count=await db.collection('instagramDeletions').countDocuments();
  const faulty=new Proxy(db,{get(target,key){if(key==='collection')return (name:string)=>{const collection=target.collection(name);if(name!=='publishRevisions')return collection;return new Proxy(collection,{get(t,k){if(k==='deleteMany')return ()=>{throw Error('injected cleanup failure');};const value=Reflect.get(t,k);return typeof value==='function'?value.bind(t):value;}});};const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}});
  await assert.rejects(requestInstagramDeletion(faulty,client,cfg,{userId:f.input.payload.destination.instagramUserId,issuedAt:new Date()}));assert.deepEqual(await db.collection('instagramConnections').findOne({_id:f.connection as never}),before);assert.equal(await db.collection('publishIntents').countDocuments({ownerId:f.owner}),1);assert.equal(await db.collection('instagramDeletions').countDocuments(),count);
+});
+
+
+test('real lost Meta publish response persists uncertainty and recovers by status without reposting',async()=>{
+ await endpoint(async h=>{
+  const f=await fixture(),adapter=publishProvider(cfg,h.request);
+  const {data}=await f.service.create(f.owner,randomUUID(),f.input);
+  await f.worker().tick(f.owner); // Existing synthetic container; only publication transport is under test.
+  f.provider.publish=adapter.publish;
+  h.set(sever);f.advance();await f.worker().tick(f.owner);
+  assert.equal((await f.service.get(f.owner,data.id)).state,'outcome_unknown');assert.equal(h.count(),1);
+  for(let i=0;i<2;i++){f.advance();await f.worker().tick(f.owner);}
+  assert.equal(h.count(),1);
+  const pending=await f.service.get(f.owner,data.id);
+  await fail(f.service.action(f.owner,data.id,randomUUID(),'retry',{expectedRevision:pending.revision,confirm:true}),'OUTCOME_UNKNOWN');
+  f.provider.status=adapter.status;h.set(json({status_code:'PUBLISHED'}));f.advance();await f.worker().tick(f.owner);
+  assert.equal((await f.service.get(f.owner,data.id)).state,'published');assert.equal(h.count(),2);
+  assert.equal(await db.collection('publishIntents').countDocuments({ownerId:f.owner}),1);
+ });
 });

@@ -36,7 +36,7 @@ Do not publish the raw local test output without reviewing it.
 | Direct Instagram connection | @namastevideoai real Instagram consent/callback, clean reload, expected workspace, consumed OAuth receipt, encrypted token and HTTP 200 profile check passed on October 8 | Public access needs applicable Advanced Access/App Review; lifecycle callbacks passed live October 10; daily token-maintenance activation passed October 10; actual provider extension awaits eligible expiry; this does not prove publishing |
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
 | Dashboard latency | October 10 aligned Vercel Mumbai with Atlas Mumbai; 12 live reads, two-account isolation and exact media delivery passed; 476 local tests/build passed | Preserve timing evidence for any recurrence; short sample does not guarantee no future timeout |
-| Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; October 10 hosted create-response loss recovered with the same key/body, one project, changed-body rejection and cleanup | October 10 isolated hosted Atlas access-loss/recovery passed with API and browser autosave; actual provider/network-outage acceptance remains separate |
+| Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; October 10 hosted create-response loss recovered with the same key/body, one project, changed-body rejection and cleanup | October 10 isolated hosted Atlas access-loss/recovery passed with API and browser autosave; controlled local provider transport/worker checks passed (156 targeted tests); hosted provider/browser and actual network-outage evidence remain separate |
 | Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Current renderer rebuilt and saved-narration revision verified October 8; ongoing activation remains paused |
 | Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery has separate live evidence below |
 | Schedule | October 8 real scheduled @namastevideoai Reel, project tabs closed before due; scheduler processing at due+7.610s, published at due+137.757s; one attempt, exact caption and no duplicate | Passed pilot timed-delivery check; no general timing SLA claimed |
@@ -495,3 +495,43 @@ disconnected, sessions signed out and database access quarantined until automati
 six-hour credential expiry. The inert deployment and synthetic database remain;
 no permanent cloud deletion was performed. See Project Status for exact evidence.
 This is authorization-loss testing; do not label it a regional/provider outage.
+
+## Controlled provider failure acceptance
+
+October 10 verification: **156 targeted tests**, root/web typechecks and production build passed.
+
+The repeatable local transport drill lives in `apps/web/tests/provider-outage.test.ts`.
+It sends synthetic payloads through production adapters to a loopback HTTP server;
+only the fetch destination is substituted. It reads no environment credentials,
+creates no real narration and publishes nothing. Run from `apps/web`:
+
+```sh
+node --conditions=react-server --import tsx --test --test-concurrency=1 \
+  tests/provider-outage.test.ts tests/jobs.test.ts tests/publishing.test.ts \
+  tests/publishing-provider.test.ts tests/idea-providers.test.ts \
+  tests/storyboards.test.ts tests/storyboard-storage.test.ts
+```
+
+The normal acceptance runner also discovers these tests and strips inherited
+credentials. The drill covers HTTP authorization/rate-limit/unavailable responses,
+socket loss, truncated/stalled bodies, cancellation and recovery. Storyboard
+explicit transient failures have a four-call maximum; ambiguous responses do not
+retry. Meta's real 12-second timeout includes stalled response-body consumption.
+Speech redirects are rejected, and transport/parse failures use the existing safe
+unknown-outcome code. Speech audio fixtures test transport only, not playable audio.
+
+Additional database-backed checks in the jobs and publishing suites route the
+actual speech/publish adapter through a dropped HTTP connection. They verify:
+
+- The speech request-start receipt exists before dispatch, a second worker delivery
+  makes no new request, previous output remains intact, and a fresh generation
+  requires the existing possible-repeat acknowledgement.
+- An interrupted publish leaves a durable unknown outcome. Repeated worker ticks
+  do not POST again; retry is blocked and an eventual PUBLISHED status read settles
+  the original intent without creating another.
+
+This is controlled local fault injection with disposable databases. It does not
+claim a real provider incident, hosted browser outage acceptance, or new live
+voice/video quality evidence. The speech change also needs the next explicitly
+approved worker-image rebuild before it is active in Cloud Run; pushing web source
+alone does not update the deployed worker. Existing activation flags remain unchanged.
