@@ -36,7 +36,7 @@ Do not publish the raw local test output without reviewing it.
 | Direct Instagram connection | @namastevideoai real Instagram consent/callback, clean reload, expected workspace, consumed OAuth receipt, encrypted token and HTTP 200 profile check passed on October 8 | Public access needs applicable Advanced Access/App Review; lifecycle callbacks passed live October 10; daily token-maintenance activation passed October 10; actual provider extension awaits eligible expiry; this does not prove publishing |
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
 | Dashboard latency | October 10 aligned Vercel Mumbai with Atlas Mumbai; 12 live reads, two-account isolation and exact media delivery passed; 476 local tests/build passed | Preserve timing evidence for any recurrence; short sample does not guarantee no future timeout |
-| Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; October 10 hosted create-response loss recovered with the same key/body, one project, changed-body rejection and cleanup | Controlled hosted outage/recovery drill before continuous operation |
+| Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; October 10 hosted create-response loss recovered with the same key/body, one project, changed-body rejection and cleanup | October 10 isolated hosted Atlas access-loss/recovery passed with API and browser autosave; actual provider/network-outage acceptance remains separate |
 | Hosted generation/media | October 8 bounded Cloud Run, Atlas, R2, authenticated playback/download and user review passed | Current renderer rebuilt and saved-narration revision verified October 8; ongoing activation remains paused |
 | Publish now | October 8 real @namastevideoai Reel, provider ID/permalink, exact caption, one intent/attempt, reload and Published filter passed; see Project Status | Full Instagram player/listening review was not repeated; scheduled delivery has separate live evidence below |
 | Schedule | October 8 real scheduled @namastevideoai Reel, project tabs closed before due; scheduler processing at due+7.610s, published at due+137.757s; one attempt, exact caption and no duplicate | Passed pilot timed-delivery check; no general timing SLA claimed |
@@ -474,7 +474,7 @@ acceptance runner discovers this test automatically. It never reads Atlas or
 provider environment files. This does not simulate an Atlas regional failure or
 establish hosted UI acceptance.
 
-The remaining hosted drill requires a separate protected test deployment and
+The October 10 hosted database drill passed on a separate application-auth-protected test deployment and
 isolated database with synthetic users/content. Do not change production Atlas
 network access, credentials or renewal configuration to induce a failure.
 Prepare synthetic saved work, deny only the test deployment's database access,
@@ -485,3 +485,13 @@ availability. Keep generation/publishing disabled and omit all real provider,
 Instagram and R2 credentials from the isolated deployment. Record exact revision,
 failure/recovery timing, browser evidence, saved-record comparison and cleanup.
 Deployment and any additional billable resources require explicit approval.
+
+Hosted database drill result (October 10): source `eb7fadc`, separate Hobby project
+`namaste-video-outage-test`, synthetic database/account only. Scoped Atlas access
+removal caused sanitized 503s; restoration preserved saved data, recovered the
+original command without duplicates and saved the browser-held edit across reload.
+No redeployment/restart was needed for recovery. Test Git integration was then
+disconnected, sessions signed out and database access quarantined until automatic
+six-hour credential expiry. The inert deployment and synthetic database remain;
+no permanent cloud deletion was performed. See Project Status for exact evidence.
+This is authorization-loss testing; do not label it a regional/provider outage.
