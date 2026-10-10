@@ -33,7 +33,7 @@ Do not publish the raw local test output without reviewing it.
 | Requirement | Existing evidence | Remaining acceptance |
 |---|---|---|
 | Private workspaces/auth | October 8 hosted two-account sign-in, project/version/media/asset denial and destination isolation passed; detailed evidence in Project Status | Retain isolation checks when authorization scope or storage boundaries change |
-| Direct Instagram connection | @namastevideoai real Instagram consent/callback, clean reload, expected workspace, consumed OAuth receipt, encrypted token and HTTP 200 profile check passed on October 8 | Public access needs applicable Advanced Access/App Review; lifecycle callbacks passed live October 10; recurring token refresh remains pending; this does not prove publishing |
+| Direct Instagram connection | @namastevideoai real Instagram consent/callback, clean reload, expected workspace, consumed OAuth receipt, encrypted token and HTTP 200 profile check passed on October 8 | Public access needs applicable Advanced Access/App Review; lifecycle callbacks passed live October 10; daily token-maintenance activation passed October 10; actual provider extension awaits eligible expiry; this does not prove publishing |
 | Idea → review → export | Feature QA through F17; accepted 77.013333-second hosted water-cycle export | Representative topic evaluation below; record new deployment revision if retested |
 | Dashboard latency | October 10 aligned Vercel Mumbai with Atlas Mumbai; 12 live reads, two-account isolation and exact media delivery passed; 476 local tests/build passed | Preserve timing evidence for any recurrence; short sample does not guarantee no future timeout |
 | Recovery and races | Autosave, session, storyboard, jobs, caption/video and publishing fixtures; October 10 hosted create-response loss recovered with the same key/body, one project, changed-body rejection and cleanup | Controlled hosted outage/recovery drill before continuous operation |
@@ -100,7 +100,7 @@ the four-GiB allocation until a reviewed benchmark establishes a safe lower one.
 
 ## Controlled hosted rollout
 
-Current baseline (October 10): migrations through 019, direct Instagram Login
+Current baseline (October 10): migrations through 022, direct Instagram Login
 for @namastevideoai, custom-domain callbacks/media and both real immediate and
 scheduled publications passed. The older Facebook Page route was rejected and
 is not required. The worker was rebuilt and its saved-narration render verified
@@ -462,3 +462,26 @@ not executed following an automatic approval-review rejection; automated replay
 and newer-consent tests passed. Earlier “pending” activation text above is retained
 as a runbook, not the current live state. Renewal and workload schedulers remain
 disabled; this does not close the remaining F22 gates.
+
+
+## Isolated outage drill
+
+The local `tests/outage-recovery.test.ts` uses a disposable loopback MongoDB
+and a TCP proxy. It drops actual sockets, first during initial connection and
+then after a successful persisted write, restores transport and verifies recovery
+through the same application connection and unchanged saved data. The normal
+acceptance runner discovers this test automatically. It never reads Atlas or
+provider environment files. This does not simulate an Atlas regional failure or
+establish hosted UI acceptance.
+
+The remaining hosted drill requires a separate protected test deployment and
+isolated database with synthetic users/content. Do not change production Atlas
+network access, credentials or renewal configuration to induce a failure.
+Prepare synthetic saved work, deny only the test deployment's database access,
+verify bounded errors and preserved local edits, restore access, and confirm
+same-command recovery without duplicate writes. Provider failures must use
+clearly labelled controlled responses; they do not establish real provider
+availability. Keep generation/publishing disabled and omit all real provider,
+Instagram and R2 credentials from the isolated deployment. Record exact revision,
+failure/recovery timing, browser evidence, saved-record comparison and cleanup.
+Deployment and any additional billable resources require explicit approval.
