@@ -1,9 +1,9 @@
 # F22 — Internal release acceptance
 
-Status: in progress. Real Post now and scheduled delivery acceptance passed on October 8. The remaining matrix below, including longer-run response reliability, is still open; this is not full release approval.
+Status: implementation follow-ups complete; cloud refresh and user-owned final acceptance remain. Real Post now and scheduled delivery acceptance passed on October 8. The remaining matrix below, including longer-run response reliability, is still open; this is not full release approval.
 `PROJECT_STATUS.md` remains the authoritative implementation/evidence record.
 
-## Current closeout authorization and order
+## October10 closeout authorization and order (historical)
 
 On October 10 the user approved completing the remaining release work, with a
 US$10 total additional spending ceiling for the worker rebuild, cloud verification

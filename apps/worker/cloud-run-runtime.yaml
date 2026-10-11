@@ -1,4 +1,4 @@
-# Runtime template: image rebuilt from 32f5d55 on October 10, 2026.
+# Runtime template: image rebuilt from b699e6c on October 11, 2026.
 # Preserve existing deployed secret versions; this file is not a live-state export.
 # Create version 1 of each role-scoped secret separately; no values in source.
 # Applying this file must not execute a job or enable dashboard dispatch.
@@ -20,7 +20,7 @@ spec:
           timeoutSeconds: '180'
           containers:
             - name: worker
-              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:233c9d285acefc93b3ff090740bd9c6f1444f0d4561541e21a3321eecd1e446f
+              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:3c7f6965ba6e12e28ed97a1b0037c9f9d0d71fe5085af9b7e1f891f74ea57c32
               args: ['storyboard', '--job', 'required']
               resources:
                 limits: {cpu: '2', memory: 4Gi}
@@ -54,7 +54,7 @@ spec:
           timeoutSeconds: '900'
           containers:
             - name: worker
-              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:233c9d285acefc93b3ff090740bd9c6f1444f0d4561541e21a3321eecd1e446f
+              image: us-central1-docker.pkg.dev/namastevideo-dev-20261007/namastevideo-workers/worker@sha256:3c7f6965ba6e12e28ed97a1b0037c9f9d0d71fe5085af9b7e1f891f74ea57c32
               args: ['generation', '--job', 'required']
               resources:
                 limits: {cpu: '2', memory: 4Gi}
