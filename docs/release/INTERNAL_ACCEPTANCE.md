@@ -634,3 +634,8 @@ publishing503 and unauthorized renewal401. Generation/publication schedulers are
 paused; daily renewal remains enabled. The private review gallery is
 `runs/f22/evaluation-review.html`. See the content report for cost estimates and
 open quality findings. This completes the bounded test run, not full V1 approval.
+
+
+## October11 acceptance ownership update
+
+The user explicitly owns final narration/video and complete manual/end-to-end testing. Do not run another paid content matrix to close those rows on their behalf or relabel historical failures as passes. Implementation follow-ups now include measured diagram text, explicit spoken-word repair budgets and proportional chart support. Atlas migration023 is applied; renderer plan-v2-4 requires a matching worker image before generation is enabled. Cloud activation and operating-budget limits remain separate from content acceptance.

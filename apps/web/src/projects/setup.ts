@@ -1,3 +1,4 @@
+import {chartDraftDefinition} from '../storyboards/registry-schema';
 import {measureStage} from '../diagnostics/timing';
 import {editableDraftDefinition} from '../drafts/edit-schema';
 import 'server-only';
@@ -30,7 +31,7 @@ export const projectMigrationId = 'mig_projects0000000001';
 export const checksum = createHash('sha256').update(JSON.stringify(definitions)).digest('hex');
 export async function setupProjects(db: Db) {
   if (!await db.collection('schemaMigrations').findOne({ _id: foundationId as never, checksum: foundationChecksum, state: 'completed' })) throw new DatabaseError('DB_SETUP_REQUIRED', 'Run foundation setup first.');
-  return runMigration(db, '002-projects', projectMigrationId, checksum, definitions, { successors: { drafts: [draftDefinition.validator,editableDraftDefinition.validator] } });
+  return runMigration(db, '002-projects', projectMigrationId, checksum, definitions, { successors: { drafts: [draftDefinition.validator,editableDraftDefinition.validator,chartDraftDefinition(editableDraftDefinition).validator] } });
 }
 async function assertProjectsReadyImpl(db: Db) {
   if (!await db.collection('schemaMigrations').findOne({ _id: projectMigrationId as never, checksum, state: 'completed' })) throw new DatabaseError('PROJECT_SETUP_REQUIRED', 'Run db:setup before project operations.');

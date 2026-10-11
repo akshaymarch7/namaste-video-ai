@@ -37,7 +37,7 @@ export function layoutStressFixture():Storyboard{
       side.heading='Cloud storage cost';
       side.points=Array(3).fill('Retains data without power');
     }
-    else v.data.labels=Array(4).fill('Reliable distributed systems');
+    else if(v.component==='title'||v.component==='takeaway')v.data.labels=Array(4).fill('Reliable distributed systems');
   }
   return plan;
 }

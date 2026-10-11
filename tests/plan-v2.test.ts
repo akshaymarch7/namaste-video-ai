@@ -160,3 +160,13 @@ test('measured diagram layout preserves whole words and fits wide boundary label
  assert.deepEqual(fitMeasuredLabel('Probability',measure,295,27,0,100).lines,['Probability']);
  assert.throws(()=>fitMeasuredLabel('cannot fit',()=>1000,100,32,0,40),/DIAGRAM_TEXT_LAYOUT_INVALID/);
 });
+
+test('chart scale preserves supplied ratios, zero and fractional quantities',async()=>{
+ const {chartFractions}=await import('../apps/web/src/storyboards/chart');
+ assert.deepEqual(chartFractions([10,20,30]),[1/3,2/3,1]);
+ assert.deepEqual(chartFractions([0,0]),[0,0]);assert.deepEqual(chartFractions([0,.1,.2]),[0,.5,1]);
+ assert.throws(()=>chartFractions([-1,2]));assert.throws(()=>chartFractions([NaN,2]));
+ const p=structuredClone(renderFixture);p.scenes[0].visual={component:'chart',version:1,data:{unit:'items',bars:[{id:'a',label:'A',value:10},{id:'b',label:'B',value:20},{id:'c',label:'C',value:30}]}};
+ p.scenes[0].events=p.scenes[0].events.slice(0,1).map(e=>({...e,targetId:'b',action:'emphasize'}));
+ const t=compileV2(p,context,fixtureSpeech(),true);assert.equal(t.rendererVersion,'plan-v2-4');assert.deepEqual(t.scenes[0].visual,p.scenes[0].visual);
+});

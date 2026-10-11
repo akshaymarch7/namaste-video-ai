@@ -24,7 +24,7 @@ export type RenderCompletion={assets:Doc[];output:Doc};
 export async function executeGeneration(db:Db,client:MongoClient,job:Doc,adapters:ExecutionAdapters,now=()=>new Date()):Promise<RenderCompletion>{
  await assertRenderingReady(db);
  const config=renderConfigSchema.parse(job.inputSnapshot.renderConfig);
- if(job.inputSnapshot.captionRevision?job.inputSnapshot.captionRevision.rendererVersion!=='plan-v2-3':config.renderer!=='plan-v2-3')throw new ExecutionError('RENDER_CONFIG_CHANGED');
+ if(job.inputSnapshot.captionRevision?job.inputSnapshot.captionRevision.rendererVersion!=='plan-v2-4':config.renderer!=='plan-v2-4')throw new ExecutionError('RENDER_CONFIG_CHANGED');
  const plan=validateStoryboard(job.inputSnapshot.plan,{notes:job.inputSnapshot.notes,voicePreset:job.inputSnapshot.voicePreset}).content;
  const jobs=db.collection<Doc>('generationJobs'),stages=db.collection<Doc>('speechStages');
  const abort=new AbortController();let heartbeat:ReturnType<typeof setTimeout>|undefined;let stopped=false;

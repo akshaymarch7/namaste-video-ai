@@ -1,3 +1,4 @@
+import {chartCandidateDefinition} from './registry-schema';
 import 'server-only';
 import {createHash} from 'node:crypto';
 import type {Db} from 'mongodb';
@@ -15,7 +16,7 @@ const fields={_id:{bsonType:'string',pattern:'^job_[a-f0-9]{32}$'},ownerId:text(
 export const snapshotDefinition:CollectionDefinition={name:'storyboardSnapshots',validator:{$jsonSchema:{bsonType:'object',additionalProperties:false,required:Object.keys(fields),properties:fields}},indexes:[{name:'storyboard_snapshot_key',key:{ownerId:1,projectId:1,keyHash:1},unique:true}]};
 const candidate=snapshotCandidateDefinition(storyboardDefinitions[1]);
 const id='mig_storyboardsnapshots001',checksum=createHash('sha256').update(JSON.stringify([candidate,snapshotDefinition])).digest('hex');
-export async function setupStoryboardSnapshots(db:Db){await assertStoryboardRevisionsReady(db);return runMigration(db,'009-storyboard-snapshots',id,checksum,[candidate,snapshotDefinition],{upgradeFrom:{storyboards:storyboardDefinitions[1].validator}});}
+export async function setupStoryboardSnapshots(db:Db){await assertStoryboardRevisionsReady(db);return runMigration(db,'009-storyboard-snapshots',id,checksum,[candidate,snapshotDefinition],{upgradeFrom:{storyboards:storyboardDefinitions[1].validator},successors:{storyboards:chartCandidateDefinition(candidate).validator}});}
 export async function assertStoryboardSnapshotsReady(db:Db){
  await assertStoryboardRevisionsReady(db);
  if(!await db.collection('schemaMigrations').findOne({_id:id as never,checksum,state:'completed'}))throw new DatabaseError('SNAPSHOT_SETUP_REQUIRED','Run db:setup before saving edited versions.');

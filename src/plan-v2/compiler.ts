@@ -11,7 +11,7 @@ export type SceneV2 = Storyboard['scenes'][number];
 export type MeasuredSpeech = {alignment: Alignment; duration: number};
 export type MotionEvent = {id: string; targetId: string; action: SceneV2['events'][number]['action']; start: number; frames: number};
 export type RenderScene = {id: string; title: string; kicker: string; visual: SceneV2['visual']; start: number; frames: number; events: MotionEvent[]; captions: (Caption & {sourceStart:number;sourceEnd:number;originalText:string})[]};
-export type RenderTimeline = {schemaVersion: 2; rendererVersion: 'plan-v2-3'; title: string; fps: 30; frames: number; fixture: boolean; scenes: RenderScene[]};
+export type RenderTimeline = {schemaVersion: 2; rendererVersion: 'plan-v2-4'; title: string; fps: 30; frames: number; fixture: boolean; scenes: RenderScene[]};
 
 // Maps approved UTF-16 boundaries to spoken UTF-16 boundaries. Inside a
 // pronunciation replacement the mapping is proportional, not forced alignment.
@@ -87,7 +87,7 @@ export function compileV2(raw:unknown, context:{notes:string;voicePreset:string}
   });
   if(used.size!==edits.length)throw Error('INVALID_SPAN');
   if(cursor<1800||cursor>2700)throw new MeasuredDurationError(cursor);
-  return {schemaVersion:2,rendererVersion:'plan-v2-3',title:plan.title,fps:30,frames:cursor,fixture,scenes};
+  return {schemaVersion:2,rendererVersion:'plan-v2-4',title:plan.title,fps:30,frames:cursor,fixture,scenes};
 }
 
 // Reveal/connect establish visibility; emphasize/compare add a temporary accent.

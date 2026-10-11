@@ -807,3 +807,10 @@ Replacement transactions read/fence the owned project and connection, validate t
 ### Direct Instagram onboarding compatibility (October 8, 2026)
 
 New OAuth receipts are direct Instagram only. Migration 016 already represents `instagram_user` tokens without Page metadata, so no new migration or bulk rewrite is required. Preserve legacy Facebook records and keyring entries. Reconnection replaces credentials only after successful session-bound authorization and transaction fences, unsets Page metadata, and advances the destination epoch when provider/app/account changes. Existing publish-intent snapshots remain bound to their original provider/app/account; configuration changes never convert tokens or silently retarget work. New Facebook callbacks are rejected. Existing disconnect/recovery records remain readable.
+
+
+## October 11 implementation addendum — migration023 proportional charts
+
+`023-proportional-charts` upgrades the strict `storyboards.content` and `drafts.editablePlan` validators with the chart variant. It creates no collections or indexes and rewrites no saved document. Chart bar IDs are checked for uniqueness by domain validation; BSON validators enforce shape, lengths and numeric bounds. Blank numeric fields persist as null only in editable drafts and cannot become immutable validated candidates.
+
+Historical schemas are frozen in `legacy-contract.ts` and `legacy-editable-contract.ts` so migrations005–009 retain their checksums. Earlier setup routines recognize the new validators as permitted successors rather than downgrading them on replay. Migration023 verifies the existing snapshot prerequisite, uses the standard migration lock/receipt, and accepts only the expected prior validators. Existing save/snapshot transactions, revision checks, ownership and idempotency remain unchanged. Isolated storage tests cover migration replay, unchanged historical checksums, exact chart persistence and invalid-value refusal.

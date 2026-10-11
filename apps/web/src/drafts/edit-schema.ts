@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {draftDefinition} from './schema';
-import {editableStoryboardSchema} from '../storyboards/editable-contract';
+import {editableStoryboardSchema} from '../storyboards/legacy-editable-contract';
 import type {CollectionDefinition} from '../db/schema';
 // Local JSON-schema conversion keeps this definition independent of migration modules.
 function bson(value:any):any{if(Array.isArray(value))return value.map(bson);if(!value||typeof value!=='object')return value;return Object.fromEntries(Object.entries(value).filter(([k])=>k!=='$schema').map(([k,v])=>k==='type'?['bsonType',v==='integer'?'int':v==='number'?['double','int']:v]:k==='const'?['enum',[v]]:[k,bson(v)]));}

@@ -1,3 +1,4 @@
+import {chartFractions} from '../../apps/web/src/storyboards/chart';
 import React,{useEffect,useState,createContext,useContext} from 'react';
 import {fitCaption} from './caption-edits';
 import {AbsoluteFill,Audio,Sequence,staticFile,useCurrentFrame,interpolate,delayRender,continueRender,cancelRender} from 'remotion';
@@ -38,6 +39,17 @@ export function DiagramV2({scene}:{scene:RenderScene}){
         return <path key={e.id} d={d} fill="none" stroke={m.accent>0?orange:teal} strokeWidth={3+m.accent*4} opacity={m.visibility*Math.min(source.visibility,destination.visibility)} pathLength={1} strokeDasharray={1} strokeDashoffset={1-m.visibility} markerEnd={`url(#arrow-${scene.id})`}/>;
       })}
       {v.data.steps.map((s,i)=>box(s.id,s.label,i,40+i*158))}
+    </>}
+    {v.component==='chart'&&<>
+      <Lines text={`${v.data.unit} · from zero`} x={95} top={0} height={40} size={24} width={670}/>
+      {v.data.bars.map((bar,i)=>{const m=motion(bar.id),fraction=chartFractions(v.data.bars.map(b=>b.value))[i],y=55+i*155;
+        return <g key={bar.id} opacity={m.visibility}>
+          <Lines text={bar.label} x={95} top={y} height={52} size={28} width={500}/>
+          <Lines text={String(bar.value)} x={610} top={y} height={52} size={26} width={155}/>
+          <rect x={95} y={y+55} width={670} height={40} rx={5} fill="#e0e8df"/>
+          <rect x={95} y={y+55} width={670*fraction*m.visibility} height={40} rx={5} fill={m.accent>0?orange:teal}/>
+        </g>;
+      })}
     </>}
     {v.component==='comparison'&&(['left','right'] as const).map((id,index)=>{
       const panel=v.data[id],m=motion(id);

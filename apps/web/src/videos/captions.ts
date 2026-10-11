@@ -58,7 +58,7 @@ export function captionService(db:Db,client:MongoClient,store:()=>ReadableObject
     const date=new Date(),parent=await liveProject(db,ownerId,v.projectId,session,date),existing=await receipt(session);
     if(existing)return {data:revisionView.parse(existing.response),replayed:true};
     if(parent.activeJobId)throw fail('PROJECT_BUSY','Wait for the active project request to finish.');
-    const inputSnapshot={...v.renderSpec,captionRevision:{version:1,rendererVersion:'plan-v2-3',parentVideoId:id,speechSourceJobId:v.jobId,overrides}};
+    const inputSnapshot={...v.renderSpec,captionRevision:{version:1,rendererVersion:'plan-v2-4',parentVideoId:id,speechSourceJobId:v.jobId,overrides}};
     const job:Doc={_id:uid('job'),ownerId,projectId:v.projectId,storyboardId:v.storyboardId,approvalId:v.storyApprovalId,inputSnapshot,inputHash:videoHash(inputSnapshot),state:'queued',stage:'queued',revision:1,attempt:0,fence:0,leaseUntil:null,deadlineAt:new Date(date.getTime()+15*60000),errorCode:null,createdAt:date,updatedAt:date,finishedAt:null};
     await db.collection<Doc>('generationJobs').insertOne(job,{session});
     await db.collection<Doc>('generationOutbox').insertOne({_id:uid('evt'),jobId:job._id,state:'pending',leaseToken:null,leaseUntil:null,availableAt:date,createdAt:date},{session});

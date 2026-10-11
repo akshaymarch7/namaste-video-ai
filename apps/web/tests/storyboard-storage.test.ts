@@ -535,3 +535,22 @@ test('bounded storyboard execution cannot consume another queued request',async(
  await assert.rejects(runStoryboardJob(db,client,provider,undefined,'invalid'));
  await runStoryboardJob(db,client,provider,undefined,a.id);
 });
+
+test('chart migration preserves historical checksums, persists editable values and immutable chart snapshots',async()=>{
+ const {setupVisualRegistry}=await import('../src/storyboards/registry-setup');
+ const before=await db.collection('schemaMigrations').find({},{projection:{_id:1,checksum:1}}).toArray();
+ await setupVisualRegistry(db);await setupVisualRegistry(db);
+ await setupProjects(db);await setupDrafts(db);await setupStoryboards(db);await setupEditableDrafts(db);await setupStoryboardSnapshots(db);
+ for(const row of before)assert.equal((await db.collection('schemaMigrations').findOne({_id:row._id}))!.checksum,row.checksum);
+ const {project,body}=await editableFixture();const applied=await drafts.apply(owner,project.id,randomUUID(),body);
+ const plan:any=structuredClone(applied.data.editablePlan);
+ plan.scenes[0].visual={component:'chart',version:1,data:{unit:'items',bars:[{id:'a',label:'A',value:10},{id:'b',label:'B',value:20},{id:'c',label:'C',value:30}]}};
+ plan.scenes[0].events[0].targetId='a';
+ const saved=await drafts.save(owner,project.id,{expectedRevision:3,changes:{editablePlan:plan}});
+ const snap=await snapshotReq(project.id,{expectedDraftRevision:saved.revision,expectedContentHash:saved.contentHash});assert.equal(snap.status,200);
+ const snapshot=(await snap.json()).data;assert.deepEqual((await service().get(owner,snapshot.storyboardId)).content.scenes[0].visual,plan.scenes[0].visual);
+ plan.scenes[0].visual.data.bars[0].value=null;
+ const incomplete=await drafts.save(owner,project.id,{expectedRevision:4,changes:{editablePlan:plan}});assert.equal(incomplete.validation.valid,false);
+ assert.equal((await snapshotReq(project.id,{expectedDraftRevision:incomplete.revision,expectedContentHash:incomplete.contentHash})).status,422);
+ await assert.rejects(db.collection('drafts').updateOne({projectId:project.id},{$set:{'editablePlan.scenes.0.visual.data.bars.0.value':-1}}));
+});

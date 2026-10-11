@@ -7,6 +7,7 @@ export function planText(plan:EditableStoryboard|null):string {
   const visual=scene.visual;
   const onScreen=visual.component==='flow'?visual.data.steps.map(step=>step.label).join(' → ')
    :visual.component==='comparison'?[visual.data.left,visual.data.right].map(side=>[side.heading,...side.points].join(' · ')).join(' / ')
+   :visual.component==='chart'?visual.data.bars.map(b=>`${b.label}: ${b.value??'unset'} ${visual.data.unit}`).join(' / ')
    :visual.data.labels.join(' · ');
   const cues=scene.events.map((event,i)=>
    `  Cue ${i+1} (${event.id}): phrase ${JSON.stringify(event.cue.phrase)}; occurrence ${event.cue.occurrence}; offset ${event.cue.offsetMs} ms; ${event.action} ${event.targetId}; duration ${event.durationMs} ms`

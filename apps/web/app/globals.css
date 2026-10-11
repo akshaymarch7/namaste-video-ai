@@ -98,3 +98,9 @@
 .publish-caption textarea { width: 100%; min-height: 10rem; padding: 1rem; color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: .75rem; font: inherit; resize: vertical; }
 .publish-caption-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .publish-timing{border:1px solid var(--border);border-radius:12px;margin:1.5rem 0;padding:1rem;min-width:0}.publish-timing label{display:block;margin:.75rem 0}.publish-timing input:not([type=radio]),.publish-timing select{display:block;width:100%;min-width:0;box-sizing:border-box;background:var(--panel);color:inherit;border:1px solid var(--border);border-radius:8px;padding:.7rem;font:inherit;color-scheme:dark}.publish-timing input[type=radio]{accent-color:var(--accent);margin-right:.5rem}
+
+.scene-chart { margin: 0; display: grid; gap: 1rem; }
+.scene-chart figcaption { color: var(--muted); font-size: .8rem; }
+.scene-chart strong { display: block; font-size: .875rem; overflow-wrap: anywhere; }
+.scene-chart-track { height: .65rem; margin-top: .4rem; border-radius: .2rem; background: rgba(255,255,255,.08); }
+.scene-chart-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent, #f0ae73); }

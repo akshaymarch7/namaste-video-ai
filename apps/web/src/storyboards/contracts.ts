@@ -3,6 +3,7 @@ const id = z.string().regex(/^[a-z][a-z0-9-]{0,49}$/);
 const text = (max: number, min = 1) => min ? z.string().min(min).max(max).regex(/\S/u) : z.string().max(max);
 const labelData = z.object({ labels: z.array(text(30)).min(1).max(4) }).strict();
 const panel = z.object({ heading: text(18), points: z.array(text(26)).min(1).max(3) }).strict();
+export const chartVisual=z.object({component:z.literal('chart'),version:z.literal(1),data:z.object({unit:text(20),bars:z.array(z.object({id,label:text(30),value:z.number().finite().min(0).max(1000000000)}).strict()).min(2).max(4)}).strict()}).strict();
 const visual = z.discriminatedUnion('component', [
   z.object({ component: z.literal('title'), version: z.literal(1), data: labelData }).strict(),
   z.object({ component: z.literal('takeaway'), version: z.literal(1), data: labelData }).strict(),
@@ -11,6 +12,7 @@ const visual = z.discriminatedUnion('component', [
     edges: z.array(z.object({id, from: id, to: id}).strict()).min(1).max(6),
   }).strict() }).strict(),
   z.object({ component: z.literal('comparison'), version: z.literal(1), data: z.object({left: panel, right: panel}).strict() }).strict(),
+  chartVisual,
 ]);
 export const storyboardSchema = z.object({
   schemaVersion: z.literal(2), title: text(100), audience: text(200,0), learningObjective: text(500),
@@ -66,6 +68,9 @@ export function validateStoryboard(raw: unknown, context: {notes: string; voiceP
         if(edge.from===edge.to||![edge.from,edge.to].every(id=>v.data.steps.some(s=>s.id===id)))add(`${path}.visual.data.edges`,'INVALID_EDGE');
         targets.set(edge.id,['reveal','emphasize','connect']);
       }
+    } else if(v.component==='chart') {
+      unique(v.data.bars.map(b=>b.id),`${path}.visual.data.bars`);
+      for(const bar of v.data.bars)targets.set(bar.id,['reveal','emphasize']);
     } else if(v.component==='comparison') {
       for(const side of ['left','right'])targets.set(side,['reveal','emphasize','compare']);
     } else v.data.labels.forEach((_,n)=>targets.set(`label-${n+1}`,['reveal','emphasize']));

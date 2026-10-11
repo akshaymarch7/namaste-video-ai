@@ -125,3 +125,12 @@ test('length repair receives server-counted scene targets and pronunciation-awar
  }) as typeof fetch,e=>diagnostics.push(e));
  assert.equal(calls,2);assert.equal(JSON.stringify(diagnostics).includes('narrationBudget'),false);
 });
+
+test('proportional chart contract rejects invalid quantities, IDs and cue targets',()=>{
+ const p:any=fixture();p.scenes[0].visual={component:'chart',version:1,data:{unit:'items',bars:[{id:'a',label:'A',value:10},{id:'b',label:'B',value:20},{id:'c',label:'C',value:30}]}};
+ p.scenes[0].events[0].targetId='a';validateStoryboard(p,input);
+ p.scenes[0].visual.data.bars[0].value=-1;assert.throws(()=>validateStoryboard(p,input));
+ p.scenes[0].visual.data.bars[0].value=Infinity;assert.throws(()=>validateStoryboard(p,input));
+ p.scenes[0].visual.data.bars[0].value=0;p.scenes[0].visual.data.bars[1].id='a';bad(p,'DUPLICATE_ID');
+ p.scenes[0].visual.data.bars[1].id='b';p.scenes[0].events[0].action='connect';bad(p,'INVALID_TARGET_ACTION');
+});

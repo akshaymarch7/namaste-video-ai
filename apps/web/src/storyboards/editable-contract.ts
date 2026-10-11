@@ -13,6 +13,7 @@ export const editableStoryboardSchema=storyboardSchema.extend({
    visuals[1].extend({data:z.object({labels:z.array(text(30)).min(1).max(4)}).strict()}),
    visuals[2].extend({data:visuals[2].shape.data.extend({steps:z.array(visuals[2].shape.data.shape.steps.element.extend({label:text(30)})).min(2).max(4)})}),
    visuals[3].extend({data:z.object({left:panel,right:panel}).strict()}),
+   visuals[4].extend({data:visuals[4].shape.data.extend({unit:text(20),bars:z.array(visuals[4].shape.data.shape.bars.element.extend({label:text(30),value:z.number().finite().min(0).max(1000000000).nullable()})).min(2).max(4)})}),
   ]),
  })).min(3).max(10),
 });
