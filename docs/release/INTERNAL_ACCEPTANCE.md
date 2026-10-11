@@ -1,6 +1,6 @@
 # F22 — Internal release acceptance
 
-Status: implementation follow-ups complete; cloud refresh and user-owned final acceptance remain. Real Post now and scheduled delivery acceptance passed on October 8. The remaining matrix below, including longer-run response reliability, is still open; this is not full release approval.
+Status: implementation follow-ups and matching cloud refresh complete; user-owned final acceptance and a bounded testing activation remain. Real Post now and scheduled delivery acceptance passed on October 8. The remaining matrix below, including longer-run response reliability, is still open; this is not full release approval.
 `PROJECT_STATUS.md` remains the authoritative implementation/evidence record.
 
 ## October10 closeout authorization and order (historical)
@@ -639,3 +639,5 @@ open quality findings. This completes the bounded test run, not full V1 approval
 ## October11 acceptance ownership update
 
 The user explicitly owns final narration/video and complete manual/end-to-end testing. Do not run another paid content matrix to close those rows on their behalf or relabel historical failures as passes. Implementation follow-ups now include measured diagram text, explicit spoken-word repair budgets and proportional chart support. Atlas migration023 is applied; renderer plan-v2-4 requires a matching worker image before generation is enabled. Cloud activation and operating-budget limits remain separate from content acceptance.
+
+Matching worker refresh completed: source b699e6c, image3c7f6965 on both Cloud Run jobs, Ready web8NmsthoS9Z12sW2RmvR3XDwh2Teo/d6bfdb3. Dispatch and publication remain disabled; renewal stays enabled.538 local tests, final production builds, silent chart still and6 worker-boundary checks are implementation evidence, not user acceptance. No narrated job ran during this refresh.
