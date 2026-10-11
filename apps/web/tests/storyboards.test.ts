@@ -111,3 +111,17 @@ test('bounded repair receives numeric field limits instead of an unexplained too
   assert.ok(repair.issues.some((i:any)=>i.path==='scenes.0.title'&&i.code==='too_big'&&i.maximum===65));return response(fixture());
  }) as typeof fetch);assert.equal(calls,2);
 });
+
+test('length repair receives server-counted scene targets and pronunciation-aware totals',async()=>{
+ const invalid:any=fixture();invalid.scenes.forEach((s:any)=>{s.narration='Water moves through our world.';s.pronunciation=[{phrase:'Water',occurrence:1,spokenAs:'Liquid water'}];});
+ let calls=0;const diagnostics:PlanningDiagnostic[]=[];
+ await planStoryboard(input,{key:'key',model:'test'},(async(_url:string,options:RequestInit)=>{
+  calls++;if(calls===1)return response(invalid);
+  const repair=JSON.parse(JSON.parse(options.body as string).contents[0].parts[0].text).repair;
+  assert.equal(repair.narrationBudget.actual,18);assert.equal(repair.narrationBudget.delta,138);
+  assert.deepEqual(repair.narrationBudget.scenes.map((s:any)=>s.actual),[6,6,6]);
+  assert.equal(repair.narrationBudget.scenes.reduce((n:number,s:any)=>n+s.target,0),156);
+  return response(fixture());
+ }) as typeof fetch,e=>diagnostics.push(e));
+ assert.equal(calls,2);assert.equal(JSON.stringify(diagnostics).includes('narrationBudget'),false);
+});
