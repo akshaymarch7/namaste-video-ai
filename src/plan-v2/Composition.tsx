@@ -1,16 +1,18 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useState,createContext,useContext} from 'react';
 import {fitCaption} from './caption-edits';
 import {AbsoluteFill,Audio,Sequence,staticFile,useCurrentFrame,interpolate,delayRender,continueRender,cancelRender} from 'remotion';
 import {motionAt,type RenderScene,type RenderTimeline} from './compiler';
-import {fitLabel} from './text';
+import {fitLabel,fitMeasuredLabel} from './text';
+const TextMeasurement=createContext<((text:string,size:number)=>number)|null>(null);
 import '@fontsource/dm-sans/400.css';
 import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/600.css';
 import '@fontsource/dm-sans/700.css';
 const ink='#153c3a',teal='#168779',orange='#e9a64d';
 const fade=(f:number)=>interpolate(f,[0,18],[0,1],{extrapolateLeft:'clamp',extrapolateRight:'clamp'});
-function Lines({text,x,top,height,size=32,max=22}:{text:string;x:number;top:number;height:number;size?:number;max?:number}){
-  const layout=fitLabel(text,max,size,top,height);
+function Lines({text,x,top,height,size=32,max=22,width=530}:{text:string;x:number;top:number;height:number;size?:number;max?:number;width?:number}){
+  const measure=useContext(TextMeasurement);
+  const layout=measure?fitMeasuredLabel(text,measure,width,size,top,height):fitLabel(text,max,size,top,height);
   return <text x={x} y={layout.baseline} fill={ink} fontSize={layout.fontSize}>{layout.lines.map((line,i)=><tspan key={i} x={x} dy={i?layout.lineHeight:0}>{line}</tspan>)}</text>;
 }
 export function DiagramV2({scene}:{scene:RenderScene}){
@@ -42,9 +44,9 @@ export function DiagramV2({scene}:{scene:RenderScene}){
       return <g key={id} opacity={m.visibility} transform={`translate(${25+index*425} 0)`}>
         <rect y="45" width="385" height="565" rx="32" fill={index?'#e8e5d9':'#dbe9e6'} stroke={m.accent>0?orange:'#bfd4cf'} strokeWidth={2+m.accent*5}/>
         <rect x="28" y="75" width="56" height="7" rx="3.5" fill={index?orange:teal}/>
-        <Lines text={panel.heading} x={28} top={105} height={79} size={32} max={10}/>
+        <Lines text={panel.heading} x={28} top={105} height={79} size={32} max={10} width={327}/>
         <line x1="28" x2="355" y1="200" y2="200" stroke="#bccfc8"/>
-        {panel.points.map((p,i)=><g key={i}><circle cx="39" cy={265+i*118} r="5" fill={teal}/><Lines text={p} x={62} top={218+i*118} height={100} size={27} max={10}/></g>)}
+        {panel.points.map((p,i)=><g key={i}><circle cx="39" cy={265+i*118} r="5" fill={teal}/><Lines text={p} x={62} top={218+i*118} height={100} size={27} max={10} width={295}/></g>)}
       </g>;
     })}
     {(v.component==='title'||v.component==='takeaway')&&v.data.labels.map((label,i)=>box(`label-${i+1}`,label,i,40+i*158))}
@@ -65,14 +67,15 @@ function Scene({scene,index,total,fixture,audio,layouts}:{layouts:Map<string,Ret
   </AbsoluteFill>;
 }
 export function PlanV2Video({timeline,audio=false}:{timeline:RenderTimeline;audio?:boolean}){
- const [handle]=useState(()=>delayRender('Measure caption font'));
+ const [handle]=useState(()=>delayRender('Measure caption and diagram font'));
+ const [measurement,setMeasurement]=useState<((text:string,size:number)=>number)|null>(null);
  const [layouts,setLayouts]=useState<Map<string,ReturnType<typeof fitCaption>>|null>(null);
  useEffect(()=>{let active=true;void document.fonts.load('400 40px "DM Sans"').then(()=>{
   const canvas=document.createElement('canvas'),context=canvas.getContext('2d');if(!context)throw Error('CAPTION_LAYOUT_INVALID');
   const measure=(text:string,size:number)=>{context.font=`400 ${size}px "DM Sans"`;return context.measureText(text).width;};
   const result=new Map<string,ReturnType<typeof fitCaption>>();for(const scene of timeline.scenes)for(const caption of scene.captions)result.set(caption.text,fitCaption(caption.text,measure));
-  if(active){setLayouts(result);continueRender(handle);}
+  if(active){setMeasurement(()=>measure);setLayouts(result);continueRender(handle);}
  }).catch(cancelRender);return()=>{active=false;};},[timeline,handle]);
  if(!layouts)return null;
- return <AbsoluteFill>{timeline.scenes.map((s,i)=><Sequence key={s.id} from={s.start} durationInFrames={s.frames}><Scene scene={s} index={i} total={timeline.scenes.length} fixture={timeline.fixture} audio={audio} layouts={layouts}/></Sequence>)}</AbsoluteFill>;
+ return <TextMeasurement.Provider value={measurement}><AbsoluteFill>{timeline.scenes.map((s,i)=><Sequence key={s.id} from={s.start} durationInFrames={s.frames}><Scene scene={s} index={i} total={timeline.scenes.length} fixture={timeline.fixture} audio={audio} layouts={layouts}/></Sequence>)}</AbsoluteFill></TextMeasurement.Provider>;
 }

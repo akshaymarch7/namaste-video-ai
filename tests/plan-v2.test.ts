@@ -148,3 +148,15 @@ test('spacing-only edits survive display comparison, compilation, VTT and fitted
  assert.equal(layout.lines.length,2);assert.equal(layout.lines.join(''),wrapped);assert.ok(layout.lines.every(l=>l.length*layout.size<=782));
  assert.equal(captionDisplayText('a\n\nb\tc'),'a  b c');
 });
+
+test('measured diagram layout preserves whole words and fits wide boundary labels',async()=>{
+ const {fitMeasuredLabel}=await import('../src/plan-v2/text');
+ const measure=(text:string,size:number)=>Array.from(text).reduce((sum,c)=>sum+(c==='W'?1:c===' '?0.25:0.55)*size,0);
+ for(const [text,width,height,size] of [['Probability',295,100,27],['Thiruvananthapuram',530,80,32],['Cloud storage cost',327,79,32],['W'.repeat(30),530,80,32]] as const){
+  const l=fitMeasuredLabel(text,measure,width,size,0,height);
+  assert.equal(l.lines.join(text.includes(' ')?' ':''),text);assert.ok(l.lines.every(s=>measure(s,l.fontSize)<=width));
+  assert.ok(l.baseline+(l.lines.length-1)*l.lineHeight+l.fontSize*.2<=height+1e-8);
+ }
+ assert.deepEqual(fitMeasuredLabel('Probability',measure,295,27,0,100).lines,['Probability']);
+ assert.throws(()=>fitMeasuredLabel('cannot fit',()=>1000,100,32,0,40),/DIAGRAM_TEXT_LAYOUT_INVALID/);
+});

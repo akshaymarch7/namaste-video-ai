@@ -274,7 +274,7 @@ test('missing saved speech stops a caption job without synthesis and preserves p
 test('older queued renderer snapshots stop before speech rather than silently changing build',async()=>{
  const s=await seed(),j=(await service().create(owner,s.project.id,randomUUID(),s.input)).data,d=executionDouble();
  const row=await db.collection('generationJobs').findOne({_id:j.id as never});
- row!.inputSnapshot.renderConfig.renderer='plan-v2-1';
+ row!.inputSnapshot.renderConfig.renderer='plan-v2-2';
  const {videoHash}=await import('../src/videos/materialize');
  await db.collection('generationJobs').updateOne({_id:j.id as never},{$set:{inputSnapshot:row!.inputSnapshot,inputHash:videoHash(row!.inputSnapshot)}});
  await runGenerationJob(db,client,j.id,undefined,undefined,d.adapters);
