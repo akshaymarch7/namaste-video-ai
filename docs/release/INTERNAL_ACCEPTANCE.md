@@ -1,6 +1,6 @@
 # F22 — Internal release acceptance
 
-Status: implementation follow-ups and matching cloud refresh complete; user-owned final acceptance and a bounded testing activation remain. Real Post now and scheduled delivery acceptance passed on October 8. The remaining matrix below, including longer-run response reliability, is still open; this is not full release approval.
+Status: **internal V1 / F22 completed and user-accepted October14, 2026.** User manual acceptance supplements the recorded real generation, playback, immediate and scheduled Instagram tests. Public creator launch is not approved. Portal test passwords have been rotated, obsolete accounts disabled, sessions revoked and the paid-work testing window closed. Current follow-ups are intermittent status-read reliability, further content/animation quality, deferred actual screen-reader testing and applicable public-launch requirements. Historical matrix evidence below is retained; acceptance does not turn unverified cases into passes.
 `PROJECT_STATUS.md` remains the authoritative implementation/evidence record.
 
 ## October10 closeout authorization and order (historical)
@@ -689,4 +689,4 @@ idea → storyboard → narration/render → captions → preview/export → app
 one immediate and one scheduled Reel. Finish the scheduled test before expiry.
 Report defects with project name, action, time and error text, without credentials.
 After user acceptance, reconcile usage, perform full operating pause and request
-explicit approval for any dev-to-main PR merge. V1 is not yet marked accepted.
+explicit approval for any dev-to-main PR merge. This historical instruction is superseded by the October14 user acceptance and server-window closure. Scheduler ticks remain configured; a full infrastructure pause has not been claimed.
