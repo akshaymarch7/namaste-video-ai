@@ -679,3 +679,14 @@ continue. For an early stop run the same operator with `close`. For a full opera
 pause, disable both activation flags/redeploy and pause dispatch/publishing schedulers;
 keep approved daily Instagram renewal enabled. Never erase reservations to reset
 allowances. Another window needs renewed user authorization.
+
+
+Activation read-back: window2026-10-13T07:17:12.972Z through2026-10-15T07:17:12.972Z
+(October13–15,12:47IST). Production CqiGKnYaebdxfj35x7Vgbf7BLAa5/843cc4d is Ready;
+both minute schedulers enabled, daily renewal unchanged. Homepage200 and unauthorized
+scheduler endpoints401 passed. Zero usage reservations at activation. User next tests
+idea → storyboard → narration/render → captions → preview/export → approval, then
+one immediate and one scheduled Reel. Finish the scheduled test before expiry.
+Report defects with project name, action, time and error text, without credentials.
+After user acceptance, reconcile usage, perform full operating pause and request
+explicit approval for any dev-to-main PR merge. V1 is not yet marked accepted.
