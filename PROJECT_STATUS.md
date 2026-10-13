@@ -2722,3 +2722,5 @@ Next release work, in order: (1) controlled hosted recovery plus end-to-end acce
 - User-requested maintenance is in progress. Detailed operational evidence is retained privately and is not included in this public repository. Completion is not yet claimed.
 
 - Additional user-approved maintenance actions were completed and verified in provider interfaces. Remaining actions require user input; private evidence updated. Full completion is still pending.
+
+- Further approved maintenance completed; old-access rejection verified. Remaining integration cleanup is pending confirmation. Detailed records remain private.
