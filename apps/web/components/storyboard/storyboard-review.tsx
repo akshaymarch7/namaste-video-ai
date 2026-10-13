@@ -23,7 +23,7 @@ const messages:Record<string,string>={
   PROVIDER_AUTHORIZATION:'The AI service needs an administrator to check its key permissions.',
   PROVIDER_CONFIGURATION:'The AI service needs an administrator to check its model configuration.',
   PROVIDER_LIMIT:'The AI service has reached its request or credit limit. Try a new request later.',
-  PROVIDER_UNAVAILABLE:'The AI service is unavailable. Your saved candidates are still here.',
+  PROVIDER_UNAVAILABLE:'The AI service remained unavailable after bounded retries. Your saved idea and earlier candidates are preserved. Try again later.',
   STORYBOARD_INVALID:'The AI couldn’t produce a valid storyboard this time. You can try a new generation.',
   PROVIDER_RESPONSE_INVALID:'The AI returned an incomplete response. You can try a new generation.',
   PLANNING_DEADLINE:'Planning reached its three-minute limit. Your idea and earlier candidates are saved.',
@@ -34,7 +34,7 @@ const messages:Record<string,string>={
   WORKER_UNAVAILABLE:'Generation could not start. Your work is saved. Please contact the team before trying again.',
   WORKER_STOPPED:'Generation stopped before processing your request. Your work is saved. Please contact the team before trying again.',
   QUEUE_EXPIRED:'Your request expired in the queue before generation started. Your idea and earlier candidates are saved. Please try again.',
-  PROVIDER_OUTCOME_UNKNOWN:'The previous outcome is unknown. A new generation may use provider credits again.',
+  PROVIDER_OUTCOME_UNKNOWN:'The AI response could not be confirmed before the connection or time limit ended. Your saved idea and earlier candidates are preserved. A new generation may use provider credits again.',
   NOT_FOUND:'This project or storyboard is no longer available in your workspace.',
   INVALID_CURSOR:'This history page has expired. Refresh the list to continue.',
 };

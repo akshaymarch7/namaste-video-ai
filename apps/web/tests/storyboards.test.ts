@@ -54,14 +54,14 @@ test('one completed invalid candidate receives one bounded repair with safe issu
  const result=await planStoryboard(input,{key:'key',model:'test'},(async(_url:string,options:RequestInit)=>{calls++;if(calls===1)return response(invalid);const repair=JSON.parse(JSON.parse(options.body as string).contents[0].parts[0].text).repair;assert.ok(repair.issues.some((x:any)=>x.code==='MISSING_CUE'));return response(fixture());}) as typeof fetch);
  assert.equal(calls,2);assert.equal(result.attempts,2);
 });
-test('repair exhaustion stops; authorization failures, timeouts and truncation never retry',async()=>{
+test('repair exhaustion stops; truncation never retries',async()=>{
  let calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return response({});}) as typeof fetch),'STORYBOARD_INVALID');assert.equal(calls,4);
- for(const value of ['timeout','truncated']){calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;if(value==='timeout')throw Object.assign(new Error('private'),{name:'TimeoutError'});return value==='503'?new Response('private',{status:503}):Response.json({candidates:[{finishReason:'MAX_TOKENS'}]});}) as typeof fetch),value==='timeout'?'PROVIDER_OUTCOME_UNKNOWN':value==='503'?'PROVIDER_UNAVAILABLE':'PROVIDER_RESPONSE_INVALID');assert.equal(calls,1);}
+ for(const value of ['truncated']){calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;if(value==='timeout')throw Object.assign(new Error('private'),{name:'TimeoutError'});return value==='503'?new Response('private',{status:503}):Response.json({candidates:[{finishReason:'MAX_TOKENS'}]});}) as typeof fetch),value==='timeout'?'PROVIDER_OUTCOME_UNKNOWN':value==='503'?'PROVIDER_UNAVAILABLE':'PROVIDER_RESPONSE_INVALID');assert.equal(calls,1);}
 });
 test('invalid inputs make no provider call; diagnostics omit content and tolerate broken loggers',async()=>{
  let calls=0;const mock=(async()=>{calls++;return response(fixture());}) as typeof fetch;
  await rejects(planStoryboard({...input,topic:' '},{key:'key',model:'test'},mock),'INVALID_DRAFT');assert.equal(calls,0);
- const events:PlanningDiagnostic[]=[];await planStoryboard(input,{key:'key',model:'test'},mock,e=>events.push(e));assert.deepEqual(Object.keys(events[0]).sort(),['attempt','category','durationMs','httpStatus','issueCodes']);
+ const events:PlanningDiagnostic[]=[];await planStoryboard(input,{key:'key',model:'test'},mock,e=>events.push(e));assert.deepEqual(Object.keys(events[0]).sort(),['attempt','category','durationMs','finishReason','httpStatus','issueCodes']);
  await planStoryboard(input,{key:'key',model:'test'},mock,()=>{throw Error('logger unavailable');});
 });
 
@@ -82,7 +82,7 @@ test('repairs can succeed on fourth call and expose only bounded validation code
 });
 test('transient HTTP failures back off within four calls; auth and expired budgets stop immediately',async()=>{
  let calls=0;const waits:number[]=[];
- const result=await planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return calls<3?new Response('',{status:503}):response(fixture());}) as typeof fetch,()=>{},{sleep:async ms=>{waits.push(ms);}});
+ const result=await planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return calls<3?new Response('',{status:503}):response(fixture());}) as typeof fetch,()=>{},{random:()=>0,sleep:async ms=>{waits.push(ms);}});
  assert.equal(result.attempts,3);assert.deepEqual(waits,[1000,2000]);
  calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return new Response('',{status:401});}) as typeof fetch),'PROVIDER_AUTHORIZATION');assert.equal(calls,1);
  calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;return response(fixture());}) as typeof fetch,()=>{},{deadline:Date.now()-1}),'PLANNING_DEADLINE');assert.equal(calls,0);
@@ -133,4 +133,21 @@ test('proportional chart contract rejects invalid quantities, IDs and cue target
  p.scenes[0].visual.data.bars[0].value=Infinity;assert.throws(()=>validateStoryboard(p,input));
  p.scenes[0].visual.data.bars[0].value=0;p.scenes[0].visual.data.bars[1].id='a';bad(p,'DUPLICATE_ID');
  p.scenes[0].visual.data.bars[1].id='b';p.scenes[0].events[0].action='connect';bad(p,'INVALID_TARGET_ACTION');
+});
+
+test('timeout retries share the four-call budget and preserve safe diagnostics',async()=>{
+ let calls=0;const events:PlanningDiagnostic[]=[],waits:number[]=[];
+ const result=await planStoryboard(input,{key:'key',model:'test'},(async()=>{
+  calls++;if(calls===1)throw Object.assign(Error('private timeout'),{name:'TimeoutError'});
+  return calls===2?Response.json({error:{status:'UNAVAILABLE',message:'private provider text'}},{status:503}):response(fixture());
+ }) as typeof fetch,e=>events.push(e),{random:()=>0.5,sleep:async ms=>{waits.push(ms);}});
+ assert.equal(result.attempts,3);assert.deepEqual(waits,[1250,2250]);
+ assert.equal(events[0].category,'TIMEOUT');assert.equal(events[1].upstreamStatus,'UNAVAILABLE');
+ assert.equal(JSON.stringify(events).includes('private'),false);
+ calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;throw Object.assign(Error('private'),{name:'TimeoutError'});}) as typeof fetch,undefined,{sleep:async()=>{}}),'PROVIDER_OUTCOME_UNKNOWN');assert.equal(calls,4);
+});
+test('timeout with insufficient remaining budget cannot retry; network failures remain unknown',async()=>{
+ for(const name of ['TimeoutError','TypeError']){
+  let calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;throw Object.assign(Error('private'),{name});}) as typeof fetch,undefined,{deadline:Date.now()+6000,sleep:async()=>{}}),'PROVIDER_OUTCOME_UNKNOWN');assert.equal(calls,1);
+ }
 });

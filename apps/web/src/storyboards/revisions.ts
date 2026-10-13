@@ -40,7 +40,7 @@ export function validateRevision(raw:unknown,source:Storyboard,context:IdeaField
 export async function reviseStoryboard(
  input:{idea:IdeaFields;source:Storyboard;planStale:boolean;request:RevisionInstruction},
  config=geminiConfig(),request=fetch,observe:(event:PlanningDiagnostic)=>void=()=>{},
- options:{deadline?:number;progress?:(value:PlanningProgress)=>Promise<void>;sleep?:(ms:number)=>Promise<void>}={},
+ options:{deadline?:number;progress?:(value:PlanningProgress)=>Promise<void>;sleep?:(ms:number)=>Promise<void>;random?:()=>number}={},
 ){
  // Clone and validate before the first asynchronous operation. A caller editing
  // its input while the provider runs must not change this revision's baseline.

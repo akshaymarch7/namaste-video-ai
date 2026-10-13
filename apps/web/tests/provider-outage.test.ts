@@ -39,7 +39,7 @@ test('storyboard retries explicit HTTP unavailability within four attempts and r
  await endpoint(async h=>{
   h.set((res,n)=>json(n<3?{error:secret}:planned,n<3?503:200)(res,n));
   const delays:number[]=[];
-  const result=await planStoryboard(input,{key:secret,model:'test'},h.request,undefined,{sleep:async ms=>{delays.push(ms);}});
+  const result=await planStoryboard(input,{key:secret,model:'test'},h.request,undefined,{random:()=>0,sleep:async ms=>{delays.push(ms);}});
   assert.equal(result.attempts,3);assert.equal(result.content.scenes.length,3);assert.deepEqual(delays,[1000,2000]);assert.equal(h.count(),3);
   h.set(json({error:secret},503));const before=h.count();
   await rejectsCode(planStoryboard(input,{key:secret,model:'test'},h.request,undefined,{sleep:async()=>{}}),'PROVIDER_UNAVAILABLE');
@@ -51,7 +51,7 @@ test('storyboard socket loss and stalled body stop without retries; deadline rem
  await endpoint(async h=>{
   for(const behavior of [sever,partial,stall]){
    h.set(behavior);const before=h.count(),started=performance.now();
-   await rejectsCode(planStoryboard(input,{key:secret,model:'test'},h.request,undefined,{deadline:Date.now()+200}),'PROVIDER_OUTCOME_UNKNOWN');
+   await rejectsCode(planStoryboard(input,{key:secret,model:'test'},h.request,undefined,{deadline:Date.now()+5200}),'PROVIDER_OUTCOME_UNKNOWN');
    assert.equal(h.count()-before,1);assert.ok(performance.now()-started<3000);
   }
  });

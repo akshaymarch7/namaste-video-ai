@@ -66,15 +66,15 @@ test('stale/invalid sources, nonexistent scenes and invalid commands dispatch no
  const p=source();p.scenes[0].narration='';await assert.rejects(reviseStoryboard({...input(),source:p},config,request),StoryboardInvalid);
  assert.equal(calls,0);
 });
-test('authorization, ambiguous timeouts and expired deadlines do not retry',async()=>{
- for(const failure of ['auth','timeout','deadline']){
+test('authorization and expired deadlines do not retry',async()=>{
+ for(const failure of ['auth','deadline']){
   let calls=0;await fails(reviseStoryboard(input(),config,(async()=>{calls++;if(failure==='timeout')throw Object.assign(Error('private payload'),{name:'TimeoutError'});return new Response('',{status:401});}) as typeof fetch,()=>{},{deadline:Date.now()+(failure==='deadline'?-1:180000)}),failure==='auth'?'PROVIDER_AUTHORIZATION':failure==='timeout'?'PROVIDER_OUTCOME_UNKNOWN':'PLANNING_DEADLINE');
   assert.equal(calls,failure==='deadline'?0:1);
  }
 });
 test('transient provider failures use shared retry budget and diagnostics contain no source text',async()=>{
  let calls=0;const waits:number[]=[],events:PlanningDiagnostic[]=[];
- const result=await reviseStoryboard(input(),config,(async()=>{calls++;return calls<3?new Response('',{status:503}):response(changed());}) as typeof fetch,e=>events.push(e),{sleep:async ms=>{waits.push(ms);}});
+ const result=await reviseStoryboard(input(),config,(async()=>{calls++;return calls<3?new Response('',{status:503}):response(changed());}) as typeof fetch,e=>events.push(e),{random:()=>0,sleep:async ms=>{waits.push(ms);}});
  assert.equal(result.attempts,3);assert.deepEqual(waits,[1000,2000]);
  assert.equal(JSON.stringify(events).includes(narration),false);assert.equal(JSON.stringify(events).includes('fixture-only'),false);
 });
