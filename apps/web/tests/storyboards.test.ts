@@ -151,3 +151,17 @@ test('timeout with insufficient remaining budget cannot retry; network failures 
   let calls=0;await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>{calls++;throw Object.assign(Error('private'),{name});}) as typeof fetch,undefined,{deadline:Date.now()+6000,sleep:async()=>{}}),'PROVIDER_OUTCOME_UNKNOWN');assert.equal(calls,1);
  }
 });
+
+test('provider timeout is sixty seconds and shortened by the remaining request budget',async t=>{
+ const observed:number[]=[];
+ t.mock.method(AbortSignal,'timeout',(ms:number)=>{observed.push(ms);return new AbortController().signal;});
+ const request=(async()=>response(fixture())) as typeof fetch;
+ await planStoryboard(input,{key:'key',model:'test'},request);
+ await planStoryboard(input,{key:'key',model:'test'},request,undefined,{deadline:Date.now()+25000});
+ assert.equal(observed[0],60000);assert.ok(observed[1]<=20000&&observed[1]>19000);
+});
+test('upstream diagnostic status cannot carry arbitrary provider text',async()=>{
+ const events:PlanningDiagnostic[]=[];
+ await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>Response.json({error:{status:'private-secret',message:'private-secret'}},{status:403})) as typeof fetch,e=>events.push(e)),'PROVIDER_AUTHORIZATION');
+ assert.equal(events[0].upstreamStatus,undefined);assert.equal(JSON.stringify(events).includes('private-secret'),false);
+});
