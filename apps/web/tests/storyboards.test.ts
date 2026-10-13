@@ -224,3 +224,38 @@ test('cue repair provides the matching scene narration and never changes the can
  assert.equal(hints.length,1);assert.equal(hints[0].narration,sentence);assert.equal(JSON.stringify(p),before);
  assert.deepEqual(cueRepairHints({},[{path:'scenes.1.events.0.cue',code:'MISSING_CUE'}]),[]);
 });
+
+test('OpenAI grammar enforces identifier patterns and bounds without changing Gemini grammar',()=>{
+ const schema=JSON.stringify(plannerResponseSchema('openai'));
+ assert.ok(schema.includes('^[a-z][a-z0-9-]{0,49}$'));
+ assert.ok(schema.includes('minItems'));assert.ok(schema.includes('maximum'));
+ assert.equal(JSON.stringify(plannerResponseSchema()).includes('pattern'),false);
+});
+test('source and action repair explains actual scene targets and preserves rejection until corrected',async()=>{
+ const p:any=fixture();p.sources=[{id:'source-1',kind:'provided_notes',text:input.topic}];p.scenes[0].sourceIds=['source-1'];p.scenes[0].events[0].targetId='earth';p.scenes[0].events[0].action='connect';
+ let calls=0;const diagnostics:PlanningDiagnostic[]=[];
+ const result=await planStoryboard(input,{provider:'openai',key:'key',model:'gpt-4.1-mini'},(async(_url,init)=>{
+  calls++;const request=JSON.parse(init!.body as string);
+  if(calls===1)return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(wire(p))}]}]});
+  const repair=JSON.parse(request.input).repair;
+  assert.deepEqual(repair.contractHints.find((h:any)=>h.code==='INVALID_TARGET_ACTION').allowedTargets,{'label-1':['reveal','emphasize']});
+  assert.equal(repair.contractHints.find((h:any)=>h.code==='UNSUPPORTED_SOURCE').notes,input.notes);
+  const corrected=fixture();return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(wire(corrected))}]}]});
+ }) as typeof fetch,e=>diagnostics.push(e));
+ assert.equal(result.attempts,2);assert.deepEqual(result.content.sources,[]);
+ assert.equal(p.scenes[0].events[0].targetId,'earth');
+ assert.equal(JSON.stringify(diagnostics).includes(input.notes),false);
+});
+test('identifier repair covers nested visual references and target registry matches each visual',async()=>{
+ const {contractRepairHints}=await import('../src/storyboards/planner');
+ const {visualTargets}=await import('../src/storyboards/contracts');
+ assert.deepEqual(visualTargets({component:'flow',version:1,data:{steps:[{id:'a',label:'A'},{id:'b',label:'B'}],edges:[{id:'edge',from:'a',to:'b'}]}}),{a:['reveal','emphasize'],b:['reveal','emphasize'],edge:['reveal','emphasize','connect']});
+ assert.deepEqual(visualTargets({component:'chart',version:1,data:{unit:'items',bars:[{id:'a',label:'A',value:1},{id:'b',label:'B',value:2}]}}),{a:['reveal','emphasize'],b:['reveal','emphasize']});
+ assert.deepEqual(visualTargets({component:'comparison',version:1,data:{left:{heading:'A',points:['A']},right:{heading:'B',points:['B']}}}),{left:['reveal','emphasize','compare'],right:['reveal','emphasize','compare']});
+ assert.deepEqual(visualTargets({component:'flow',version:1,data:{}}),{});
+ const hints=contractRepairHints(wire(fixture()),[{path:'scenes.0.events.0.targetId',code:'invalid_format'}],input);
+ assert.match(hints[0].instruction as string,/dependent reference/);
+});
+test('prototype property names are rejected as unknown visual targets',()=>{
+ const p=fixture();p.scenes[0].events[0].targetId='constructor';bad(p,'INVALID_TARGET_ACTION');
+});

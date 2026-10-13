@@ -8,7 +8,7 @@ import {runStoryboardPlanner,type PlanningDiagnostic,type PlanningProgress} from
 
 export {revisionInstruction,type RevisionInstruction} from './revision-input';
 import {revisionInstruction,type RevisionInstruction} from './revision-input';
-export const revisionPromptVersion='storyboard-revision-v2-core-1';
+export const revisionPromptVersion='storyboard-revision-v2-core-2';
 
 // A structural difference is not proof of unchanged meaning. Every result here
 // needs a fresh human review, including changes confined to visual labels/cues.

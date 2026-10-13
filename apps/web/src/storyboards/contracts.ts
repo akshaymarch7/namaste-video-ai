@@ -30,6 +30,20 @@ export const storyboardSchema = z.object({
   }).strict()).min(3).max(10),
 }).strict();
 export type Storyboard = z.infer<typeof storyboardSchema>;
+// One authoritative target/action registry for validation and provider repair.
+export function visualTargets(raw: unknown): Record<string,string[]> {
+  const parsed=visual.safeParse(raw);
+  if(!parsed.success)return {};
+  const v=parsed.data;
+  if(v.component==='flow')return Object.fromEntries([
+    ...v.data.steps.map(s=>[s.id,['reveal','emphasize']]),
+    ...v.data.edges.map(e=>[e.id,['reveal','emphasize','connect']]),
+  ]);
+  if(v.component==='chart')return Object.fromEntries(v.data.bars.map(b=>[b.id,['reveal','emphasize']]));
+  if(v.component==='comparison')return {left:['reveal','emphasize','compare'],right:['reveal','emphasize','compare']};
+  return Object.fromEntries(v.data.labels.map((_,i)=>[`label-${i+1}`,['reveal','emphasize']]));
+}
+
 export type PlanIssue = { path: string; code: string; actual?: number; minimum?: number; maximum?: number };
 export function schemaIssues(issues:readonly z.core.$ZodIssue[]):PlanIssue[] {
   return issues.slice(0,30).map(issue=>({path:issue.path.join('.'),code:issue.code,
@@ -57,25 +71,20 @@ export function validateStoryboard(raw: unknown, context: {notes: string; voiceP
   for(const [i,source] of plan.sources.entries()) if(source.kind==='provided_notes'&&!context.notes.includes(source.text))add(`sources.${i}`,'UNSUPPORTED_SOURCE');
   let words=0;
   for(const [i,scene] of plan.scenes.entries()) {
-    const path=`scenes.${i}`, targets=new Map<string,string[]>();
+    const path=`scenes.${i}`, targets=visualTargets(scene.visual);
     unique(scene.events.map(e=>e.id),`${path}.events`); unique(scene.sourceIds,`${path}.sourceIds`);
     if(scene.sourceIds.some(id=>!plan.sources.some(s=>s.id===id)))add(`${path}.sourceIds`,'UNKNOWN_SOURCE');
     const v=scene.visual;
     if(v.component==='flow') {
       unique([...v.data.steps.map(s=>s.id),...v.data.edges.map(e=>e.id)],`${path}.visual.data`);
-      for(const step of v.data.steps)targets.set(step.id,['reveal','emphasize']);
       for(const edge of v.data.edges) {
         if(edge.from===edge.to||![edge.from,edge.to].every(id=>v.data.steps.some(s=>s.id===id)))add(`${path}.visual.data.edges`,'INVALID_EDGE');
-        targets.set(edge.id,['reveal','emphasize','connect']);
       }
     } else if(v.component==='chart') {
       unique(v.data.bars.map(b=>b.id),`${path}.visual.data.bars`);
-      for(const bar of v.data.bars)targets.set(bar.id,['reveal','emphasize']);
-    } else if(v.component==='comparison') {
-      for(const side of ['left','right'])targets.set(side,['reveal','emphasize','compare']);
-    } else v.data.labels.forEach((_,n)=>targets.set(`label-${n+1}`,['reveal','emphasize']));
+    }
     for(const [j,event] of scene.events.entries()) {
-      if(!targets.get(event.targetId)?.includes(event.action))add(`${path}.events.${j}`,'INVALID_TARGET_ACTION');
+      if(!Object.hasOwn(targets,event.targetId)||!targets[event.targetId].includes(event.action))add(`${path}.events.${j}`,'INVALID_TARGET_ACTION');
       if(occurrence(scene.narration,event.cue.phrase,event.cue.occurrence)<0)add(`${path}.events.${j}.cue`,'MISSING_CUE');
     }
     const replacements=scene.pronunciation.map((p,j)=>{
