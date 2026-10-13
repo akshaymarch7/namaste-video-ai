@@ -1,7 +1,8 @@
 import 'server-only';
+import {storyboardConfig,type PlannerConfig} from './provider-config';
 import {isDeepStrictEqual} from 'node:util';
 import {ideaFields,type IdeaFields} from '../drafts/contracts';
-import {geminiConfig,ProviderError} from '../ideas/providers';
+import {ProviderError} from '../ideas/providers';
 import {validateStoryboard,StoryboardInvalid,type Storyboard} from './contracts';
 import {runStoryboardPlanner,type PlanningDiagnostic,type PlanningProgress} from './planner';
 
@@ -39,7 +40,7 @@ export function validateRevision(raw:unknown,source:Storyboard,context:IdeaField
 
 export async function reviseStoryboard(
  input:{idea:IdeaFields;source:Storyboard;planStale:boolean;request:RevisionInstruction},
- config=geminiConfig(),request=fetch,observe:(event:PlanningDiagnostic)=>void=()=>{},
+ config:PlannerConfig=storyboardConfig(),request=fetch,observe:(event:PlanningDiagnostic)=>void=()=>{},
  options:{deadline?:number;progress?:(value:PlanningProgress)=>Promise<void>;sleep?:(ms:number)=>Promise<void>;random?:()=>number}={},
 ){
  // Clone and validate before the first asynchronous operation. A caller editing

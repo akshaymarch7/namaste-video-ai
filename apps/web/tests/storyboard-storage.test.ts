@@ -554,3 +554,19 @@ test('chart migration preserves historical checksums, persists editable values a
  assert.equal((await snapshotReq(project.id,{expectedDraftRevision:incomplete.revision,expectedContentHash:incomplete.contentHash})).status,422);
  await assert.rejects(db.collection('drafts').updateOne({projectId:project.id},{$set:{'editablePlan.scenes.0.visual.data.bars.0.value':-1}}));
 });
+
+test('provider migration preserves predecessors and persists the actual successful provider',async()=>{
+ const {setupStoryboardProviders}=await import('../src/storyboards/provider-setup');
+ const {setupVisualRegistry}=await import('../src/storyboards/registry-setup');
+ await setupStoryboardProviders(db);await setupStoryboardProviders(db);
+ await setupStoryboards(db);await setupStoryboardSnapshots(db);await setupVisualRegistry(db);
+ const project=(await projects.create(owner,randomUUID(),{title:'OpenAI provenance'})).data!;
+ const draft=await drafts.save(owner,project.id,{expectedRevision:1,changes:{topic:'Water cycle'}});
+ const output=fixture();
+ const adapter=()=>({model:'openai:gpt-4.1-mini|gemini:gemini-test',run:async()=>({content:output,plannerConfig:{provider:'openai' as const,model:'gpt-4.1-mini',promptVersion:'fixture'}})});
+ const result=await storyboardService(db,client,config.secret,adapter).create(owner,project.id,randomUUID(),{expectedDraftRevision:draft.revision});
+ assert.equal(result.data.state,'completed');
+ const candidate=await db.collection('storyboards').findOne({_id:result.data.storyboardId as never});
+ assert.deepEqual(candidate?.plannerConfig,{provider:'openai',model:'gpt-4.1-mini',promptVersion:'fixture'});
+ await assert.rejects(db.collection('storyboards').updateOne({_id:candidate!._id},{$set:{'plannerConfig.provider':'unknown'}}));
+});

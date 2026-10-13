@@ -9,7 +9,7 @@ import { dependencies } from '../auth/runtime';
 import { isAdmitted } from '../auth/engine';
 import { HttpError, readBody } from '../auth/http';
 import { projectId, idempotencyKey, ProjectError } from '../projects/contracts';
-import { geminiConfig, ProviderError } from '../ideas/providers';
+import { ProviderError } from '../ideas/providers';
 import {revisionRequest} from './api-contracts';
 import {assertStoryboardRevisionsReady} from './revision-setup';
 import {reviseStoryboard} from './revisions';
@@ -17,9 +17,10 @@ import { storyboardId, storyboardRequest, listStoryboards } from './api-contract
 import { assertStoryboardQueueReady } from './queue-setup';
 import { storyboardService, type StoryboardProvider } from './service';
 import { planStoryboard } from './planner';
+import {storyboardConfig,plannerRoute} from './provider-config';
 export const defaultProvider = (model?:string): StoryboardProvider => {
-  const config = {...geminiConfig(),...(model?{model}:{})};
-  return {model:config.model,run:(input,context)=>{
+  const config = storyboardConfig(model);
+  return {model:plannerRoute(config),run:(input,context)=>{
     const observe=(event:import('./planner').PlanningDiagnostic)=>console.info(JSON.stringify({event:'storyboard_provider_result',requestId:context.requestId,model:config.model,...event}));
     const options={deadline:context.deadline,progress:context.progress};
     return context.revision?reviseStoryboard({idea:input,source:context.revision.source,request:context.revision.request,planStale:false},config,fetch,observe,options):planStoryboard(input,config,fetch,observe,options);

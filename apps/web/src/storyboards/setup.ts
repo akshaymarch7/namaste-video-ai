@@ -1,3 +1,4 @@
+import {providerCandidateDefinition} from './provider-schema';
 import {chartCandidateDefinition} from './registry-schema';
 import {snapshotCandidateDefinition} from './snapshot-schema';
 import {queuedReceiptDefinition} from './queue-schema';
@@ -50,7 +51,7 @@ export const storyboardDefinitions: CollectionDefinition[] = [
 ];
 export const storyboardMigrationId = 'mig_storyboards000001';
 export const storyboardChecksum = createHash('sha256').update(JSON.stringify(storyboardDefinitions)).digest('hex');
-export async function setupStoryboards(db: Db) { await assertIdeasReady(db); return runMigration(db, '005-storyboard-candidates', storyboardMigrationId, storyboardChecksum, storyboardDefinitions, {successors:{storyboards:[snapshotCandidateDefinition(storyboardDefinitions[1]).validator,chartCandidateDefinition(snapshotCandidateDefinition(storyboardDefinitions[1])).validator],storyboardRequests:queuedReceiptDefinition(storyboardDefinitions[0]).validator}}); }
+export async function setupStoryboards(db: Db) { await assertIdeasReady(db); return runMigration(db, '005-storyboard-candidates', storyboardMigrationId, storyboardChecksum, storyboardDefinitions, {successors:{storyboards:[snapshotCandidateDefinition(storyboardDefinitions[1]).validator,chartCandidateDefinition(snapshotCandidateDefinition(storyboardDefinitions[1])).validator,providerCandidateDefinition(chartCandidateDefinition(snapshotCandidateDefinition(storyboardDefinitions[1]))).validator],storyboardRequests:queuedReceiptDefinition(storyboardDefinitions[0]).validator}}); }
 export async function assertStoryboardsReady(db: Db) {
   if (!await db.collection('schemaMigrations').findOne({ _id: storyboardMigrationId as never, checksum: storyboardChecksum, state: 'completed' })) throw new DatabaseError('STORYBOARD_SETUP_REQUIRED', 'Run db:setup before storyboard generation.');
   for (const definition of storyboardDefinitions) {

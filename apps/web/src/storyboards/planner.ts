@@ -1,6 +1,7 @@
 import 'server-only';
 import { z } from 'zod';
-import { boundedBytes, geminiConfig, ideaThinking, ProviderError, type IdeaDiagnostic } from '../ideas/providers';
+import {storyboardConfig,type PlannerConfig} from './provider-config';
+import { boundedBytes, ideaThinking, ProviderError, type IdeaDiagnostic } from '../ideas/providers';
 import { ideaFields, type IdeaFields } from '../drafts/contracts';
 import { storyboardSchema, schemaIssues, StoryboardInvalid, validateStoryboard, type PlanIssue } from './contracts';
 export class StoryboardPlanningError extends ProviderError {
@@ -53,8 +54,22 @@ export function narrationRepairBudget(raw:unknown) {
       target:Math.floor(target/counts.length)+(index<target%counts.length?1:0)})),
     instruction:'Use these server-counted spoken words, not your own estimate. Aim for the per-scene targets; expand with concrete explanation or remove repetition without changing facts. Never add filler solely to meet a count. Keep the saved topic and update dependent cues/pronunciation. Return the complete candidate.'};
 }
+// Give repair calls concrete source text for exact-match failures. Suggestions are
+// guidance only: the model must return a complete candidate which is revalidated.
+export function cueRepairHints(raw:unknown,issues:PlanIssue[]) {
+  const scenes=(raw as {scenes?:unknown[]})?.scenes;
+  if(!Array.isArray(scenes))return [];
+  return issues.filter(i=>i.code==='MISSING_CUE').flatMap(issue=>{
+    const match=/^scenes\.(\d+)\.events\.(\d+)\.cue$/.exec(issue.path);
+    if(!match)return [];
+    const scene=scenes[Number(match[1])] as {narration?:unknown;events?:{cue?:unknown}[]};
+    if(typeof scene?.narration!=='string')return [];
+    return [{path:issue.path,narration:scene.narration,cue:scene.events?.[Number(match[2])]?.cue,
+      instruction:'The cue phrase is absent at that occurrence. Copy an exact contiguous phrase from THIS narration, preserving spelling and case, and count its occurrence from one. Do not paraphrase it or change narration to match the old cue.'}];
+  }).slice(0,30);
+}
 export type PlanningProgress = {stage:'planning'|'repairing'|'retrying'|'checking';attempt:number;issueCodes:string[]};
-export type PlanningDiagnostic = IdeaDiagnostic & {attempt: number; issueCodes:string[]; upstreamStatus?:string; finishReason?:string};
+export type PlanningDiagnostic = IdeaDiagnostic & {attempt: number; issueCodes:string[]; upstreamStatus?:string; finishReason?:string; provider?:'gemini'|'openai'; model?:string};
 // Only identifier naming and uniquely identifiable cue capitalization are repaired locally.
 // Narration, facts, labels, ambiguous references and unmatched cues are never invented here.
 export function normalizeCandidate(raw: unknown): unknown {
@@ -82,13 +97,13 @@ export type PlannerTask = {
  promptVersion: string;
  validate(raw:unknown): ReturnType<typeof validateStoryboard>;
 };
-export async function planStoryboard(input: IdeaFields, config = geminiConfig(), request = fetch,
+export async function planStoryboard(input: IdeaFields, config:PlannerConfig = storyboardConfig(), request = fetch,
   observe: (event: PlanningDiagnostic) => void = () => {},
   options: {deadline?:number; progress?:(value:PlanningProgress)=>Promise<void>; sleep?:(ms:number)=>Promise<void>; random?:()=>number} = {}) {
   return runStoryboardPlanner(input,config,request,observe,options);
 }
 // Shared bounded provider execution; task validators are trusted server code, never model input.
-export async function runStoryboardPlanner(input: IdeaFields, config = geminiConfig(), request = fetch,
+export async function runStoryboardPlanner(input: IdeaFields, config:PlannerConfig = storyboardConfig(), request = fetch,
   observe: (event: PlanningDiagnostic) => void = () => {},
   options: {deadline?:number; progress?:(value:PlanningProgress)=>Promise<void>; sleep?:(ms:number)=>Promise<void>; random?:()=>number} = {}, task?:PlannerTask) {
   const parsedInput=ideaFields.safeParse(input);
@@ -96,22 +111,30 @@ export async function runStoryboardPlanner(input: IdeaFields, config = geminiCon
   input=parsedInput.data;
   if(!input.topic.trim())throw new ProviderError('INVALID_DRAFT');
   if(input.voicePreset!=='daniel-test')throw new ProviderError('VOICE_UNAVAILABLE');
-  let repair: {candidate: string; issues: PlanIssue[]; narrationBudget?:ReturnType<typeof narrationRepairBudget>} | undefined;
+  let repair: {candidate: string; issues: PlanIssue[]; narrationBudget?:ReturnType<typeof narrationRepairBudget>;cueHints?:ReturnType<typeof cueRepairHints>} | undefined;
   const deadline=options.deadline??Date.now()+180000;
   const sleep=options.sleep??(ms=>new Promise(resolve=>setTimeout(resolve,ms)));
   const retryDelay=(attempt:number)=>1000*2**(attempt-1)+Math.floor((options.random??Math.random)()*500);
   // Leave time for validation and durable settlement before the worker deadline.
   const providerDeadline=deadline-5000;
+  let active:PlannerConfig=config;
+  const switchProvider=()=>{if(active===config&&config.fallback)active=config.fallback;};
   for(let attempt=1;attempt<=4;attempt++) {
     if(Date.now()>=providerDeadline)throw new ProviderError('PLANNING_DEADLINE');
     await options.progress?.({stage:repair?'repairing':'planning',attempt,issueCodes:repair?.issues.map(i=>i.code)??[]});
+    const selected=active;
     const start=performance.now(); let httpStatus:number|null=null;
     let category:IdeaDiagnostic['category']='NETWORK'; let issueCodes:string[]=[]; let upstreamStatus:string|undefined,finishReason:string|undefined;
     try {
-      const response=await request(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`,{
-        method:'POST', headers:{'Content-Type':'application/json','x-goog-api-key':config.key},redirect:'error',signal:AbortSignal.timeout(Math.max(1,Math.min(60000,providerDeadline-Date.now()))),
-        body:JSON.stringify({systemInstruction:{parts:[{text:`${task?.system??system}\nWire-format exception: visual has component, version and dataJson. dataJson is a JSON-encoded string containing ONLY the data object for that component from this application contract. Do not output a data field beside dataJson. Application contract for the decoded result:\n${JSON.stringify(z.toJSONSchema(storyboardSchema))}`}]},contents:[{role:'user',parts:[{text:JSON.stringify({savedIdea:input,...task?.payload,requirements:task?.requirements??{sceneCount:6,narrationWordsPerScene:"25–27 words in each narration field; 150–162 narration words overall",cueRule:"Copy an exact case-sensitive substring from the final narration, with the correct one-based occurrence. Prefer the first word with occurrence 1."}, ...(repair?{repair:{...repair,instruction:task?.repairInstruction??'Repair only the invalid fields and their dependent cues while preserving valid scenes, facts, and the saved topic. Recheck every changed scene. For narration length, distribute the required added or removed words across the scenes rather than rewriting the topic. unrecognized_keys means remove ALL keys outside the schema; the root permits only schemaVersion, title, audience, learningObjective, language, voicePreset, sources, scenes. DURATION_ESTIMATE_OUT_OF_RANGE includes actual, minimum and maximum NARRATION WORD COUNTS. If actual is below minimum, expand the narration with concrete explanation; if above maximum, shorten it. The total narration must contain 150–225 words; aim for six scenes each with 25–27 narration words (150–162 overall), leaving room for measured voice pace and scene pauses. Titles and labels do not count. MISSING_CUE means copy an exact case-sensitive substring from the final narration. Return the complete replacement JSON object.'}}:{})})}]}],
-          generationConfig:{...ideaThinking(config.model),responseMimeType:'application/json',responseJsonSchema:plannerResponseSchema(),maxOutputTokens:8192}}),
+      const geminiBody={systemInstruction:{parts:[{text:`${task?.system??system}\nWire-format exception: visual has component, version and dataJson. dataJson is a JSON-encoded string containing ONLY the data object for that component from this application contract. Do not output a data field beside dataJson. Application contract for the decoded result:\n${JSON.stringify(z.toJSONSchema(storyboardSchema))}`}]},contents:[{role:'user',parts:[{text:JSON.stringify({savedIdea:input,...task?.payload,requirements:task?.requirements??{sceneCount:6,narrationWordsPerScene:"25–27 words in each narration field; 150–162 narration words overall",cueRule:"Copy an exact case-sensitive substring from the final narration, with the correct one-based occurrence. Prefer the first word with occurrence 1."}, ...(repair?{repair:{...repair,instruction:task?.repairInstruction??'Repair only the invalid fields and their dependent cues while preserving valid scenes, facts, and the saved topic. Recheck every changed scene. For narration length, distribute the required added or removed words across the scenes rather than rewriting the topic. unrecognized_keys means remove ALL keys outside the schema; the root permits only schemaVersion, title, audience, learningObjective, language, voicePreset, sources, scenes. DURATION_ESTIMATE_OUT_OF_RANGE includes actual, minimum and maximum NARRATION WORD COUNTS. If actual is below minimum, expand the narration with concrete explanation; if above maximum, shorten it. The total narration must contain 150–225 words; aim for six scenes each with 25–27 narration words (150–162 overall), leaving room for measured voice pace and scene pauses. Titles and labels do not count. MISSING_CUE means copy an exact case-sensitive substring from the final narration. Return the complete replacement JSON object.'}}:{})})}]}],
+          generationConfig:{...ideaThinking(selected.model),responseMimeType:'application/json',responseJsonSchema:plannerResponseSchema(),maxOutputTokens:8192}};
+      const isOpenAI=selected.provider==='openai';
+      const response=await request(isOpenAI?'https://api.openai.com/v1/responses':`https://generativelanguage.googleapis.com/v1beta/models/${selected.model}:generateContent`,{
+        method:'POST',headers:isOpenAI?{'Content-Type':'application/json',Authorization:`Bearer ${selected.key}`}:{'Content-Type':'application/json','x-goog-api-key':selected.key},
+        redirect:'error',signal:AbortSignal.timeout(Math.max(1,Math.min(60000,providerDeadline-Date.now()))),
+        body:JSON.stringify(isOpenAI?{model:selected.model,store:false,max_output_tokens:8192,
+          instructions:geminiBody.systemInstruction.parts[0].text,input:geminiBody.contents[0].parts[0].text,
+          text:{format:{type:'json_schema',name:'storyboard',strict:true,schema:plannerResponseSchema()}}}:geminiBody),
       });
       httpStatus=response.status;
       if(!response.ok){
@@ -122,22 +145,33 @@ export async function runStoryboardPlanner(input: IdeaFields, config = geminiCon
         category=response.status===429?'RATE_LIMIT':[401,403].includes(response.status)?'AUTHORIZATION':[400,404].includes(response.status)?'CONFIGURATION':'UNAVAILABLE';throw new ProviderError(category==='RATE_LIMIT'?'PROVIDER_LIMIT':category==='AUTHORIZATION'?'PROVIDER_AUTHORIZATION':category==='CONFIGURATION'?'PROVIDER_CONFIGURATION':'PROVIDER_UNAVAILABLE');}
       category='INVALID_RESPONSE';
       const body=JSON.parse((await boundedBytes(response,128*1024)).toString('utf8'));
-      const candidate=body.candidates?.[0];
-      if(['STOP','MAX_TOKENS','SAFETY','RECITATION','OTHER'].includes(candidate?.finishReason))finishReason=candidate.finishReason;
-      // A truncated/blocked response is not a completed candidate eligible for repair.
-      if(candidate?.finishReason!=='STOP')throw new ProviderError('PROVIDER_RESPONSE_INVALID');
-      const raw=candidate.content?.parts?.filter((p:{thought?:boolean;text?:string})=>!p.thought&&typeof p.text==='string').map((p:{text:string})=>p.text).join('');
+      let raw:string|undefined;
+      if(isOpenAI){
+        const messages=Array.isArray(body.output)?body.output.filter((item:any)=>item.type==='message'):[];
+        const parts=messages.flatMap((item:any)=>Array.isArray(item.content)?item.content:[]);
+        if(body.status!=='completed'||parts.some((part:any)=>part.type==='refusal'))throw new ProviderError('PROVIDER_RESPONSE_INVALID');
+        raw=parts.filter((part:any)=>part.type==='output_text'&&typeof part.text==='string').map((part:any)=>part.text).join('');
+        finishReason='STOP';
+      }else{
+        const candidate=body.candidates?.[0];
+        if(['STOP','MAX_TOKENS','SAFETY','RECITATION','OTHER'].includes(candidate?.finishReason))finishReason=candidate.finishReason;
+        if(candidate?.finishReason!=='STOP')throw new ProviderError('PROVIDER_RESPONSE_INVALID');
+        raw=candidate.content?.parts?.filter((p:{thought?:boolean;text?:string})=>!p.thought&&typeof p.text==='string').map((p:{text:string})=>p.text).join('');
+      }
       if(typeof raw!=='string'||!raw)throw new ProviderError('PROVIDER_RESPONSE_INVALID');
       try {
         await options.progress?.({stage:'checking',attempt,issueCodes:[]});
         const decoded=decodePlannerCandidate(JSON.parse(raw));
         const result=task?task.validate(decoded):validateStoryboard(normalizeCandidate(decoded),input); category='OK';
-        return {...result,plannerConfig:{provider:'gemini' as const,model:config.model,promptVersion:task?.promptVersion??plannerPromptVersion},attempts:attempt};
+        return {...result,plannerConfig:{provider:selected.provider??'gemini',model:selected.model,promptVersion:task?.promptVersion??plannerPromptVersion},attempts:attempt};
       } catch(error) {
         if(!(error instanceof StoryboardInvalid||error instanceof SyntaxError))throw error;
         issueCodes=[...new Set(error instanceof StoryboardInvalid?error.issues.map(i=>i.code):['INVALID_JSON'])];
         if(attempt===4)throw new StoryboardPlanningError(error instanceof StoryboardInvalid?error.issues:[{path:'',code:'INVALID_JSON'}]);
         repair={candidate:raw,issues:error instanceof StoryboardInvalid?error.issues:[{path:'',code:'INVALID_JSON'}]};
+        if(issueCodes.includes('MISSING_CUE')){
+          try{repair.cueHints=cueRepairHints(JSON.parse(raw),repair.issues);}catch{/* Invalid JSON uses the ordinary repair. */}
+        }
         // Revision tasks retain their explicit edit scope; do not suggest rewriting other scenes.
         if(!task&&issueCodes.includes('DURATION_ESTIMATE_OUT_OF_RANGE')){
           try{repair.narrationBudget=narrationRepairBudget(JSON.parse(raw));}catch{/* Invalid JSON is repaired by the provider. */}
@@ -147,6 +181,7 @@ export async function runStoryboardPlanner(input: IdeaFields, config = geminiCon
       const delay=retryDelay(attempt);
       if(error instanceof ProviderError){
         if((error.code==='PROVIDER_LIMIT'||(error.code==='PROVIDER_UNAVAILABLE'&&httpStatus!==null&&httpStatus>=500))&&attempt<4&&Date.now()+delay+5000<providerDeadline){
+          switchProvider();
           await options.progress?.({stage:'retrying',attempt,issueCodes:[]});
           await sleep(delay);continue;
         }
@@ -157,11 +192,12 @@ export async function runStoryboardPlanner(input: IdeaFields, config = geminiCon
       // Text planning has no external mutation. Retry only confirmed local timeout,
       // sharing the four-call budget with repairs; never retry speech or publishing here.
       if(category==='TIMEOUT'&&attempt<4&&Date.now()+delay+5000<providerDeadline){
+        switchProvider();
         await options.progress?.({stage:'retrying',attempt,issueCodes:[]});
         await sleep(delay);continue;
       }
       throw new ProviderError('PROVIDER_OUTCOME_UNKNOWN');
-    } finally {try{observe({attempt,httpStatus,category,issueCodes,durationMs:Math.round(performance.now()-start),...(upstreamStatus?{upstreamStatus}:{}),...(finishReason?{finishReason}:{})});}catch{}}
+    } finally {try{observe({...(selected.provider?{provider:selected.provider,model:selected.model}:{}),attempt,httpStatus,category,issueCodes,durationMs:Math.round(performance.now()-start),...(upstreamStatus?{upstreamStatus}:{}),...(finishReason?{finishReason}:{})});}catch{}}
   }
   throw new ProviderError('STORYBOARD_INVALID');
 }

@@ -15,7 +15,7 @@ import type {RevisionInstruction} from './revision-input';
 import type {RevisionRequest} from './api-contracts';
 import type { StoryboardReceipt } from './api-contracts';
 type Doc = Document & { _id: string };
-export type StoryboardProvider = { model: string; run(input: IdeaFields, context: { requestId: string; revision?:{source:Storyboard;request:RevisionInstruction}; deadline:number; progress:(value:PlanningProgress)=>Promise<void> }): Promise<{ content: unknown }> };
+export type StoryboardProvider = { model: string; run(input: IdeaFields, context: { requestId: string; revision?:{source:Storyboard;request:RevisionInstruction}; deadline:number; progress:(value:PlanningProgress)=>Promise<void> }): Promise<{ content: unknown; plannerConfig?:{provider:'gemini'|'openai';model:string;promptVersion:string} }> };
 const hash = (value: unknown) => createHash('sha256').update(canonical(value)).digest('hex');
 export function storyboardHashes(content: Storyboard) {
   // Retain all semantic text/data/order; omit animation timing/presentation events.
@@ -50,6 +50,7 @@ export function storyboardService(db: Db, client: MongoClient, secret: string, p
   }
   async function execute(ownerId:string,projectId:string,claim:{doc:Doc;adapter:StoryboardProvider;draft:IdeaFields}) {
       let result: ReturnType<typeof validateStoryboard> | undefined, state = 'completed', errorCode: string | null = null, issueCodes:string[]=[];
+      let plannerMetadata:{provider:'gemini'|'openai';model:string;promptVersion:string}|undefined;
       let revision:Awaited<ReturnType<typeof lineage>>;
       try {
         revision=await lineage(ownerId,projectId,claim.doc._id);
@@ -60,6 +61,7 @@ export function storyboardService(db: Db, client: MongoClient, secret: string, p
         const updated=await requests.updateOne({_id:claim.doc._id,state:'running',deadline:{$gt:now()}},{$set:{...value,updatedAt:now()}});
         if(!updated.matchedCount)throw new ProviderError('PLANNING_DEADLINE');
       }});
+        plannerMetadata=output.plannerConfig;
         result=revisionContext?validateRevision(output.content,revisionContext.source,claim.draft,revisionContext.request.sceneId):validateStoryboard(output.content,claim.draft);
       }
       catch (error) {
@@ -79,7 +81,7 @@ export function storyboardService(db: Db, client: MongoClient, secret: string, p
           storyboardId = `stb_${randomUUID().replaceAll('-','')}`;
           await candidates.insertOne({_id:storyboardId,schemaVersion:1,ownerId,projectId,sourceDraftRevision:current.sourceDraftRevision,
             ...result,...storyboardHashes(result.content),canonicalizationVersion:1,state:'review_ready',
-            plannerConfig:{provider:'gemini',model:current.model,promptVersion:revision?revisionPromptVersion:plannerPromptVersion},createdByJobId:current._id,createdAt:date,updatedAt:date},{session});
+            plannerConfig:plannerMetadata??{provider:'gemini',model:current.model,promptVersion:revision?revisionPromptVersion:plannerPromptVersion},createdByJobId:current._id,createdAt:date,updatedAt:date},{session});
         }
         await requests.updateOne({_id:current._id,state:'running'},{$set:{state,storyboardId,errorCode,...(current.stage?{stage:state==='completed'?'ready':'stopped',issueCodes}:{}),updatedAt:date}},{session});
         await projects.updateOne({_id:projectId,ownerId,activeJobId:current._id},{$unset:{activeJobId:''},$inc:{contentRevision:Long.ONE}},{session});

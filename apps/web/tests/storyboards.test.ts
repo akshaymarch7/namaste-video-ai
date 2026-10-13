@@ -165,3 +165,62 @@ test('upstream diagnostic status cannot carry arbitrary provider text',async()=>
  await rejects(planStoryboard(input,{key:'key',model:'test'},(async()=>Response.json({error:{status:'private-secret',message:'private-secret'}},{status:403})) as typeof fetch,e=>events.push(e)),'PROVIDER_AUTHORIZATION');
  assert.equal(events[0].upstreamStatus,undefined);assert.equal(JSON.stringify(events).includes('private-secret'),false);
 });
+
+test('OpenAI primary uses Responses strict schema, no storage, and true provider metadata',async()=>{
+ const events:PlanningDiagnostic[]=[];
+ const result=await planStoryboard(input,{provider:'openai',key:'private-openai',model:'gpt-4.1-mini'},(async(url,init)=>{
+  assert.equal(url,'https://api.openai.com/v1/responses');
+  assert.equal(new Headers(init?.headers).get('Authorization'),'Bearer private-openai');
+  assert.equal(new Headers(init?.headers).get('x-goog-api-key'),null);
+  const body=JSON.parse(init!.body as string);
+  assert.equal(body.store,false);assert.equal(body.text.format.strict,true);assert.equal(body.max_output_tokens,8192);
+  assert.deepEqual(JSON.parse(body.input).savedIdea,input);
+  return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(wire(fixture()))}]}]});
+ }) as typeof fetch,e=>events.push(e));
+ assert.equal(result.plannerConfig.provider,'openai');assert.equal(result.plannerConfig.model,'gpt-4.1-mini');assert.equal(events[0].provider,'openai');
+ assert.equal(JSON.stringify(events).includes('private-openai'),false);
+});
+test('OpenAI transient failures switch once to Gemini inside the same four-call budget',async()=>{
+ for(const failure of ['503','429','timeout']){
+  let calls=0;const events:PlanningDiagnostic[]=[];
+  const result=await planStoryboard(input,{provider:'openai',key:'openai-private',model:'gpt-4.1-mini',fallback:{provider:'gemini',key:'gemini-private',model:'gemini-test'}},(async(url,init)=>{
+   calls++;
+   if(calls===1){assert.equal(url,'https://api.openai.com/v1/responses');if(failure==='timeout')throw Object.assign(new Error('private'),{name:'TimeoutError'});return new Response('',{status:Number(failure)});}
+   assert.match(String(url),/gemini-test:generateContent$/);assert.equal(new Headers(init?.headers).get('Authorization'),null);assert.equal(new Headers(init?.headers).get('x-goog-api-key'),'gemini-private');
+   return calls<4?response({}):response(fixture());
+  }) as typeof fetch,e=>events.push(e),{sleep:async()=>{},random:()=>0});
+  assert.equal(calls,4);assert.equal(result.attempts,4);assert.equal(result.plannerConfig.provider,'gemini');assert.deepEqual(events.map(e=>e.provider),['openai','gemini','gemini','gemini']);
+ }
+});
+test('OpenAI validation repairs stay with OpenAI; refusals, incomplete, auth and network do not fail over',async()=>{
+ const config={provider:'openai' as const,key:'key',model:'gpt-4.1-mini',fallback:{provider:'gemini' as const,key:'key2',model:'gemini-test'}};
+ let calls=0;
+ await planStoryboard(input,config,(async(url,init)=>{
+  calls++;assert.equal(url,'https://api.openai.com/v1/responses');if(calls===2)assert.ok(JSON.parse(JSON.parse(init!.body as string).input).repair);
+  return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(calls===1?{}:wire(fixture()))}]}]});
+ }) as typeof fetch);assert.equal(calls,2);
+ for(const failure of ['refusal','incomplete','auth','network']){
+  calls=0;await assert.rejects(planStoryboard(input,config,(async()=>{calls++;
+   if(failure==='network')throw new Error('private');
+   if(failure==='auth')return new Response('',{status:401});
+   return Response.json({status:failure==='incomplete'?'incomplete':'completed',output:[{type:'message',content:[{type:'refusal',refusal:'private'}]}]});
+  }) as typeof fetch));assert.equal(calls,1);
+ }
+});
+test('provider routes pin primary and fallback without keys and reject invalid configuration',async()=>{
+ const {storyboardConfig,plannerRoute}=await import('../src/storyboards/provider-config');
+ const env={OPENAI_API_KEY:'private1',GEMINI_API_KEY:'private2',GEMINI_MODEL:'gemini-test',STORYBOARD_PRIMARY_PROVIDER:'openai',STORYBOARD_FALLBACK_PROVIDER:'gemini'};
+ const c=storyboardConfig(undefined,env);assert.equal(plannerRoute(c),'openai:gpt-4.1-mini|gemini:gemini-test');
+ assert.deepEqual(storyboardConfig(plannerRoute(c),{...env,STORYBOARD_PRIMARY_PROVIDER:'gemini'}),c);
+ assert.equal(storyboardConfig('gemini-old',env).fallback,undefined);
+ for(const route of ['openai:x|gemini:y|openai:z','bad:model','openai:../../private'])assert.throws(()=>storyboardConfig(route,env));
+ assert.throws(()=>storyboardConfig(undefined,{...env,OPENAI_API_KEY:''}));
+});
+test('cue repair provides the matching scene narration and never changes the candidate locally',async()=>{
+ const {cueRepairHints}=await import('../src/storyboards/planner');
+ const p=fixture();p.scenes[1].events[0].cue.phrase='not in narration';
+ const before=JSON.stringify(p);
+ const hints=cueRepairHints(p,[{path:'scenes.1.events.0.cue',code:'MISSING_CUE'}]);
+ assert.equal(hints.length,1);assert.equal(hints[0].narration,sentence);assert.equal(JSON.stringify(p),before);
+ assert.deepEqual(cueRepairHints({},[{path:'scenes.1.events.0.cue',code:'MISSING_CUE'}]),[]);
+});
