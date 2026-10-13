@@ -814,3 +814,17 @@ New OAuth receipts are direct Instagram only. Migration 016 already represents `
 `023-proportional-charts` upgrades the strict `storyboards.content` and `drafts.editablePlan` validators with the chart variant. It creates no collections or indexes and rewrites no saved document. Chart bar IDs are checked for uniqueness by domain validation; BSON validators enforce shape, lengths and numeric bounds. Blank numeric fields persist as null only in editable drafts and cannot become immutable validated candidates.
 
 Historical schemas are frozen in `legacy-contract.ts` and `legacy-editable-contract.ts` so migrations005–009 retain their checksums. Earlier setup routines recognize the new validators as permitted successors rather than downgrading them on replay. Migration023 verifies the existing snapshot prerequisite, uses the standard migration lock/receipt, and accepts only the expected prior validators. Existing save/snapshot transactions, revision checks, ownership and idempotency remain unchanged. Isolated storage tests cover migration replay, unchanged historical checksums, exact chart persistence and invalid-value refusal.
+
+
+## October13 addendum: bounded pilot controls (migration024)
+
+`pilotWindows` has one active record with a random window ID, UTC start/end (maximum
+48 hours), integer reserved cents and BSON Long revision. `pilotReservations`
+retains immutable per-window/kind/operation receipts with an index on windowId/kind.
+There is no TTL. Strict validators reject extra fields and invalid basic types;
+the service enforces deadline, eight renders, one publication per mode, destination
+and 400-cent policy. Every reservation writes the singleton inside the same MongoDB
+transaction as its command or cloud-dispatch admission, serializing concurrent
+owners/replicas. Deterministic receipt IDs make replay free. A rollback rolls back
+both the command and allowance. Uncertain and failed provider work is not refunded.
+No existing project or media record is rewritten by this migration.

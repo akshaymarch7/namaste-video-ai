@@ -1,3 +1,4 @@
+import {checkPilot} from '../pilot/service';
 import {assertVideosReady} from '../videos/setup';
 import {materializeVideo} from '../videos/materialize';
 import 'server-only';
@@ -49,7 +50,8 @@ export function generationService(db:Db,client:MongoClient,now=()=>new Date()){
     const inputSnapshot={plan:source.content,notes:draft.notes,voicePreset:draft.voicePreset,contentHash:source.contentHash,storyHash:source.storyHash,canonicalizationVersion:1,renderConfig};
     const job:Doc={_id:id,ownerId,projectId,storyboardId:source._id,approvalId:approval._id,inputSnapshot,inputHash:hash(inputSnapshot),state:'queued',stage:'queued',revision:1,attempt:0,fence:0,leaseUntil:null,deadlineAt:new Date(date.getTime()+15*60000),errorCode:null,createdAt:date,updatedAt:date,finishedAt:null};
     await db.collection<Doc>('projects').updateOne({_id:projectId,ownerId,deletedAt:null},{$set:{activeJobId:id,'flags.needsAttention':!!await db.collection('publishIntents').findOne({projectId,state:{$in:['paused_auth','failed_safe','outcome_unknown','needs_attention']}},{session}),updatedAt:date},$inc:{contentRevision:Long.ONE}},{session});
-    await jobs.insertOne(job,{session});
+    await checkPilot(db,session,now());
+        await jobs.insertOne(job,{session});
     await db.collection('generationOutbox').insertOne({_id:uid('evt') as never,jobId:id,state:'pending',leaseToken:null,leaseUntil:null,availableAt:date,createdAt:date},{session});
     const data=view(job);await commands.insertOne({_id:uid('cmd'),...cmd.scope,requestHash:cmd.requestHash,jobId:id,response:data,createdAt:date},{session});return {data,replayed:false};
    });

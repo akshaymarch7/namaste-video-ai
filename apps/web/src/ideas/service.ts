@@ -1,3 +1,4 @@
+import {reservePilot} from '../pilot/service';
 import { liveProject } from '../generation/live-project';
 import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
@@ -41,6 +42,7 @@ export function ideaService(db: Db, client: MongoClient, provider: () => IdeaPro
           state: 'running', suggestions: [], errorCode: null, createdAt: date, updatedAt: date, deadline: new Date(date.getTime() + 45000) };
         // All child writers share this parent write with deletion and other pipeline work.
         await projects.updateOne({ _id: projectId, ownerId, deletedAt: null }, { $set: { activeJobId: id, updatedAt: date }, $inc: { contentRevision: Long.ONE } }, { session });
+        await reservePilot(db,session,'idea',id,date);
         await requests.insertOne(doc, { session });
         return { doc, adapter, draft: fieldsOf(draft as unknown as IdeaFields) };
       });

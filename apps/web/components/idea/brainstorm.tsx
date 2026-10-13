@@ -41,6 +41,8 @@ export function Brainstorm({ projectId, draft, apply }: { projectId: string; dra
   }, [path]);
   const stale = Boolean(result && (draft.status !== 'saved' || result.sourceDraftRevision !== draft.saved.revision));
   const messages: Record<string, string> = {
+    PILOT_WINDOW_CLOSED:'The testing window is closed. Your saved draft remains accessible.',
+    PILOT_BUDGET_LIMIT:'The pilot usage allowance is reserved. Contact the administrator before generating more.',
     AI_NOT_CONFIGURED: 'AI suggestions need server configuration. Your idea is still saved.',
     PROVIDER_LIMIT: 'The AI service has reached its request or credit limit. Try again later.',
     PROVIDER_UNAVAILABLE: 'The AI service is temporarily unavailable. Your draft is saved; try a new request later.',

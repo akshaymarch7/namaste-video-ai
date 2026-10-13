@@ -641,3 +641,41 @@ open quality findings. This completes the bounded test run, not full V1 approval
 The user explicitly owns final narration/video and complete manual/end-to-end testing. Do not run another paid content matrix to close those rows on their behalf or relabel historical failures as passes. Implementation follow-ups now include measured diagram text, explicit spoken-word repair budgets and proportional chart support. Atlas migration023 is applied; renderer plan-v2-4 requires a matching worker image before generation is enabled. Cloud activation and operating-budget limits remain separate from content acceptance.
 
 Matching worker refresh completed: source b699e6c, image3c7f6965 on both Cloud Run jobs, Ready web8NmsthoS9Z12sW2RmvR3XDwh2Teo/d6bfdb3. Dispatch and publication remain disabled; renewal stays enabled.538 local tests, final production builds, silent chart still and6 worker-boundary checks are implementation evidence, not user acceptance. No narrated job ran during this refresh.
+
+
+## Bounded manual-testing operation (October 13)
+
+The approved pilot uses a persistent 48-hour window, at most eight render attempts,
+20 Cloud Run launch attempts per UTC day, and one immediate plus one scheduled
+publication to @namastevideoai. Existing internal access rules remain unchanged.
+Reservations stop at 400 cents: 40 per render, 10 per storyboard request, 2 per
+brainstorm request. Repairs within a storyboard request share its allowance;
+failed/unknown requests retain reservations. These planning allowances are not
+provider invoice metering or a guaranteed US$5 billing ceiling. No top-up or
+subscription is authorized. Existing storage, scheduler and other infrastructure
+charges are not measured by this ledger.
+
+Production requires PILOT_WINDOW_REQUIRED=1. Migration024 must precede activation.
+From apps/web, with the existing ignored environment and Node24:
+
+```sh
+node --conditions=react-server --env-file=.env.local --import tsx scripts/pilot-window.ts setup
+node --conditions=react-server --env-file=.env.local --import tsx scripts/pilot-window.ts status
+node --conditions=react-server --env-file=.env.local --import tsx scripts/pilot-window.ts start
+```
+
+Start refuses an unexpired window or unresolved cloud dispatches. Record the
+returned UTC start/end; set CLOUD_RUN_NOT_BEFORE to that start, CLOUD_RUN_DAILY_LIMIT=20,
+and the existing generation/publishing activation flags to1. Deploy before resuming
+the existing dispatch/publishing schedulers. No worker image rebuild is needed:
+these controls run in web admission/dispatch, before the existing bounded workers.
+Do not run content jobs to verify activation; final testing belongs to the user.
+
+At expiry, server checks reject new generation/brainstorming and new publication;
+publishing checks the deadline again before its final POST. Already launched jobs
+may finish, and already submitted publications retain status reconciliation.
+Schedulers are not automatically paused by the deadline; their read-only ticks can
+continue. For an early stop run the same operator with `close`. For a full operating
+pause, disable both activation flags/redeploy and pause dispatch/publishing schedulers;
+keep approved daily Instagram renewal enabled. Never erase reservations to reset
+allowances. Another window needs renewed user authorization.

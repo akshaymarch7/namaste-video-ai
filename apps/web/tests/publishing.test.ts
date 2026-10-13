@@ -227,3 +227,12 @@ test('real lost Meta publish response persists uncertainty and recovers by statu
   assert.equal(await db.collection('publishIntents').countDocuments({ownerId:f.owner}),1);
  });
 });
+
+test('pilot publication admission is replayable and expiry stops the final provider POST',async()=>{
+ const f=await fixture();const {setupPilot}=await import('../src/pilot/setup');await setupPilot(db);
+ await db.collection('instagramConnections').updateOne({_id:f.connection as never},{$set:{username:'namastevideoai'}});
+ await db.collection('pilotWindows').insertOne({_id:'active' as never,windowId:'c'.repeat(32),startsAt:new Date(Date.now()-60000),endsAt:new Date(Date.now()+3600000),reservedCents:0,revision:Long.ZERO});
+ try{const key=randomUUID(),r=await f.service.create(f.owner,key,f.input);assert.equal((await f.service.create(f.owner,key,f.input)).replayed,true);assert.equal(await db.collection('pilotReservations').countDocuments(),1);await f.worker().tick(f.owner);assert.equal(f.counts().creates,1);
+ await db.collection('pilotWindows').updateOne({},{$set:{endsAt:new Date(Date.now()-1)}});f.advance();await f.worker().tick(f.owner);assert.equal(f.counts().publishes,0);assert.equal((await f.service.get(f.owner,r.data.id)).errorCode,'PILOT_WINDOW_CLOSED');assert.equal((await f.service.create(f.owner,key,f.input)).replayed,true);
+ }finally{await db.collection('pilotWindows').deleteMany({});}
+});

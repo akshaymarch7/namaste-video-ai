@@ -1,3 +1,4 @@
+import {setupPilot} from '../src/pilot/setup';
 import {setupVisualRegistry} from '../src/storyboards/registry-setup';
 import {setupInstagramDeletion} from '../src/instagram/deletion-setup';
 import {setupInstagramLifecycle} from '../src/instagram/lifecycle-setup';
@@ -40,8 +41,9 @@ try {
   const publishing = await setupPublishing(db);
   const scheduling = await setupScheduling(db);
   const visualRegistry = await setupVisualRegistry(db);
+  const pilot = await setupPilot(db);
   const repairs = {...await repairGenerationProjectFlags(db,client),...await backfillVideos(db,client)};
-  console.log(JSON.stringify({ status: 'ok', repairs, migrations: [result, projects, drafts, ideas, storyboards, queue, editable, revisions, snapshots, approvals, storage, jobs, videos, instagram, cloud, publishing, scheduling, instagramLifecycle, instagramDeletion,visualRegistry] }));
+  console.log(JSON.stringify({ status: 'ok', repairs, migrations: [result, projects, drafts, ideas, storyboards, queue, editable, revisions, snapshots, approvals, storage, jobs, videos, instagram, cloud, publishing, scheduling, instagramLifecycle, instagramDeletion,visualRegistry,pilot] }));
 } catch (error) {
   // Driver diagnostics can include connection strings or document data. Do not print them.
   console.error(JSON.stringify({

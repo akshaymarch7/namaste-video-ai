@@ -729,3 +729,13 @@ Activation is still off by default. Independent minute ticks, deployment and mig
 PlanV2 now additionally accepts `visual.component="chart"`, version1, with `data={unit,bars}`. Unit is1–20 characters;2–4 bars each have a unique stable ID, a1–30 character label and a finite numeric value from0 through1,000,000,000. Only reveal/emphasize actions target bar IDs. All bars share one unit and a common zero-based scale; negative, mixed-unit and logarithmic plots are unsupported. The planner is instructed to use supplied quantities without inventing statistics; automated validation does not establish factual accuracy.
 
 The existing draft/save/snapshot/approval endpoints carry charts without new routes or changed concurrency semantics. Editable drafts may retain a null numeric value while incomplete; validated snapshots reject it. Conflict comparisons include values and units. The generated `design/projects.openapi.json` contains the current contracts. Older registry descriptions above are historical.
+
+
+## October13 addendum: pilot admission responses
+
+Existing paid-work and publishing endpoints may return sanitized HTTP409 errors:
+PILOT_WINDOW_CLOSED, PILOT_BUDGET_LIMIT, PILOT_WINDOW_LIMIT or PILOT_DESTINATION_LIMIT.
+They are explicit rejections, not unknown provider outcomes. Command replay and
+status recovery remain available after closure. Scheduled publications must be due
+before the active deadline; only @namastevideoai and one intent per publication mode
+are admitted in the approved pilot. There is no public window-reset/operator API.

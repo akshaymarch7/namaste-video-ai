@@ -1,3 +1,4 @@
+import {checkPilot} from '../pilot/service';
 import 'server-only';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Long, type Db, type MongoClient, type Document } from 'mongodb';
@@ -153,6 +154,7 @@ export function storyboardService(db: Db, client: MongoClient, secret: string, p
         const doc = {_id:id,schemaVersion:1,ownerId,projectId,keyHash,requestHash,model:adapter.model,sourceDraftRevision:draft.revision,
           state:'running',storyboardId:null,errorCode:null,...(background?{stage:'queued',attempt:0,issueCodes:[]}:{}),createdAt:date,updatedAt:date,deadline:new Date(date.getTime()+180000)};
         await projects.updateOne({_id:projectId,ownerId,deletedAt:null},{$set:{activeJobId:id,updatedAt:date},$inc:{contentRevision:Long.ONE}},{session});
+        await checkPilot(db,session,date);
         await requests.insertOne(doc,{session});
         if(revision)await db.collection<Doc>('storyboardRevisions').insertOne({_id:id,ownerId,projectId,sourceStoryboardId:revision.source.id,sourceContentHash:revision.source.hash,instruction:revision.instruction,sceneId:revision.sceneId??null,createdAt:date},{session});
         if(background)await db.collection<Doc>('storyboardQueue').insertOne({_id:id,ownerId,projectId,model:adapter.model,state:'queued',draft:fieldsOf(draft as unknown as IdeaFields),createdAt:date,deadline:doc.deadline},{session});

@@ -1,6 +1,6 @@
 # Project Status — NamasteVideo.ai
 
-Last updated: October 11, 2026 (Asia/Kolkata).
+Last updated: October 13, 2026 (Asia/Kolkata).
 
 This is the source of truth for development progress. Specifications describe intent; a feature is complete here only when its implementation and verification are recorded. Design approval is not evidence of working functionality.
 
@@ -2584,3 +2584,15 @@ Next release work, in order: (1) controlled hosted recovery plus end-to-end acce
 
 - **Rollout read-back complete:** both jobs report digest3c7f6965, maxRetries0 and the original180/900-second timeouts. Vercel Ready Production8NmsthoS9Z12sW2RmvR3XDwh2Teo on d6bfdb3 serves namastevideo.ai with the saved matching image. Homepage200, unauthenticated dispatch503 and publish-tick503 confirm the intentional pause; renewal401 confirms protected access. System curl passed normal TLS verification after local Python's trust store could not verify the chain. Screenshot: ignored runs/f22/chart-rollout-ready.png. No content execution was started for this refresh.
 - **Implementation handoff:** recorded implementation gaps are completed (repair guidance, measured typography, proportional charts), Atlas023 is applied and matching code is deployed. Final live AI reliability, facts, pronunciation, complete motion and user flow acceptance are left to the user as requested. No further V1 feature is identified in the current checkpoint; operating activation and final sign-off remain explicit outstanding items, not missing implementations. Main remains unchanged; dev is the development/release-evidence branch.
+
+
+## October13 — User-approved 48-hour manual-testing controls
+
+- User approved48 hours, US$5 usage allowance,20 cloud executions per day,5–8 narrated videos and one immediate/one scheduled Reel on @namastevideoai. No top-up/subscription or automatic test content. Final testing remains user-owned.
+- Implemented a persistent pilot window and atomic reservation ledger (migration024). New paid work stops at the server-side48-hour deadline even with all browsers closed. Existing reads/downloads, command replay and unknown-outcome reconciliation remain available. Global transaction serialization prevents concurrent creators bypassing limits.
+- Reservation policy:40 cents per render attempt (including saved-speech revisions),10 cents per storyboard request (including its bounded repairs),2 cents per brainstorming request; stop before exceeding400 reserved cents. These are planning allowances, not measured billing or a guaranteed cross-provider US$5 cutoff. Failed/unknown attempts retain reservations; existing prepaid credit is used with no new purchase. At most8 renders and one publication of each mode per window. Existing daily dispatch cap will be configured to20 UTC-day attempts (reset05:30IST).
+- Publication checks enforce the approved destination, reject unreserved older intents, reject schedules outside the window, and recheck expiry before container creation/final publication. Already submitted outcomes remain reconcilable. No Reel is posted by this activation task.
+- Files: pilot setup/service/operator, paid-work admission in ideas/storyboards/jobs/captions, dispatcher reservation, publishing admission/worker, client limit feedback, database setup and tests. New production PILOT_WINDOW_REQUIRED setting fails closed if configuration is missing. Operational scheduler requests may continue for reconciliation; server guards stop new paid jobs/publication at expiry independently of scheduler timing.
+- Verification:544 integrated acceptance tests and three public demo decodes passed; final targeted suite66/66 passed, including expiry before final publishing POST and no cloud launch after closure. Root/web typechecks and production build passed. Initial tests exposed numeric MongoDB error codes in a string-code handler; corrected the type guard. Atlas024 setup succeeded with zero unresolved dispatches. Activation is in progress; no content has been generated or published.
+
+- Atlas window started2026-10-13T07:17:12.972Z and expires2026-10-15T07:17:12.972Z (12:47IST both dates), initially zero reservations. Vercel production settings saved: required guard1, daily limit20, fresh not-before start and both activation flags1. These take effect with the new code deployment; scheduler activation/read-back is pending.

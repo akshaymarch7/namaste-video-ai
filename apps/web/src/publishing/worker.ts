@@ -1,3 +1,4 @@
+import {checkPilotPublication} from '../pilot/service';
 import 'server-only';
 import {randomBytes} from 'node:crypto';
 import type {Db,MongoClient,ClientSession} from 'mongodb';
@@ -13,6 +14,7 @@ export function publishWorker(db:Db,client:MongoClient,config:InstagramConfig,pr
  async function write(r:PublishRow,values:Record<string,unknown>,session:ClientSession,clear=false){const result=await rows.findOneAndUpdate({_id:r._id,revision:r.revision,attempt:r.attempt},{$set:{...values,updatedAt:now()},$inc:{revision:1},...(clear?{$unset:{encryptedToken:'',ingestToken:''}}:{})},{session,returnDocument:'after'});if(result)await publishFlags(db,r.projectId,session);return result;}
  async function settle(r:PublishRow,state:string,errorCode:string|null,extra:Record<string,unknown>={}){return inTransaction(client,async session=>write(r,{state,errorCode,leaseUntil:null,nextRunAt:new Date(now().getTime()+60000),...extra},session,['published','failed_safe','cancelled','paused_auth'].includes(state)));}
  async function eligible(r:PublishRow,session:ClientSession){
+  await checkPilotPublication(db,session,r,now());
   const admitted=await db.collection('internalAccess').findOneAndUpdate({provisionedUserId:r.ownerId,enabled:true,provisioningState:'active'},{$set:{updatedAt:now()}},{session});if(!admitted)throw Error('ACCESS_UNAVAILABLE');
   return validatePublication(db,r.ownerId,input(r),config,session);
  }
@@ -29,7 +31,7 @@ export function publishWorker(db:Db,client:MongoClient,config:InstagramConfig,pr
     if(current.polls>=15||current.providerAppId!==config.appId||current.provider!==(config.provider??'instagram'))return write(current,{state:'needs_attention',errorCode:'PUBLISH_OUTCOME_UNKNOWN',leaseUntil:null},session).then(()=>null);
     return write(current,{leaseUntil:new Date(now().getTime()+60000),nextRunAt:new Date(now().getTime()+60000),polls:current.polls+1},session);
    }
-   try{await eligible(current,session);}catch{return write(current,{state:'paused_auth',errorCode:'PUBLICATION_REVALIDATION_REQUIRED',leaseUntil:null},session,true).then(()=>null);}
+   try{await eligible(current,session);}catch(e){const raw=(e as {code?:unknown}).code,code=typeof raw==='string'?raw:undefined;return write(current,{state:code?.startsWith('PILOT_')?'failed_safe':'paused_auth',errorCode:code?.startsWith('PILOT_')?code:'PUBLICATION_REVALIDATION_REQUIRED',leaseUntil:null},session,true).then(()=>null);}
    if(current.state==='queued'||current.state==='scheduled'){
     const token=randomBytes(32).toString('base64url'),expiresAt=new Date(now().getTime()+3600000);
     await db.collection('publishMediaGrants').insertOne({_id:uid('pgr') as never,ownerId:current.ownerId,projectId:current.projectId,intentId:current._id,assetId:current.assetId,assetHash:current.assetHash,attempt:current.attempt,tokenHash:digest(token),expiresAt},{session});
@@ -55,7 +57,7 @@ export function publishWorker(db:Db,client:MongoClient,config:InstagramConfig,pr
   const submitting=await inTransaction(client,async session=>{
    const current=await rows.findOne({_id:r._id,revision:r.revision,state:'processing'},{session});if(!current)return null;
    if(deliveryDeadline(current)<=now())return write(current,{state:'failed_safe',errorCode:'DELIVERY_WINDOW_EXPIRED',leaseUntil:null},session,true).then(()=>null);
-   try{await eligible(current,session);}catch{return write(current,{state:'paused_auth',errorCode:'PUBLICATION_REVALIDATION_REQUIRED',leaseUntil:null},session,true).then(()=>null);}
+   try{await eligible(current,session);}catch(e){const raw=(e as {code?:unknown}).code,code=typeof raw==='string'?raw:undefined;return write(current,{state:code?.startsWith('PILOT_')?'failed_safe':'paused_auth',errorCode:code?.startsWith('PILOT_')?code:'PUBLICATION_REVALIDATION_REQUIRED',leaseUntil:null},session,true).then(()=>null);}
    return write(current,{state:'submitting',polls:0,leaseUntil:new Date(now().getTime()+60000),nextRunAt:new Date(now().getTime()+60000)},session);
   });if(!submitting)return {worked:true};
   try{

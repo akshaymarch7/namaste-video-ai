@@ -72,3 +72,9 @@ test('image rollout reconciles the original receipt without relaunching it and f
  assert.equal((await row(first.id))!.state,'finished');assert.equal((await row(first.id))!.image,cloud.image);
  assert.equal((await row(next.id))!.image,newConfig.image);assert.equal(f.calls(),2);
 });
+
+test('expired pilot rejects queued work without a cloud launch and clears project slot',async()=>{
+ const j=await queued(),f=fake();const {setupPilot}=await import('../src/pilot/setup');await setupPilot(db);
+ await db.collection('pilotWindows').insertOne({_id:'active' as never,windowId:'b'.repeat(32),startsAt:new Date(Date.now()-60000),endsAt:new Date(Date.now()-1),reservedCents:0,revision:(await import('mongodb')).Long.ZERO});
+ try{await tick(f.provider);assert.equal(f.calls(),0);assert.equal((await generationService(db,client).get(owner,j.id)).errorCode,'PILOT_WINDOW_CLOSED');assert.equal(await db.collection('pilotReservations').countDocuments(),0);}finally{await db.collection('pilotWindows').deleteMany({});}
+});

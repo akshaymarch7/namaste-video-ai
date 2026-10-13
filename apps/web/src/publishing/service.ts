@@ -1,3 +1,4 @@
+import {reservePilot,checkPilotPublication,pilotWindow} from '../pilot/service';
 import {publicationTombstone} from '../instagram/deletion-guard';
 import 'server-only';
 import {randomUUID} from 'node:crypto';
@@ -64,16 +65,20 @@ export function publishingService(db:Db,client:MongoClient,config:InstagramConfi
    const cfg=settings(),existing=await rows.findOne({ownerId,videoId:input.payload.videoId,instagramUserId:input.payload.destination.instagramUserId},{session});
    if(existing)throw issue('PUBLICATION_EXISTS','This video already has a publication for that account. Review its history; do not create a duplicate.');
    const {v,c}=await validatePublication(db,ownerId,input,cfg,session),now=new Date(),id=uid('pub');
-   const row:PublishRow={_id:id,ownerId,projectId:input.projectId,revision:1,state:'queued',videoId:v._id,videoTitle:v.title,videoApprovalId:input.payload.videoApprovalId,assetId:v.outputAssetId,assetHash:v.outputHash,renderSpecHash:v.renderSpecHash,connectionId:c._id,instagramUserId:c.instagramUserId,destinationEpoch:c.destinationEpoch,usernameAtApproval:c.username,caption:input.payload.caption,provider:cfg.provider??'instagram',providerAppId:cfg.appId,encryptedToken:encryptToken(decryptToken(c.encryptedToken,cfg,ownerId,c._id),cfg,ownerId,id),createdAt:now,updatedAt:now,nextRunAt:now,leaseUntil:null,attempt:1,polls:0,containerId:null,providerMediaId:null,permalink:null,publishedAt:null,errorCode:null};Object.assign(row,timing(input));await rows.insertOne(row,{session});await snapshot(row,session);return row;
+   const row:PublishRow={_id:id,ownerId,projectId:input.projectId,revision:1,state:'queued',videoId:v._id,videoTitle:v.title,videoApprovalId:input.payload.videoApprovalId,assetId:v.outputAssetId,assetHash:v.outputHash,renderSpecHash:v.renderSpecHash,connectionId:c._id,instagramUserId:c.instagramUserId,destinationEpoch:c.destinationEpoch,usernameAtApproval:c.username,caption:input.payload.caption,provider:cfg.provider??'instagram',providerAppId:cfg.appId,encryptedToken:encryptToken(decryptToken(c.encryptedToken,cfg,ownerId,c._id),cfg,ownerId,id),createdAt:now,updatedAt:now,nextRunAt:now,leaseUntil:null,attempt:1,polls:0,containerId:null,providerMediaId:null,permalink:null,publishedAt:null,errorCode:null};Object.assign(row,timing(input));
+   const window=await pilotWindow(db,session);if(window&&row.schedule?.utc>=window.endsAt)throw issue('PILOT_WINDOW_CLOSED','Schedule this test Reel before the testing window ends.');
+   await reservePilot(db,session,row.mode==='schedule'?'publish_schedule':'publish_now',id,clock());await checkPilotPublication(db,session,row,clock());await rows.insertOne(row,{session});await snapshot(row,session);return row;
   });},
   async replace(ownerId:string,id:string,key:string,raw:unknown){const input=replaceInput.parse(raw);return command(ownerId,key,{id,action:'replace',input},async session=>{
    const row=await owned(ownerId,id,session);if(row.revision!==input.expectedRevision)throw issue('REVISION_CONFLICT','Publication changed. Refresh and review without discarding your edits.');
    if(!editableStates.includes(row.state))throw issue('INTENT_ALREADY_CLAIMED','Delivery has already started. Its approved payload cannot be replaced.');
    if(input.projectId!==row.projectId)throw issue('NOT_FOUND','Project not found.',404);
    const conflict=await rows.findOne({_id:{$ne:id},ownerId,videoId:input.payload.videoId,instagramUserId:input.payload.destination.instagramUserId},{session});if(conflict)throw issue('PUBLICATION_EXISTS','This video already has a publication for that account.');
+   await checkPilotPublication(db,session,{...row,mode:input.mode},clock());const window=await pilotWindow(db,session);const nextDue=timing(input).schedule?.utc;if(window&&nextDue&&nextDue>=window.endsAt)throw issue('PILOT_WINDOW_CLOSED','Schedule this test Reel before the testing window ends.');
    const cfg=settings(),{v,c}=await validatePublication(db,ownerId,input,cfg,session);
    if(!row.mode)await snapshot({...row,mode:'now',schedule:null,retryDeadlineAt:deliveryDeadline(row)},session);
    const values={...timing(input),videoId:v._id,videoTitle:v.title,videoApprovalId:input.payload.videoApprovalId,assetId:v.outputAssetId,assetHash:v.outputHash,renderSpecHash:v.renderSpecHash,connectionId:c._id,instagramUserId:c.instagramUserId,destinationEpoch:c.destinationEpoch,usernameAtApproval:c.username,caption:input.payload.caption,provider:cfg.provider??'instagram',providerAppId:cfg.appId,encryptedToken:encryptToken(decryptToken(c.encryptedToken,cfg,ownerId,c._id),cfg,ownerId,id),containerId:null,errorCode:null,leaseUntil:null,polls:0,updatedAt:clock()};
+   await checkPilotPublication(db,session,{...row,...values},clock());
    const updated=(await rows.findOneAndUpdate({_id:id},{$set:values,$inc:{revision:1,attempt:1},$unset:{ingestToken:'',expiresAt:''}},{session,returnDocument:'after'}))!;
    await db.collection('publishMediaGrants').deleteMany({intentId:id},{session});await snapshot(updated,session);return updated;
   });},
@@ -85,7 +90,7 @@ export function publishingService(db:Db,client:MongoClient,config:InstagramConfi
    }else{
     if(!['failed_safe','paused_auth','cancelled'].includes(row.state))throw issue('OUTCOME_UNKNOWN','This publication cannot safely be retried.');
     if(deliveryDeadline(row)<=clock())throw issue('RETRY_WINDOW_EXPIRED','The delivery window expired. Edit and confirm a new time or Post now.');
-    const cfg=settings(),c=await db.collection<PublishRow>('instagramConnections').findOne({_id:row.connectionId,ownerId},{session});
+    await checkPilotPublication(db,session,row,clock());const cfg=settings(),c=await db.collection<PublishRow>('instagramConnections').findOne({_id:row.connectionId,ownerId},{session});
     if(!c||c.instagramUserId!==row.instagramUserId)throw issue('DESTINATION_CHANGED','Reconnect the original Instagram account.');
     const {c:current}=await validatePublication(db,ownerId,{projectId:row.projectId,mode:'now',confirm:true,payload:{videoId:row.videoId,videoApprovalId:row.videoApprovalId,expectedOutputHash:row.assetHash,caption:row.caption,destination:{connectionId:c._id,instagramUserId:c.instagramUserId,destinationEpoch:c.destinationEpoch}}},cfg,session);
     await rows.updateOne({_id:id},{$set:{mode:row.mode??'now',schedule:row.schedule??null,retryDeadlineAt:deliveryDeadline(row),state:row.mode==='schedule'&&row.schedule?.utc>clock()?'scheduled':'queued',destinationEpoch:current.destinationEpoch,usernameAtApproval:current.username,provider:cfg.provider??'instagram',providerAppId:cfg.appId,encryptedToken:encryptToken(decryptToken(current.encryptedToken,cfg,ownerId,current._id),cfg,ownerId,id),containerId:null,errorCode:null,leaseUntil:null,polls:0,nextRunAt:row.mode==='schedule'&&row.schedule?.utc>clock()?row.schedule.utc:clock(),updatedAt:clock()},$inc:{revision:1,attempt:1},$unset:{ingestToken:'',expiresAt:''}},{session});

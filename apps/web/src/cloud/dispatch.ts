@@ -1,3 +1,4 @@
+import {reservePilot} from '../pilot/service';
 import 'server-only';
 import {Long, type Db, type MongoClient, type ClientSession, type Document} from 'mongodb';
 import {inTransaction} from '../db/client';
@@ -103,6 +104,7 @@ export async function dispatchCloud(db:Db,client:MongoClient,config:CloudConfig,
       }
       if(await ledger.countDocuments({state:{$in:active}},{session})>=2
         ||await ledger.countDocuments({ownerId:c.ownerId,state:{$in:active}},{session})>=1)return false;
+      try{await reservePilot(db,session,c.role,c._id,date);}catch(e){if(typeof (e as {code?:unknown}).code!=='string'||!(e as {code:string}).code.startsWith('PILOT_'))throw e;await rejectQueued(db,session,c,date,(e as {code:string}).code);return false;}
       await ledger.insertOne({_id:c._id,ownerId:c.ownerId,projectId:c.projectId,role:c.role,target:jobName(config,c.role),image:config.image,state:'submitting',operation:null,execution:null,code:null,createdAt:date,updatedAt:date,checkAt:new Date(date.getTime()+30000)},{session});
       return true;
     });

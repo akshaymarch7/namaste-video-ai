@@ -1,6 +1,9 @@
 export function generationError(code:string){
  const messages:Record<string,string>={
   RENDER_CONFIG_CHANGED:'The renderer was updated before this job ran. Start a fresh generation to use the current renderer.',
+  PILOT_WINDOW_CLOSED:'The testing window is closed. Your saved work remains accessible.',
+  PILOT_WINDOW_LIMIT:'This testing window has reached its generation limit. Your work is saved.',
+  PILOT_BUDGET_LIMIT:'The testing usage allowance is reserved. Contact the administrator before generating more.',
   PILOT_DAILY_LIMIT:'The internal pilot has reached its daily generation limit. Your work is saved. Please try again tomorrow.',
   WORKER_UNAVAILABLE:'Generation could not start. Your work is saved. Please contact the team before trying again.',
   WORKER_STOPPED:'Generation stopped before processing your request. Your work is saved. Please contact the team before trying again.',
