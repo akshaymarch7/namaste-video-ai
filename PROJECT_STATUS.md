@@ -2716,3 +2716,7 @@ Next release work, in order: (1) controlled hosted recovery plus end-to-end acce
 - New owner credential written with exclusive creation to ignored runs/f22/portal-owner-access.json, mode0600 verified; no password printed, committed or pasted in chat. Live HTTPS checks: old latest-workspace password401; replacement sign-in200; authenticated session200; sign-out204; revoked session401; public signup path404. Source also confirms disableSignUp and operator-only creation/admission. Final session count0. This is a targeted access verification, not a comprehensive security audit.
 - Closed pilot window at2026-10-13T22:15:03.738Z (October14,03:45:03IST), retaining348 reserved cents and usage history. No unresolved cloud dispatches. No new video/post submitted. Minute scheduler reconciliation and daily token renewal remain configured; closing the server window is not an infrastructure shutdown. Reopening generation/posting needs a deliberate operator action; public signup remains unavailable.
 - Files: PROJECT_STATUS.md and docs/release/INTERNAL_ACCEPTANCE.md; ignored operator evidence runs/f22/lockdown-portal.ts and access-audit.ts. No application code change, deployment, main merge or new full-suite pass claimed.
+
+### October14 — Private maintenance checkpoint
+
+- User-requested maintenance is in progress. Detailed operational evidence is retained privately and is not included in this public repository. Completion is not yet claimed.
