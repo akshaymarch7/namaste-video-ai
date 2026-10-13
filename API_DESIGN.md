@@ -739,3 +739,7 @@ They are explicit rejections, not unknown provider outcomes. Command replay and
 status recovery remain available after closure. Scheduled publications must be due
 before the active deadline; only @namastevideoai and one intent per publication mode
 are admitted in the approved pilot. There is no public window-reset/operator API.
+
+### October14 provider routing addendum
+
+Storyboard generation/revision routes and request bodies are unchanged. The existing request receipt `model` is the pinned route identifier for new multi-provider work (`openai:gpt-4.1-mini|gemini:gemini-3.5-flash-lite`); legacy values remain Gemini model IDs. This is server configuration, never a client-supplied endpoint or credential. Successful candidate provenance records the provider/model actually used. OpenAI and Gemini share the existing four-call/180-second execution budget. Transient429/5xx/local timeouts may switch once to the configured fallback. Completed invalid content is repaired and fully revalidated; no provider refusal or authentication failure is bypassed. Brainstorming is unchanged.
